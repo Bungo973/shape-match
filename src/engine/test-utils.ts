@@ -3,6 +3,7 @@
 import { createIdGen, weightedSpawner, type IdGen, type Spawner } from './board';
 import { DEFAULT_CONFIG } from './config';
 import { createRng } from './rng';
+import type { InsertType, InstalledInsert } from './inserts';
 import type { ResolveContext } from './resolve';
 import type { Board, BombKind, Color, Tile } from './types';
 
@@ -41,7 +42,7 @@ export function alternatingSpawner(): Spawner {
   return () => (k++ % 2 === 0 ? 'shield' : 'attack');
 }
 
-export function testCtx(seed = 1, spawn?: Spawner): ResolveContext {
+export function testCtx(seed = 1, spawn?: Spawner, inserts: InstalledInsert[] = []): ResolveContext {
   const rng = createRng(seed);
   return {
     config: DEFAULT_CONFIG,
@@ -49,7 +50,13 @@ export function testCtx(seed = 1, spawn?: Spawner): ResolveContext {
     ids: createIdGen(10_000),
     spawn: spawn ?? alternatingSpawner(),
     gravity: 'down',
+    inserts,
   };
+}
+
+/** 构造一块已安装嵌片；cells 写作 [行, 列] */
+export function ins(id: string, type: InsertType, ...cells: [number, number][]): InstalledInsert {
+  return { id, type, cells: cells.map(([r, c]) => ({ r, c })) };
 }
 
 /** 按种子随机补位；大面积补位的测试用它，避免固定序列造成无限连锁 */

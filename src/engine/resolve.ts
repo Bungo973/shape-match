@@ -15,8 +15,10 @@ import {
   type TileSpawn,
 } from './board';
 import type { EngineConfig } from './config';
+import { INSERT_DEFS, type InsertType, type InstalledInsert } from './inserts';
 import { findGroups, passiveBombCell } from './match';
 import type { Rng } from './rng';
+import type { EffectValues } from './score';
 import {
   COLORS,
   emptyClears,
@@ -38,6 +40,8 @@ export interface ResolveContext {
   ids: IdGen;
   spawn: Spawner;
   gravity: Gravity;
+  /** 已安装的嵌片；被压制的嵌片不参与结算 */
+  inserts?: readonly InstalledInsert[];
 }
 
 export type ExplosionShape = BombKind | 'cross' | 'rows3' | 'cols3' | 'square5' | 'board';
@@ -50,12 +54,27 @@ export interface Explosion {
   cells: Pos[];
   /** 仅 CB：本次清除的目标类型；随机池为空时为 null */
   targetColor?: Color | null;
+  /** 由嵌片追加或改变范围时，记录该嵌片 */
+  byInsert?: string;
 }
 
 export interface ClearedEntry {
   id: number;
   pos: Pos;
   tile: Tile;
+}
+
+/** 一次有效的嵌片触发；空触发不记录 */
+export interface InsertTrigger {
+  insertId: string;
+  type: InsertType;
+  /**
+   * base 基数嵌片加基数；catalyst 催化盐多计一枚；produce 土质火药让三连产弹；
+   * ignite 易燃物质点火；ember 火星陶追加 3×3；quake 震裂石扩为 5×5；powder 火药嵌片连带清除
+   */
+  effect: 'base' | 'catalyst' | 'produce' | 'ignite' | 'ember' | 'quake' | 'powder';
+  at: Pos[];
+  amount?: number;
 }
 
 export type ResolutionEvent =
@@ -68,6 +87,7 @@ export type ResolutionEvent =
       groups: { color: Color; cells: Pos[]; product: BombKind | null; bombCell: Pos | null }[];
       cleared: ClearedEntry[];
       created: { id: number; bomb: BombKind; at: Pos }[];
+      insertTriggers: InsertTrigger[];
     }
   | {
       type: 'wave';
@@ -80,6 +100,7 @@ export type ResolutionEvent =
       converted: { from: ClearedEntry | null; id: number; bomb: BombKind; at: Pos }[];
       /** 被波及、将在下一波引爆的炸弹 */
       queued: { id: number; at: Pos }[];
+      insertTriggers: InsertTrigger[];
     }
   | { type: 'gravity'; gravity: Gravity; moves: TileMove[]; spawns: TileSpawn[] };
 
@@ -94,6 +115,10 @@ export interface ActionResult {
   passiveClearCount: number;
   /** 本次行动是否主动清除了至少一枚有色普通方块 */
   hadActiveColorClear: boolean;
+  /** 主动消除触发的嵌片基础值 E */
+  socketBonuses: EffectValues;
+  /** 本次行动中发生过有效触发的嵌片，按 ID 排序 */
+  triggeredInsertIds: string[];
 }
 
 interface Detonation {
@@ -120,13 +145,23 @@ interface WaveInput {
   conversions: Conversion[];
 }
 
+type CreatedBomb = { id: number; bomb: BombKind; at: Pos };
+
+const waveOf = (detonations: Detonation[]): WaveInput => ({ detonations, explosions: [], consume: [], conversions: [] });
+
 class Resolver {
   readonly board: Board;
   readonly events: ResolutionEvent[] = [];
   readonly activeClears = emptyClears();
+  readonly socket: EffectValues = { attack: 0, shield: 0, poison: 0 };
+  readonly triggeredIds = new Set<string>();
   passiveCount = 0;
   /** 本次行动中已引爆或已消耗的炸弹，保证每枚只引爆一次 */
   private readonly spent = new Set<number>();
+  private readonly insertAt = new Map<number, InstalledInsert>();
+  private readonly activeInserts: InstalledInsert[];
+  /** 尚未写入事件的嵌片触发，随下一条 matches／wave 事件输出 */
+  private triggers: InsertTrigger[] = [];
   private phaseCount = 0;
 
   constructor(
@@ -134,13 +169,43 @@ class Resolver {
     private readonly ctx: ResolveContext,
   ) {
     this.board = cloneBoard(board);
+    this.activeInserts = (ctx.inserts ?? []).filter((i) => !i.suppressed).sort((a, b) => a.id.localeCompare(b.id));
+    for (const ins of this.activeInserts) for (const p of ins.cells) this.insertAt.set(posKey(p), ins);
   }
 
-  private count(phase: Phase, tile: Tile): void {
-    if (phase === 'active') {
-      if (tile.kind === 'normal') this.activeClears[tile.color]++;
-    } else {
+  private insertOn(pos: Pos, type: InsertType): InstalledInsert | undefined {
+    const ins = this.insertAt.get(posKey(pos));
+    return ins?.type === type ? ins : undefined;
+  }
+
+  private trigger(t: InsertTrigger): void {
+    this.triggers.push(t);
+    this.triggeredIds.add(t.insertId);
+  }
+
+  private takeTriggers(): InsertTrigger[] {
+    const out = this.triggers;
+    this.triggers = [];
+    return out;
+  }
+
+  private count(phase: Phase, tile: Tile, pos: Pos): void {
+    if (phase === 'passive') {
       this.passiveCount++;
+      return;
+    }
+    if (tile.kind !== 'normal') return;
+    this.activeClears[tile.color]++;
+    // 主动阶段的覆盖格清除：基数嵌片认同色，催化盐认催化剂
+    const ins = this.insertAt.get(posKey(pos));
+    if (!ins) return;
+    const def = INSERT_DEFS[ins.type];
+    if (def.baseColor && def.baseColor === tile.color) {
+      this.socket[def.baseColor] += this.ctx.config.socketPerCell;
+      this.trigger({ insertId: ins.id, type: ins.type, effect: 'base', at: [pos], amount: this.ctx.config.socketPerCell });
+    } else if (ins.type === 'catalystSalt' && tile.color === 'catalyst') {
+      this.activeClears.catalyst++;
+      this.trigger({ insertId: ins.id, type: ins.type, effect: 'catalyst', at: [pos], amount: 1 });
     }
   }
 
@@ -148,21 +213,30 @@ class Resolver {
     const tile = getTile(this.board, pos);
     if (!tile) return null;
     setTile(this.board, pos, null);
-    this.count(phase, tile);
+    this.count(phase, tile, pos);
     return { id: tile.id, pos, tile };
   }
 
-  /** 按归组规则结算匹配；active 时 landings 为两枚交换方块的落点。返回是否有匹配。 */
-  resolveMatches(phase: Phase, landings: Pos[] = []): boolean {
+  /** 按归组规则结算匹配；active 时 landings 为两枚交换方块的落点。 */
+  resolveMatches(phase: Phase, landings: Pos[] = []): { matched: boolean; created: CreatedBomb[] } {
     const groups = findGroups(this.board);
-    if (groups.length === 0) return false;
+    if (groups.length === 0) return { matched: false, created: [] };
     const cleared: ClearedEntry[] = [];
-    const created: { id: number; bomb: BombKind; at: Pos }[] = [];
+    const created: CreatedBomb[] = [];
     const summary: Extract<ResolutionEvent, { type: 'matches' }>['groups'] = [];
-    // 先确定所有组的产弹格，再统一清除，保证各组同时判定
+    // 先确定所有组的产物与产弹格，再统一清除，保证各组同时判定
     const plans = groups.map((g) => {
+      let product = g.product;
+      // 土质火药：只含一条三连线、原本不产弹的组，任一格在覆盖格上就产同向直线炸弹
+      if (!product && g.lines.length === 1) {
+        const ins = g.cells.map((p) => this.insertOn(p, 'earthPowder')).find(Boolean);
+        if (ins) {
+          product = g.lines[0]!.dir === 'h' ? 'H' : 'V';
+          this.trigger({ insertId: ins.id, type: ins.type, effect: 'produce', at: g.cells.filter((p) => this.insertOn(p, 'earthPowder')) });
+        }
+      }
       let bombCell: Pos | null = null;
-      if (g.product) {
+      if (product) {
         if (phase === 'active') {
           const inGroup = landings.filter((l) => g.cells.some((p) => samePos(p, l)));
           // 主动阶段不变量：每个主动组恰好包含一个交换落点
@@ -172,24 +246,36 @@ class Resolver {
           bombCell = passiveBombCell(g, this.ctx.gravity);
         }
       }
-      return { g, bombCell };
+      return { g, product, bombCell };
     });
-    for (const { g, bombCell } of plans) {
+    for (const { g, product, bombCell } of plans) {
       for (const p of g.cells) {
         if (bombCell && samePos(p, bombCell)) continue;
         const entry = this.clearAt(phase, p);
         if (entry) cleared.push(entry);
       }
-      if (bombCell && g.product) {
+      if (bombCell && product) {
         // 产弹格原方块不计清除，直接替换为无属性炸弹
-        const b = makeBomb(this.ctx.ids, g.product);
+        const b = makeBomb(this.ctx.ids, product);
         setTile(this.board, bombCell, b);
-        created.push({ id: b.id, bomb: g.product, at: bombCell });
+        created.push({ id: b.id, bomb: product, at: bombCell });
       }
-      summary.push({ color: g.color, cells: g.cells, product: g.product, bombCell });
+      summary.push({ color: g.color, cells: g.cells, product, bombCell });
     }
-    this.events.push({ type: 'matches', phase, groups: summary, cleared, created });
-    return true;
+    this.events.push({ type: 'matches', phase, groups: summary, cleared, created, insertTriggers: this.takeTriggers() });
+    return { matched: true, created };
+  }
+
+  /** 易燃物质：匹配产出的炸弹若生成在覆盖格上，下一波引爆（改造出的炸弹本就会引爆，不重复处理） */
+  flammableDetonations(created: CreatedBomb[]): Detonation[] {
+    const out: Detonation[] = [];
+    for (const b of created) {
+      const ins = this.insertOn(b.at, 'flammable');
+      if (!ins) continue;
+      this.trigger({ insertId: ins.id, type: ins.type, effect: 'ignite', at: [b.at] });
+      out.push({ id: b.id, pos: b.at, bomb: b.bomb });
+    }
+    return out;
   }
 
   /** 波次循环：同一波内清除取并集、改造在清除之后，结果与处理先后无关。 */
@@ -204,22 +290,28 @@ class Resolver {
       const converted: Extract<ResolutionEvent, { type: 'wave' }>['converted'] = [];
       const queued = new Map<number, Pos>();
 
-      // a. 定范围；来源炸弹在此消耗
+      // a. 定范围（含火星陶、震裂石的范围修正）；来源炸弹在此消耗
       const detonations = [...input.detonations].sort((x, y) => posKey(x.pos) - posKey(y.pos));
-      for (const d of detonations) {
-        explosions.push(this.explosionOf(d, snapshot));
-      }
+      for (const d of detonations) explosions.push(...this.explosionsOf(d, snapshot));
       for (const d of [...detonations, ...input.consume]) {
         this.spent.add(d.id);
         const entry = this.clearAt(phase, d.pos);
         if (entry) consumed.push(entry);
       }
 
-      // b. 清除：所有范围的并集；范围内尚未引爆的炸弹进入下一波
+      // b. 清除：所有范围的并集，加上火药嵌片的连带清除；范围内尚未引爆的炸弹进入下一波
       const hit = new Map<number, Pos>();
       for (const e of explosions) for (const p of e.cells) hit.set(posKey(p), p);
-      const clearedKeys = new Set<number>();
-      for (const [k, p] of [...hit].sort((x, y) => x[0] - y[0])) {
+      const targets = new Map(hit);
+      for (const ins of this.activeInserts) {
+        if (ins.type !== 'blastPowder' || !ins.cells.some((p) => hit.has(posKey(p)))) continue;
+        // 只有覆盖格上仍有方块、且未被爆炸本身覆盖时才算有效触发
+        const extra = ins.cells.filter((p) => !hit.has(posKey(p)) && getTile(this.board, p));
+        if (extra.length === 0) continue;
+        for (const p of extra) targets.set(posKey(p), p);
+        this.trigger({ insertId: ins.id, type: ins.type, effect: 'powder', at: extra });
+      }
+      for (const [, p] of [...targets].sort((x, y) => x[0] - y[0])) {
         const tile = getTile(this.board, p);
         if (!tile) continue;
         if (tile.kind === 'bomb') {
@@ -227,10 +319,7 @@ class Resolver {
           continue;
         }
         const entry = this.clearAt(phase, p);
-        if (entry) {
-          cleared.push(entry);
-          clearedKeys.add(k);
-        }
+        if (entry) cleared.push(entry);
       }
 
       // c. 改造 = 清除原有色方块（若 b 未清除，此时计数）+ 放下炸弹；对象按本波开始时的快照判定
@@ -248,7 +337,7 @@ class Resolver {
         }
       }
 
-      // d. 生成触发：留给嵌片接入（易燃物质、星火矿脉）
+      // d. 生成触发：第一批中只有易燃物质，且改造出的炸弹本就在下一波引爆，无需额外处理
 
       // e. 记录
       this.events.push({
@@ -260,32 +349,45 @@ class Resolver {
         cleared,
         converted,
         queued: [...queued].map(([id, at]) => ({ id, at })),
+        insertTriggers: this.takeTriggers(),
       });
 
       for (const [id, pos] of queued) {
         const t = getTile(this.board, pos) as BombTile;
         next.push({ id, pos, bomb: t.bomb });
       }
-      input = next.length > 0 ? { detonations: next, explosions: [], consume: [], conversions: [] } : null;
+      input = next.length > 0 ? waveOf(next) : null;
       index++;
     }
   }
 
-  private explosionOf(d: Detonation, snapshot: Board): Explosion {
+  private explosionsOf(d: Detonation, snapshot: Board): Explosion[] {
     const rows = this.board.length;
     const cols = this.board[0]!.length;
     const { r, c } = d.pos;
+    const base = { origin: d.pos, sourceId: d.id };
     switch (d.bomb) {
       case 'H':
-        return { shape: 'H', origin: d.pos, sourceId: d.id, cells: rect(rows, cols, r, r, 0, cols - 1) };
-      case 'V':
-        return { shape: 'V', origin: d.pos, sourceId: d.id, cells: rect(rows, cols, 0, rows - 1, c, c) };
-      case 'A':
-        return { shape: 'A', origin: d.pos, sourceId: d.id, cells: rect(rows, cols, r - 1, r + 1, c - 1, c + 1) };
+      case 'V': {
+        const line: Explosion =
+          d.bomb === 'H'
+            ? { ...base, shape: 'H', cells: rect(rows, cols, r, r, 0, cols - 1) }
+            : { ...base, shape: 'V', cells: rect(rows, cols, 0, rows - 1, c, c) };
+        const ember = this.insertOn(d.pos, 'emberClay');
+        if (!ember) return [line];
+        this.trigger({ insertId: ember.id, type: ember.type, effect: 'ember', at: [d.pos] });
+        return [line, { ...base, shape: 'A', cells: rect(rows, cols, r - 1, r + 1, c - 1, c + 1), byInsert: ember.id }];
+      }
+      case 'A': {
+        const quake = this.insertOn(d.pos, 'quakeStone');
+        if (!quake) return [{ ...base, shape: 'A', cells: rect(rows, cols, r - 1, r + 1, c - 1, c + 1) }];
+        this.trigger({ insertId: quake.id, type: quake.type, effect: 'quake', at: [d.pos] });
+        return [{ ...base, shape: 'square5', cells: rect(rows, cols, r - 2, r + 2, c - 2, c + 2), byInsert: quake.id }];
+      }
       case 'CB': {
         const target = d.forcedColor ?? this.pickExistingColor(snapshot);
         const cells = target ? cellsOfColor(snapshot, target) : [];
-        return { shape: 'CB', origin: d.pos, sourceId: d.id, cells, targetColor: target };
+        return [{ ...base, shape: 'CB', cells, targetColor: target }];
       }
     }
   }
@@ -305,12 +407,19 @@ class Resolver {
     return true;
   }
 
+  /** 匹配结算后，若易燃物质点火，就在同一阶段进入波次 */
+  matchesThenWaves(phase: Phase, landings?: Pos[]): boolean {
+    const { matched, created } = this.resolveMatches(phase, landings);
+    const lit = this.flammableDetonations(created);
+    if (lit.length > 0) this.runWaves(phase, waveOf(lit));
+    return matched;
+  }
+
   /** 第一次重力移动之后：反复找匹配直到棋盘稳定。 */
   runPassive(): void {
     while (this.gravityStep()) {
       if (++this.phaseCount > this.ctx.config.maxPhases) throw new Error('单次行动阶段数超过工程保护上限');
-      this.resolveMatches('passive');
-      // 被动爆炸只来自嵌片；接入嵌片后在此调用 runWaves('passive', ...)
+      this.matchesThenWaves('passive');
     }
   }
 }
@@ -380,6 +489,8 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     activeClearsByType: emptyClears(),
     passiveClearCount: 0,
     hadActiveColorClear: false,
+    socketBonuses: { attack: 0, shield: 0, poison: 0 },
+    triggeredInsertIds: [],
   });
 
   const res = new Resolver(board, ctx);
@@ -391,7 +502,7 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     const t = getTile(board, action.at);
     if (!t || t.kind !== 'bomb') return invalid('notBomb');
     res.events.push({ type: 'ignite', at: action.at, bomb: t.bomb });
-    res.runWaves('active', { detonations: [{ id: t.id, pos: action.at, bomb: t.bomb }], explosions: [], consume: [], conversions: [] });
+    res.runWaves('active', waveOf([{ id: t.id, pos: action.at, bomb: t.bomb }]));
     res.runPassive();
   } else {
     const { from, to } = action;
@@ -415,15 +526,9 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     } else if ((a.kind === 'bomb' && a.bomb === 'CB') || (b.kind === 'bomb' && b.bomb === 'CB')) {
       // CB 与普通方块交换：按对方类型清除
       const [cb, cbPos, other] = a.kind === 'bomb' && a.bomb === 'CB' ? [a, to, b] : [b as BombTile, from, a];
-      res.runWaves('active', {
-        detonations: [{ id: cb.id, pos: cbPos, bomb: 'CB', forcedColor: (other as { color: Color }).color }],
-        explosions: [],
-        consume: [],
-        conversions: [],
-      });
+      res.runWaves('active', waveOf([{ id: cb.id, pos: cbPos, bomb: 'CB', forcedColor: (other as { color: Color }).color }]));
       res.runPassive();
-    } else if (res.resolveMatches('active', [to, from])) {
-      // 主动匹配本身不引爆炸弹；接入易燃物质等嵌片后，生成触发的爆炸在此进入主动波次
+    } else if (res.matchesThenWaves('active', [to, from])) {
       res.runPassive();
     } else {
       res.events.push({ type: 'noMatch' });
@@ -439,5 +544,7 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     activeClearsByType: res.activeClears,
     passiveClearCount: res.passiveCount,
     hadActiveColorClear: colorClears > 0,
+    socketBonuses: res.socket,
+    triggeredInsertIds: [...res.triggeredIds].sort(),
   };
 }

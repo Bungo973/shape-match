@@ -14,6 +14,10 @@ export interface EngineConfig {
   /** 每层旧充能给攻击、护盾、毒气基础值各加多少 */
   chargeBonus: number;
   chargeCap: number;
+  /** 锋刃／壁垒／毒囊每个触发格提供的基数 */
+  socketPerCell: number;
+  /** 棋盘上同时安装的嵌片上限 */
+  maxInstalledInserts: number;
   /** 工程保护：单次行动的阶段数上限，超出视为程序错误 */
   maxPhases: number;
 }
@@ -27,5 +31,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   catalystPerCharge: 3,
   chargeBonus: 3,
   chargeCap: 2,
+  socketPerCell: 2,
+  maxInstalledInserts: 6,
   maxPhases: 200,
 };
