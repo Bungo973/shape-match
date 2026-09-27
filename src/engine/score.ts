@@ -14,8 +14,10 @@ export interface SettlementInput {
   hadActiveColorClear: boolean;
   /** 行动开始前存储的催化剂充能层数 */
   chargesBefore: number;
-  /** 主动消除触发的嵌片基础值 E；嵌片接入前为 0 */
+  /** 主动消除触发的嵌片基础值 E */
   socketBonuses?: EffectValues;
+  /** 倍率档位修正（神器提高为正，倍率侵蚀为负）；结果限制在 ×1 至封顶之间 */
+  multiplierStepDelta?: number;
 }
 
 export interface Settlement {
@@ -29,14 +31,15 @@ export interface Settlement {
   chargesAfter: number;
 }
 
-export function multiplierFor(passiveClearCount: number, config: EngineConfig): number {
-  return 2 ** Math.min(Math.floor(passiveClearCount / config.passivePerStep), config.maxMultiplierSteps);
+export function multiplierFor(passiveClearCount: number, config: EngineConfig, stepDelta = 0): number {
+  const steps = Math.min(Math.floor(passiveClearCount / config.passivePerStep), config.maxMultiplierSteps) + stepDelta;
+  return 2 ** Math.max(0, Math.min(config.maxMultiplierSteps, steps));
 }
 
 export function settle(input: SettlementInput, config: EngineConfig): Settlement {
   const A = input.activeClearsByType;
   const E = input.socketBonuses ?? { attack: 0, shield: 0, poison: 0 };
-  const M = multiplierFor(input.passiveClearCount, config);
+  const M = multiplierFor(input.passiveClearCount, config, input.multiplierStepDelta ?? 0);
   // 至少主动清除一枚有色普通方块的行动才消耗旧充能（GAME_RULES §2 第 5 步）
   const C = input.hadActiveColorClear ? input.chargesBefore : 0;
   const bonus = config.chargeBonus * C;

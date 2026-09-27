@@ -6,3 +6,4 @@ export * from './match';
 export * from './resolve';
 export * from './score';
 export * from './inserts';
+export * from './battle';

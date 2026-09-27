@@ -20,6 +20,16 @@ export interface EngineConfig {
   maxInstalledInserts: number;
   /** 工程保护：单次行动的阶段数上限，超出视为程序错误 */
   maxPhases: number;
+  // ---- 战斗 ----
+  playerMaxHp: number;
+  apPerTurn: number;
+  playerShieldCap: number;
+  /** 毒气眩晕阈值 */
+  poisonThreshold: number;
+  /** 敌人回合末毒气控制进度衰减量 */
+  poisonDecay: number;
+  /** 重力反转持续的玩家回合数 */
+  gravityTurns: number;
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
@@ -34,4 +44,10 @@ export const DEFAULT_CONFIG: EngineConfig = {
   socketPerCell: 2,
   maxInstalledInserts: 6,
   maxPhases: 200,
+  playerMaxHp: 40,
+  apPerTurn: 3,
+  playerShieldCap: 40,
+  poisonThreshold: 12,
+  poisonDecay: 2,
+  gravityTurns: 3,
 };
