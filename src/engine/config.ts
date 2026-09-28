@@ -9,6 +9,8 @@ export interface EngineConfig {
   /** 倍率 = 2 ^ min(floor(P / passivePerStep), maxMultiplierSteps) */
   passivePerStep: number;
   maxMultiplierSteps: number;
+  /** 主动阶段亲手做出的产弹匹配（四连、五连、T/L），该组清除的方块按此倍数计入基数 */
+  activeSpecialMatchFactor: number;
   /** 每满多少个主动催化剂获得 1 层充能 */
   catalystPerCharge: number;
   /** 每层旧充能给攻击、护盾、毒气基础值各加多少 */
@@ -47,6 +49,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   colorWeights: { attack: 30, shield: 25, poison: 25, catalyst: 20 },
   passivePerStep: 3,
   maxMultiplierSteps: 2,
+  activeSpecialMatchFactor: 2,
   catalystPerCharge: 3,
   chargeBonus: 1,
   chargeCap: 5,

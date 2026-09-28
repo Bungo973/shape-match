@@ -58,7 +58,7 @@ describe('土质火药', () => {
     const [m] = matches(res.events);
     expect(m!.created).toEqual([expect.objectContaining({ bomb: 'H', at: { r: 0, c: 2 } })]);
     expect(m!.insertTriggers[0]!.effect).toBe('produce');
-    expect(res.activeClearsByType.attack).toBe(2);
+    expect(res.activeClearsByType.attack).toBe(4);
   });
 
   it('被动竖三连碰到覆盖格，按重力最远格产 V', () => {

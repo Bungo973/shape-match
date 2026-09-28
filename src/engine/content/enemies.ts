@@ -7,7 +7,7 @@ const atk = (amount: number): Intent => ({ parts: [{ kind: 'attack', amount }] }
 export const CRYSTAL_MOLE: EnemyDef = {
   id: 'crystal-mole',
   name: '晶背鼹鼠',
-  maxHp: 110,
+  maxHp: 130,
   fallbackDefend: 8,
   script: [atk(11), atk(15), atk(11), atk(19)],
 };
@@ -16,7 +16,7 @@ export const CRYSTAL_MOLE: EnemyDef = {
 export const CAVE_BATS: EnemyDef = {
   id: 'cave-bats',
   name: '洞蝠群',
-  maxHp: 130,
+  maxHp: 155,
   fallbackDefend: 8,
   // 蓄力后的俯冲 13+13=26，超过护盾上限 20，必须眩晕、抢杀或硬吃
   script: [{ parts: [{ kind: 'charge', amount: 13 }] }, atk(13), atk(9)],
@@ -26,7 +26,7 @@ export const CAVE_BATS: EnemyDef = {
 export const ROCK_CRAB: EnemyDef = {
   id: 'rock-crab',
   name: '吞光岩蟹',
-  maxHp: 210,
+  maxHp: 250,
   fallbackDefend: 12,
   script: [
     atk(18),

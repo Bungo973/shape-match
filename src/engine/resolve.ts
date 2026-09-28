@@ -91,7 +91,8 @@ export type ResolutionEvent =
   | {
       type: 'matches';
       phase: Phase;
-      groups: { color: Color; cells: Pos[]; product: BombKind | null; bombCell: Pos | null }[];
+      /** bonus：主动产弹匹配额外计入的基数（奖励亲手做出的特殊匹配） */
+      groups: { color: Color; cells: Pos[]; product: BombKind | null; bombCell: Pos | null; bonus: number }[];
       cleared: ClearedEntry[];
       created: { id: number; bomb: BombKind; at: Pos }[];
       insertTriggers: InsertTrigger[];
@@ -266,10 +267,20 @@ class Resolver {
       return { g, product, bombCell };
     });
     for (const { g, product, bombCell } of plans) {
+      let clearedHere = 0;
       for (const p of g.cells) {
         if (bombCell && samePos(p, bombCell)) continue;
         const entry = this.clearAt(phase, p);
-        if (entry) cleared.push(entry);
+        if (entry) {
+          cleared.push(entry);
+          if (entry.tile.kind === 'normal') clearedHere++;
+        }
+      }
+      // 亲手做出的特殊匹配：该组清除的方块按倍数计入基数（产弹格本身不计）
+      let bonus = 0;
+      if (phase === 'active' && product) {
+        bonus = clearedHere * (this.ctx.config.activeSpecialMatchFactor - 1);
+        this.activeClears[g.color] += bonus;
       }
       if (bombCell && product) {
         // 产弹格原方块不计清除，直接替换为无属性炸弹
@@ -277,7 +288,7 @@ class Resolver {
         setTile(this.board, bombCell, b);
         created.push({ id: b.id, bomb: product, at: bombCell });
       }
-      summary.push({ color: g.color, cells: g.cells, product, bombCell });
+      summary.push({ color: g.color, cells: g.cells, product, bombCell, bonus });
     }
     this.events.push({ type: 'matches', phase, groups: summary, cleared, created, insertTriggers: this.takeTriggers() });
     return { matched: true, created };

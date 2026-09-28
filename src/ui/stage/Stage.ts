@@ -3,6 +3,7 @@
 import gsap from 'gsap';
 import { Application, Assets, Container, Graphics, GraphicsContext, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import {
+  DEFAULT_CONFIG,
   posKey,
   type ActionLog,
   type Board,
@@ -15,6 +16,7 @@ import {
   type ResolutionEvent,
   type Tile,
 } from '../../engine';
+import { sfx } from '../audio';
 import { INSERT_HEX, insertSymbolSvg } from '../insertStyle';
 
 export const STAGE_W = 1600;
@@ -81,6 +83,14 @@ export class Stage {
   private readonly selection = new Graphics();
   private readonly cursor = new Graphics();
   private readonly hint: Text;
+  /** 本次结算中的连锁层数、被动清除累计与倍率档位，用于实时反馈 */
+  private chain = 0;
+  private passiveSoFar = 0;
+  private tier = 0;
+  /** 本次行动主动清除的方块位置与颜色：结算后化作光点飞向目标 */
+  private activeHits: { x: number; y: number; color: Color }[] = [];
+  private chainText!: Text;
+  private enemyBaseTint = 0xffffff;
   private alchemist!: Sprite;
   private enemy!: Sprite;
   private readonly enemyTex = new Map<string, Texture>();
@@ -143,7 +153,8 @@ export class Stage {
     gsap.killTweensOf(this.enemy);
     gsap.killTweensOf(this.enemy.scale);
     this.enemy.texture = tex ?? fallback;
-    this.enemy.tint = tex ? 0xffffff : 0xa0a8ff;
+    this.enemyBaseTint = tex ? 0xffffff : 0xa0a8ff;
+    this.enemy.tint = this.enemyBaseTint;
     this.enemy.rotation = 0;
     this.enemy.scale.set(look.width / this.enemy.texture.width);
     this.enemy.position.set(look.x, look.bottom);
@@ -225,6 +236,14 @@ export class Stage {
     this.fxLayer.blendMode = 'add';
     this.root.addChild(this.insertLayer, this.insertGlow, mask, this.tileLayer, this.fxLayer, this.uiLayer);
     this.uiLayer.addChild(this.ghost, this.selection, this.cursor, this.hint);
+    this.chainText = new Text({
+      text: '',
+      style: { fontFamily: 'system-ui, sans-serif', fontSize: 44, fontWeight: '900', fill: 0xffe08a, stroke: { color: 0x2a1405, width: 8 } },
+    });
+    this.chainText.anchor.set(0.5);
+    this.chainText.position.set(BOARD.x + BOARD.size / 2, BOARD.y + 36);
+    this.chainText.alpha = 0;
+    this.uiLayer.addChild(this.chainText);
     this.cursor.visible = false;
 
     // 输入
@@ -498,6 +517,10 @@ export class Stage {
   // ---------- 播放结算事件 ----------
 
   async play(events: ResolutionEvent[]): Promise<void> {
+    this.chain = 0;
+    this.passiveSoFar = 0;
+    this.tier = 0;
+    this.activeHits = [];
     for (const ev of events) {
       switch (ev.type) {
         case 'swap':
@@ -521,6 +544,73 @@ export class Stage {
           break;
       }
     }
+    if (this.chain > 0) gsap.to(this.chainText, { alpha: 0, duration: 0.4, delay: 0.5 });
+  }
+
+  // ---------- 实时反馈 ----------
+
+  private showChain(): void {
+    const t = this.chainText;
+    gsap.killTweensOf(t);
+    gsap.killTweensOf(t.scale);
+    t.text = `连锁 ${this.chain}`;
+    t.style.fill = [0xffe08a, 0xffc05a, 0xff9a3c, 0xff6b3d, 0xff4a8a][Math.min(4, this.chain - 1)]!;
+    t.alpha = 1;
+    gsap.fromTo(t.scale, { x: 1.7, y: 1.7 }, { x: 1, y: 1, duration: 0.25, ease: 'back.out(3)' });
+  }
+
+  /** 被动清除累计到新的倍率档位时的爆点 */
+  private addPassive(n: number): void {
+    if (n <= 0) return;
+    this.passiveSoFar += n;
+    const tier = Math.min(Math.floor(this.passiveSoFar / DEFAULT_CONFIG.passivePerStep), DEFAULT_CONFIG.maxMultiplierSteps);
+    if (tier <= this.tier) return;
+    this.tier = tier;
+    sfx.multiplierUp(tier);
+    this.banner(`倍率 ×${2 ** tier}！`, 0xffb347, 76, BOARD.y + BOARD.size / 2);
+    this.flashBoard(0xffd27a, 0.35);
+    this.shake(6 + tier * 4);
+  }
+
+  private recordActive(entries: { pos: Pos; tile: Tile }[]): void {
+    for (const e of entries) {
+      if (e.tile.kind !== 'normal') continue;
+      const { x, y } = center(e.pos);
+      this.activeHits.push({ x, y, color: e.tile.color });
+    }
+  }
+
+  /** 棋盘中央的大字：倍率升档、每步评价 */
+  private banner(text: string, color: number, size: number, y: number, hold = 0.55): void {
+    const t = new Text({ text, style: { fontFamily: 'system-ui, sans-serif', fontSize: size, fontWeight: '900', fill: color, stroke: { color: 0x1a0c02, width: 10 } } });
+    t.anchor.set(0.5);
+    t.position.set(BOARD.x + BOARD.size / 2, y);
+    this.uiLayer.addChild(t);
+    gsap.fromTo(t.scale, { x: 0.3, y: 0.3 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(3)' });
+    gsap.to(t, { alpha: 0, y: y - 30, duration: 0.35, delay: hold, onComplete: () => t.destroy() });
+  }
+
+  private flashBoard(color: number, alpha: number): void {
+    const f = new Graphics().rect(BOARD.x, BOARD.y, BOARD.size, BOARD.size).fill({ color, alpha });
+    f.blendMode = 'add';
+    this.fxLayer.addChild(f);
+    gsap.to(f, { alpha: 0, duration: 0.35, onComplete: () => f.destroy() });
+  }
+
+  /** 画面停顿：打击感的关键，短暂冻结所有补间 */
+  private hitStop(ms: number): void {
+    gsap.globalTimeline.pause();
+    window.setTimeout(() => gsap.globalTimeline.resume(), ms);
+  }
+
+  /** 每步评价与组合技名称，由界面在结算后调用 */
+  showRating(rating: { level: number; text: string; combo?: string }): void {
+    const colors = [0x8fd0ff, 0xffd76a, 0xff7ce8];
+    const sizes = [58, 70, 84];
+    const i = Math.max(0, Math.min(2, rating.level - 1));
+    sfx.rating(rating.level);
+    if (rating.combo) this.banner(rating.combo, 0xffffff, 40, BOARD.y + BOARD.size / 2 - 90, 0.7);
+    this.banner(rating.text, colors[i]!, sizes[i]!, BOARD.y + BOARD.size / 2 - 20, 0.7);
   }
 
   private spriteAt(p: Pos): Container | undefined {
@@ -533,6 +623,7 @@ export class Stage {
     const b = this.grid[to.r]![to.c]!;
     this.grid[from.r]![from.c] = b;
     this.grid[to.r]![to.c] = a;
+    sfx.swap();
     const tl = gsap.timeline();
     tl.to(this.sprites.get(a)!, { ...center(to), duration: 0.16, ease: 'power2.inOut' }, 0);
     tl.to(this.sprites.get(b)!, { ...center(from), duration: 0.16, ease: 'power2.inOut' }, 0);
@@ -567,6 +658,21 @@ export class Stage {
 
   private async playMatches(ev: Extract<ResolutionEvent, { type: 'matches' }>): Promise<void> {
     const tl = gsap.timeline();
+    if (ev.phase === 'passive') {
+      this.chain++;
+      this.showChain();
+    } else {
+      this.recordActive(ev.cleared);
+    }
+    sfx.pop(this.chain, ev.cleared.length);
+    if (ev.created.length > 0) tl.call(() => sfx.bombCreate(), [], 0.14);
+    // 亲手做出的特殊匹配：在产弹格旁标出基数翻倍
+    for (const g of ev.groups) {
+      if (g.bonus > 0 && g.bombCell) {
+        const { x, y } = center(g.bombCell);
+        tl.call(() => this.floatText(x, y - 30, '基数 ×2', 0xffe08a, 22), [], 0.18);
+      }
+    }
     for (const c of ev.cleared) {
       this.removeTile(tl, c.id, 0, this.tileColor(c.tile));
       this.grid[c.pos.r]![c.pos.c] = null;
@@ -579,6 +685,7 @@ export class Stage {
     this.glowInserts(tl, ev.insertTriggers.map((t) => t.insertId), 0);
     tl.to({}, { duration: 0.08 });
     await tl;
+    if (ev.phase === 'passive') this.addPassive(ev.cleared.length);
   }
 
   private async playWave(ev: Extract<ResolutionEvent, { type: 'wave' }>): Promise<void> {
@@ -594,6 +701,13 @@ export class Stage {
     }
     const at = (p: Pos) => delay.get(posKey(p)) ?? 0;
 
+    const combo = ev.explosions.some((e) => e.shape === 'cross' || e.shape === 'rows3' || e.shape === 'cols3' || e.shape === 'square5' || e.shape === 'board');
+    sfx.explosion(delay.size + (combo ? 20 : 0));
+    if (combo) {
+      this.flashBoard(0xffffff, ev.explosions.some((e) => e.shape === 'board' || e.shape === 'square5') ? 0.6 : 0.4);
+      this.hitStop(90);
+    }
+    if (ev.phase === 'active') this.recordActive([...ev.cleared, ...ev.converted.flatMap((c) => (c.from ? [c.from] : []))]);
     for (const c of ev.consumed) {
       this.removeTile(tl, c.id, 0, BOMB_HEX, true);
       this.grid[c.pos.r]![c.pos.c] = null;
@@ -620,6 +734,7 @@ export class Stage {
     if (cleared > 6) tl.call(() => this.shake(Math.min(14, 3 + cleared / 4)), [], 0);
     tl.to({}, { duration: 0.1 });
     await tl;
+    if (ev.phase === 'passive') this.addPassive(cleared + ev.converted.filter((c) => c.from).length);
   }
 
   private explosionFx(tl: gsap.core.Timeline, e: Explosion): void {
@@ -750,20 +865,86 @@ export class Stage {
     gsap.to(t, { y: y - 70, alpha: 0, duration: 1.1, delay: 0.4, ease: 'power1.in', onComplete: () => t.destroy() });
   }
 
+  /** 从棋盘上的主动清除位置发出光点，飞向目标后触发 onArrive */
+  private orbs(tl: gsap.core.Timeline, from: { x: number; y: number }[], color: number, to: { x: number; y: number }, start: number): number {
+    const picks = from.length > 10 ? from.filter((_, i) => i % Math.ceil(from.length / 10) === 0) : from;
+    let last = start;
+    picks.forEach((p, i) => {
+      const orb = new Sprite(this.particleTex);
+      orb.anchor.set(0.5);
+      orb.tint = color;
+      orb.blendMode = 'add';
+      orb.scale.set(0.9);
+      orb.position.set(p.x, p.y);
+      orb.alpha = 0;
+      this.fxLayer.addChild(orb);
+      const t = start + i * 0.03;
+      // 先向上弹起，再加速冲向目标，形成弧线
+      const mid = { x: (p.x + to.x) / 2, y: Math.min(p.y, to.y) - 120 - Math.random() * 60 };
+      tl.set(orb, { alpha: 1 }, t);
+      tl.to(orb, { x: mid.x, y: mid.y, duration: 0.18, ease: 'power1.out' }, t);
+      tl.to(orb, { x: to.x + (Math.random() - 0.5) * 30, y: to.y + (Math.random() - 0.5) * 30, duration: 0.2, ease: 'power2.in' }, t + 0.18);
+      tl.to(orb.scale, { x: 0.3, y: 0.3, duration: 0.2 }, t + 0.18);
+      tl.call(() => orb.destroy(), [], t + 0.4);
+      last = Math.max(last, t + 0.38);
+    });
+    return last;
+  }
+
   async playPlayerEffects(log: ActionLog): Promise<void> {
     if (!log.settlement) return;
     const tl = gsap.timeline();
+    const fx = log.settlement.finalEffects;
+    const enemyAt = { x: this.enemyX, y: this.enemy.y - this.enemy.height * 0.5 };
+    const heroAt = { x: HERO.x, y: HERO.bottom - HERO.height * 0.55 };
+    const hitsOf = (c: Color) => this.activeHits.filter((h) => h.color === c);
     const dealt = log.damageToEnemyHp + log.damageToEnemyShield;
+
+    // 攻击：光点飞向敌人，命中时停顿、闪红、后仰、大数字
     if (dealt > 0) {
       tl.to(this.alchemist, { x: HERO.x + 50, duration: 0.12, ease: 'power2.out' }, 0);
       tl.to(this.alchemist, { x: HERO.x, duration: 0.25, ease: 'power2.inOut' }, 0.12);
-      tl.to(this.enemy, { x: this.enemyX + 20, duration: 0.05, yoyo: true, repeat: 3 }, 0.12);
-      tl.call(() => this.floatText(this.enemyX, 460, `-${dealt}`, 0xff5a5a, 48), [], 0.12);
+      const src = hitsOf('attack').length ? hitsOf('attack') : [heroAt];
+      const arrive = this.orbs(tl, src, COLOR_HEX.attack, enemyAt, 0.05);
+      const big = dealt >= 30;
+      tl.call(
+        () => {
+          sfx.hitEnemy(big);
+          this.hitStop(big ? 110 : 60);
+          this.enemy.tint = 0xff7070;
+          gsap.delayedCall(0.12, () => (this.enemy.tint = this.enemyBaseTint));
+          this.shake(Math.min(18, 4 + dealt / 5));
+          this.floatText(this.enemyX, 440, `-${dealt}`, 0xff5a5a, Math.min(96, 44 + dealt / 2));
+        },
+        [],
+        arrive,
+      );
+      tl.to(this.enemy, { x: this.enemyX + 26, duration: 0.06, ease: 'power2.out' }, arrive);
+      tl.to(this.enemy, { x: this.enemyX, duration: 0.3, ease: 'elastic.out(1, 0.4)' }, arrive + 0.06);
     }
-    if (log.shieldGained > 0) tl.call(() => this.floatText(HERO.x, 300, `+${log.shieldGained} 护盾`, 0x7cc4ff), [], 0.05);
-    if (log.poisonAdded > 0) tl.call(() => this.floatText(this.enemyX, 520, `+${log.poisonAdded} 毒`, 0x6dff7a, 30), [], 0.2);
-    if (log.stunApplied) tl.call(() => this.floatText(this.enemyX, 400, '眩晕！', 0xd6ff5c, 44), [], 0.35);
-    tl.to({}, { duration: 0.45 });
+    // 护盾：光点飞回主角
+    if (log.shieldGained > 0 || fx.shield > 0) {
+      const src = hitsOf('shield').length ? hitsOf('shield') : [heroAt];
+      const arrive = this.orbs(tl, src, COLOR_HEX.shield, heroAt, 0.1);
+      tl.call(() => {
+        sfx.shield();
+        this.floatText(HERO.x, 300, log.shieldGained > 0 ? `+${log.shieldGained} 护盾` : '护盾已满', 0x7cc4ff);
+      }, [], arrive);
+    }
+    // 毒气：光点飞向敌人
+    if (log.poisonAdded > 0 || log.stunApplied) {
+      const src = hitsOf('poison').length ? hitsOf('poison') : [heroAt];
+      const arrive = this.orbs(tl, src, COLOR_HEX.poison, enemyAt, 0.15);
+      tl.call(() => {
+        sfx.absorb();
+        if (log.poisonAdded > 0) this.floatText(this.enemyX, 520, `+${log.poisonAdded} 毒`, 0x6dff7a, 30);
+        if (log.stunApplied) {
+          sfx.stun();
+          this.floatText(this.enemyX, 380, '眩晕！', 0xd6ff5c, 52);
+        }
+      }, [], arrive);
+    }
+    tl.to({}, { duration: 0.35 });
     await tl;
   }
 
@@ -779,14 +960,20 @@ export class Stage {
     if (log.apBonusNext > 0) tl.call(() => this.floatText(HERO.x, 250, `下回合 +${log.apBonusNext} 行动力`, 0xffd76a, 28), [], t0 + 0.4);
     if (log.cancelledByStun) {
       tl.to(this.enemy, { rotation: -0.08, duration: 0.1, yoyo: true, repeat: 3 }, t0);
-      tl.call(() => this.floatText(this.enemyX, 420, '眩晕中，行动取消', 0xd6ff5c, 30), [], t0);
+      tl.call(() => {
+        sfx.stun();
+        this.floatText(this.enemyX, 420, '眩晕中，行动取消', 0xd6ff5c, 30);
+      }, [], t0);
     } else {
       const hit = log.damageToPlayerHp + log.damageToPlayerShield;
       if (hit > 0) {
         tl.to(this.enemy, { x: this.enemyX - 110, duration: 0.14, ease: 'power3.in' }, t0);
         tl.to(this.enemy, { x: this.enemyX, duration: 0.3, ease: 'power2.out' }, t0 + 0.14);
         tl.to(this.alchemist, { x: HERO.x - 20, duration: 0.05, yoyo: true, repeat: 3 }, t0 + 0.14);
-        tl.call(() => this.shake(10), [], t0 + 0.14);
+        tl.call(() => {
+          this.shake(10);
+          sfx.playerHit();
+        }, [], t0 + 0.14);
         if (log.damageToPlayerShield > 0) tl.call(() => this.floatText(HERO.x, 330, `-${log.damageToPlayerShield} 护盾`, 0x7cc4ff, 32), [], t0 + 0.14);
         if (log.damageToPlayerHp > 0) tl.call(() => this.floatText(HERO.x, 400, `-${log.damageToPlayerHp}`, 0xff5a5a, 48), [], t0 + 0.2);
       } else {

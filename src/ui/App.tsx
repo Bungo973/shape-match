@@ -24,6 +24,8 @@ import {
   type RunState,
 } from '../engine';
 import { ArtifactStrip, EnemyPanel, PlayerPanel, REASON_TEXT, SettlePanel } from './Hud';
+import { isMuted, setMuted } from './audio';
+import { rateMove } from './rating';
 import { clearRun, loadRun, saveRun } from './save';
 import { BoardEditor } from './screens/BoardEditor';
 import { ArtifactScreen, CampScreen, MapScreen, ResultScreen, RewardScreen, StarterScreen } from './screens/Screens';
@@ -50,6 +52,7 @@ export function App() {
   const [lastLog, setLastLog] = useState<ActionLog | null>(null);
   const [toast, setToast] = useState('');
   const [speed, setSpeed] = useState(1);
+  const [muted, setMutedState] = useState(isMuted);
   const [placeBomb, setPlaceBomb] = useState<BombKind | null>(null);
   const placeRef = useRef(placeBomb);
   placeRef.current = placeBomb;
@@ -100,6 +103,8 @@ export function App() {
     await stage.play(out.log.result.events);
     if (out.run.battle) stage.sync(out.run.battle.board);
     setLastLog(out.log);
+    const rating = rateMove(out.log);
+    if (rating) stage.showRating(rating);
     await stage.playPlayerEffects(out.log);
     setRun(out.run);
     setBusyBoth(false);
@@ -244,6 +249,14 @@ export function App() {
         <div className="debug">
           <span>种子 {run.seed}</span>
           <button onClick={restart}>新的一局</button>
+          <button
+            onClick={() => {
+              setMuted(!muted);
+              setMutedState(!muted);
+            }}
+          >
+            {muted ? '🔇 静音' : '🔊 声音'}
+          </button>
           <span>速度</span>
           {[1, 2, 4].map((v) => (
             <button key={v} className={speed === v ? 'on' : ''} onClick={() => setSpeed(v)}>

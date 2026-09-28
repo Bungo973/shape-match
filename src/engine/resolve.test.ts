@@ -56,17 +56,25 @@ describe('主动匹配与产弹', () => {
       ['V', { r: 3, c: 2 }],
       ['V', { r: 3, c: 3 }],
     ]);
-    expect(res.activeClearsByType).toMatchObject({ attack: 3, shield: 3 });
+    // 亲手做出的四连：每组清除 3 格，按 2 倍计入基数
+    expect(res.activeClearsByType).toMatchObject({ attack: 6, shield: 6 });
+    expect(m!.groups.map((g) => g.bonus)).toEqual([3, 3]);
   });
 
-  it('例 2：T 形含五连，只在交换落点产一枚 CB，其余 6 格主动清除', () => {
+  it('例 2：T 形含五连，只在交换落点产一枚 CB，其余 6 格主动清除并按 2 倍计入基数', () => {
     const board = boardWith({
       '4,0': 'a', '4,1': 'a', '4,3': 'a', '4,4': 'a', '2,2': 'a', '3,2': 'a', '5,2': 'a', '4,2': 's',
     });
     const res = resolveAction(board, { type: 'swap', from: { r: 5, c: 2 }, to: { r: 4, c: 2 } }, testCtx());
     const [m] = matches(res.events);
     expect(m!.created).toEqual([expect.objectContaining({ bomb: 'CB', at: { r: 4, c: 2 } })]);
-    expect(res.activeClearsByType.attack).toBe(6);
+    expect(res.activeClearsByType.attack).toBe(12);
+  });
+
+  it('普通三连不享受特殊匹配加成', () => {
+    const board = boardWith({ '0,0': 'a', '0,1': 'a', '0,2': 's', '1,2': 'a' });
+    const res = resolveAction(board, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } }, testCtx());
+    expect(res.activeClearsByType.attack).toBe(3);
   });
 });
 
