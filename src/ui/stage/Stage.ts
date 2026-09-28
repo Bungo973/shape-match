@@ -9,12 +9,12 @@ import {
   type Color,
   type EnemyTurnLog,
   type Explosion,
-  type InsertType,
   type InstalledInsert,
   type Pos,
   type ResolutionEvent,
   type Tile,
 } from '../../engine';
+import { INSERT_GLYPH, INSERT_HEX } from '../insertStyle';
 
 export const STAGE_W = 1600;
 export const STAGE_H = 900;
@@ -27,30 +27,6 @@ const RIPPLE_STEP = 0.035;
 
 const COLOR_HEX: Record<Color, number> = { attack: 0xe6edf5, shield: 0x5aa8ff, poison: 0x5cff6a, catalyst: 0xff5ce1 };
 const BOMB_HEX = 0xff8a2a;
-/** 嵌片角标用字，保证每种都能区分 */
-const INSERT_GLYPH: Record<InsertType, string> = {
-  blade: '刃',
-  bulwark: '垒',
-  venomSac: '囊',
-  catalystSalt: '盐',
-  earthPowder: '土',
-  flammable: '燃',
-  emberClay: '陶',
-  quakeStone: '震',
-  blastPowder: '药',
-};
-const INSERT_HEX: Record<InsertType, number> = {
-  blade: 0x9fd3ff,
-  bulwark: 0xffd166,
-  venomSac: 0x7dff8a,
-  catalystSalt: 0xff8cf0,
-  earthPowder: 0xd9a066,
-  flammable: 0xff6b3d,
-  emberClay: 0xffa05c,
-  quakeStone: 0xb0a4ff,
-  blastPowder: 0xff4a4a,
-};
-
 type TextureKey = 'attack' | 'shield' | 'poison' | 'catalyst' | 'line' | 'area' | 'color' | 'alchemist' | 'mole' | 'bg' | 'frame';
 const TEXTURE_URLS: Record<TextureKey, string> = {
   attack: '/game/tile-attack.webp',
@@ -90,6 +66,9 @@ export class Stage {
   private readonly hint: Text;
   private alchemist!: Sprite;
   private mole!: Sprite;
+  private moleBaseScale = 1;
+  private moleIdle: gsap.core.Tween | null = null;
+  private enemyNote!: Text;
 
   private readonly sprites = new Map<number, Container>();
   private grid: (number | null)[][] = [];
@@ -131,6 +110,24 @@ export class Stage {
     this.app.destroy(true, { children: true });
   }
 
+  /** 切换敌人外观。新敌人美术到位前，用着色与缩放后的鼹鼠作占位 */
+  setEnemy(id: string): void {
+    const look: Record<string, { tint: number; scale: number; note: string }> = {
+      'crystal-mole': { tint: 0xffffff, scale: 1, note: '' },
+      'cave-bats': { tint: 0x8fb0ff, scale: 0.85, note: '（洞蝠群占位图）' },
+      'rock-crab': { tint: 0xc49cff, scale: 1.2, note: '（吞光岩蟹占位图）' },
+    };
+    const l = look[id] ?? { tint: 0xcccccc, scale: 1, note: '（占位图）' };
+    this.moleIdle?.kill();
+    gsap.killTweensOf(this.mole);
+    this.mole.tint = l.tint;
+    this.mole.position.set(1390, 720);
+    this.mole.rotation = 0;
+    this.mole.scale.set(this.moleBaseScale * l.scale);
+    this.moleIdle = gsap.to(this.mole.scale, { y: this.mole.scale.y * 1.02, duration: 1.3, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.enemyNote.text = l.note;
+  }
+
   setSpeed(scale: number): void {
     gsap.globalTimeline.timeScale(scale);
   }
@@ -170,7 +167,12 @@ export class Stage {
     this.mole.position.set(1390, 720);
     this.root.addChild(this.alchemist, this.mole);
     gsap.to(this.alchemist.scale, { y: this.alchemist.scale.y * 1.015, duration: 1.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    gsap.to(this.mole.scale, { y: this.mole.scale.y * 1.02, duration: 1.3, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.moleBaseScale = this.mole.scale.x;
+    this.enemyNote = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 16, fill: 0xd8d0c0, stroke: { color: 0x000000, width: 4 } } });
+    this.enemyNote.anchor.set(0.5, 0);
+    this.enemyNote.position.set(1390, 728);
+    this.root.addChild(this.enemyNote);
+    this.setEnemy('crystal-mole');
 
     // 棋盘底图与格线
     const frame = new Sprite(this.tex.frame);

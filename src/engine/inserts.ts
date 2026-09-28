@@ -22,18 +22,20 @@ export interface InsertDef {
   rarity: Rarity;
   /** 基数嵌片对应的方块颜色 */
   baseColor?: Exclude<Color, 'catalyst'>;
+  /** 卡面规则文案 */
+  text: string;
 }
 
 export const INSERT_DEFS: Record<InsertType, InsertDef> = {
-  blade: { type: 'blade', name: '锋刃', rarity: 'common', baseColor: 'attack' },
-  bulwark: { type: 'bulwark', name: '壁垒', rarity: 'common', baseColor: 'shield' },
-  venomSac: { type: 'venomSac', name: '毒囊', rarity: 'common', baseColor: 'poison' },
-  catalystSalt: { type: 'catalystSalt', name: '催化盐', rarity: 'common' },
-  earthPowder: { type: 'earthPowder', name: '土质火药', rarity: 'rare' },
-  flammable: { type: 'flammable', name: '易燃物质', rarity: 'rare' },
-  emberClay: { type: 'emberClay', name: '火星陶', rarity: 'rare' },
-  quakeStone: { type: 'quakeStone', name: '震裂石', rarity: 'epic' },
-  blastPowder: { type: 'blastPowder', name: '火药嵌片', rarity: 'epic' },
+  blade: { type: 'blade', name: '锋刃', rarity: 'common', baseColor: 'attack', text: '主动清除覆盖格上的攻击方块，每格攻击基数 +2。' },
+  bulwark: { type: 'bulwark', name: '壁垒', rarity: 'common', baseColor: 'shield', text: '主动清除覆盖格上的护盾方块，每格护盾基数 +2。' },
+  venomSac: { type: 'venomSac', name: '毒囊', rarity: 'common', baseColor: 'poison', text: '主动清除覆盖格上的毒气方块，每格毒气基数 +2。' },
+  catalystSalt: { type: 'catalystSalt', name: '催化盐', rarity: 'common', text: '主动清除覆盖格上的催化剂，每个多算一个。' },
+  earthPowder: { type: 'earthPowder', name: '土质火药', rarity: 'rare', text: '普通三连碰到覆盖格时，也会留下一枚同向直线炸弹。' },
+  flammable: { type: 'flammable', name: '易燃物质', rarity: 'rare', text: '炸弹在覆盖格上生成时立即引爆，不花行动力。' },
+  emberClay: { type: 'emberClay', name: '火星陶', rarity: 'rare', text: '覆盖格上的直线炸弹引爆时，额外炸开周围 3×3。' },
+  quakeStone: { type: 'quakeStone', name: '震裂石', rarity: 'epic', text: '覆盖格上的 3×3 炸弹引爆时，范围扩大为 5×5。' },
+  blastPowder: { type: 'blastPowder', name: '火药嵌片', rarity: 'epic', text: '爆炸碰到任一覆盖格时，连带清除整块嵌片上的方块。' },
 };
 
 /** 已安装在棋盘上的嵌片；cells 为棋盘绝对坐标 */
