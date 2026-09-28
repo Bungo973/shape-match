@@ -4,7 +4,7 @@ import { ARTIFACTS, type ArtifactKey } from './artifacts';
 import { endTurn, playerAction, startBattle, type ActionLog, type BattleState, type EnemyTurnLog, type PlayerState } from './battle';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import { SEGMENT_1, type RouteNode } from './content/enemies';
-import { canPlace, expansionCells, normalize, SHAPES, type InsertType, type InstalledInsert } from './inserts';
+import { canPlace, expansionCells, isRotationOf, normalize, SHAPES, type InsertType, type InstalledInsert } from './inserts';
 import { generateInsertChoices, mixSeed, type InsertCandidate } from './rewards';
 import { createRng } from './rng';
 import type { Action, Pos } from './types';
@@ -284,14 +284,4 @@ export function installInsert(prev: RunState, inventoryId: string, cells: Pos[],
   run.inventory = run.inventory.filter((i) => i.id !== inventoryId);
   run.installed.push({ id: item.id, type: item.type, cells: cells.map((p) => ({ ...p })) });
   return { ok: true, run };
-}
-
-function isRotationOf(shape: Pos[], cells: Pos[]): boolean {
-  const target = JSON.stringify(normalize(cells));
-  let s = normalize(shape);
-  for (let i = 0; i < 4; i++) {
-    if (JSON.stringify(s) === target) return true;
-    s = normalize(s.map((p) => ({ r: p.c, c: -p.r })));
-  }
-  return false;
 }

@@ -30,6 +30,9 @@ export interface EngineConfig {
   poisonDecayRatio: number;
   /** 重力反转持续的玩家回合数 */
   gravityTurns: number;
+  // ---- 嵌片卡模式（原型） ----
+  drawPerTurn: number;
+  handLimit: number;
   // ---- 一局 ----
   goldMinion: number;
   goldElite: number;
@@ -56,6 +59,8 @@ export const DEFAULT_CONFIG: EngineConfig = {
   poisonThresholdRatio: 0.25,
   poisonDecayRatio: 1 / 6,
   gravityTurns: 3,
+  drawPerTurn: 5,
+  handLimit: 10,
   goldMinion: 8,
   goldElite: 16,
   rerollCost: 8,

@@ -156,3 +156,19 @@ button.primary { background: linear-gradient(#d48a34, #8a4d17); font-size: 22px;
 .symbol svg { display: block; }
 .insert-emblem { width: 96px; height: 96px; align-self: center; filter: drop-shadow(0 6px 12px rgba(0,0,0,.5)); }
 .card.insert { min-height: 360px; }
+
+/* ---- 嵌片卡模式（原型） ---- */
+.card-mode .settle-panel { top: 172px; bottom: auto; width: 520px; min-height: 0; }
+.card-mode .settle-panel .settle-row.big { font-size: 20px; }
+.card-mode .settle-panel .mult { font-size: 28px; }
+.card-mode .end-turn { left: 784px; bottom: 20px; height: 150px; width: 120px; font-size: 18px; }
+.hand { position: absolute; left: 916px; right: 36px; bottom: 20px; height: 150px; display: flex; gap: 10px; align-items: flex-end; }
+.hand-card { position: relative; flex: 1 1 0; max-width: 150px; height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; padding: 10px 6px 8px; background: linear-gradient(#262b3a, #171b26); border: 2px solid #6b5334; border-radius: 10px; transition: transform .12s, border-color .12s; }
+.hand-card b { font-size: 16px; margin-top: 4px; }
+.hand-card small { font-size: 11px; color: var(--dim); line-height: 1.3; text-align: center; font-weight: 500; }
+.hand-card:hover:not(:disabled) { transform: translateY(-6px); filter: none; }
+.hand-card.on { transform: translateY(-14px); box-shadow: 0 8px 22px rgba(255,200,90,.3); }
+.hand-card:disabled { opacity: .4; }
+.hand-cost { position: absolute; left: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; background: #ffd76a; color: #2a1a08; font-size: 13px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+.hand-key { position: absolute; right: 8px; top: 6px; font-size: 11px; color: var(--dim); }
+.piles { position: absolute; left: 916px; bottom: 176px; font-size: 13px; color: var(--dim); background: rgba(0,0,0,.45); padding: 3px 10px; border-radius: 6px; }

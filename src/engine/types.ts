@@ -35,7 +35,12 @@ export type Phase = 'active' | 'passive';
 export type Action =
   /** from 为先选中或拖动起点的格；炸弹组合的锚点取其交换后的落点，即 to。 */
   | { type: 'swap'; from: Pos; to: Pos }
-  | { type: 'ignite'; at: Pos };
+  | { type: 'ignite'; at: Pos }
+  /**
+   * 嵌片卡模式：以卡片形状作为一次主动爆炸清除 cells。
+   * bonus 为属性卡的颜色词条：覆盖该颜色的普通方块时额外加基数（催化剂为额外计数）。
+   */
+  | { type: 'play'; cells: Pos[]; bonus?: { color: Color; perTile: number } };
 
 export type ClearsByType = Record<Color, number>;
 

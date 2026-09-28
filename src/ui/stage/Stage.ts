@@ -58,6 +58,10 @@ export interface StageHandlers {
   onIgnite(at: Pos): void;
   /** 调试：放炸弹模式下点击格子 */
   onPlace?(at: Pos): void;
+  /** 嵌片卡模式：鼠标所在格变化（离开棋盘时为 null） */
+  onCellHover?(at: Pos | null): void;
+  /** 嵌片卡模式：点击棋盘格 */
+  onCellClick?(at: Pos): void;
 }
 
 /** 方块的外观签名：精灵只在签名一致时才能复用 */
@@ -95,6 +99,10 @@ export class Stage {
 
   busy = false;
   placeMode = false;
+  /** 嵌片卡模式：棋盘输入改为悬停预览与点击放置，不再交换 */
+  cardMode = false;
+  private readonly ghost = new Graphics();
+  private hoverCell: Pos | null = null;
 
   private constructor(
     private readonly app: Application,
@@ -216,7 +224,7 @@ export class Stage {
     this.insertGlow.blendMode = 'add';
     this.fxLayer.blendMode = 'add';
     this.root.addChild(this.insertLayer, this.insertGlow, mask, this.tileLayer, this.fxLayer, this.uiLayer);
-    this.uiLayer.addChild(this.selection, this.cursor, this.hint);
+    this.uiLayer.addChild(this.ghost, this.selection, this.cursor, this.hint);
     this.cursor.visible = false;
 
     // 输入
@@ -226,11 +234,30 @@ export class Stage {
     this.tileLayer.on('pointerdown', (e) => {
       const p = this.root.toLocal(e.global);
       const cell = this.cellAt(p.x, p.y);
-      if (cell) this.drag = { cell, x: p.x, y: p.y };
+      if (!cell || this.cardMode) return;
+      this.drag = { cell, x: p.x, y: p.y };
     });
     app.stage.eventMode = 'static';
     app.stage.hitArea = app.screen;
+    // 卡牌模式：在根节点接收点击再换算格子，不受上层预览、特效图层的遮挡影响
+    app.stage.on('pointerdown', (e) => {
+      if (!this.cardMode || this.busy || e.button !== 0) return;
+      const p = this.root.toLocal(e.global);
+      const cell = this.cellAt(p.x, p.y);
+      if (cell) this.handlers.onCellClick?.(cell);
+    });
+    // 纯显示的图层不参与点击判定
+    for (const layer of [this.insertLayer, this.insertGlow, this.fxLayer, this.uiLayer]) layer.eventMode = 'none';
     app.stage.on('globalpointermove', (e) => {
+      if (this.cardMode) {
+        const p = this.root.toLocal(e.global);
+        const cell = this.cellAt(p.x, p.y);
+        if (cell?.r !== this.hoverCell?.r || cell?.c !== this.hoverCell?.c) {
+          this.hoverCell = cell;
+          this.handlers.onCellHover?.(cell);
+        }
+        return;
+      }
       if (!this.drag || this.busy) return;
       const p = this.root.toLocal(e.global);
       const dx = p.x - this.drag.x;
@@ -247,6 +274,22 @@ export class Stage {
       this.drag = null;
     });
     app.stage.on('pointerupoutside', () => (this.drag = null));
+  }
+
+  /**
+   * 嵌片卡的放置预览：只标出将被覆盖的格子（输入确认），不预览后续连锁。
+   * 超出棋盘的部分不画；legal 为 false 时用红色提示不能放下。
+   */
+  setGhost(cells: Pos[] | null, legal: boolean, color: number): void {
+    this.ghost.clear();
+    if (!cells) return;
+    const tint = legal ? color : 0xff5a5a;
+    for (const p of cells) {
+      if (p.r < 0 || p.r > 7 || p.c < 0 || p.c > 7) continue;
+      const x = BOARD.x + p.c * CELL;
+      const y = BOARD.y + p.r * CELL;
+      this.ghost.roundRect(x + 3, y + 3, CELL - 6, CELL - 6, 8).fill({ color: tint, alpha: 0.28 }).stroke({ width: 3, color: tint, alpha: 0.95 });
+    }
   }
 
   private cellAt(x: number, y: number): Pos | null {

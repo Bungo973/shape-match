@@ -47,7 +47,7 @@ export interface ResolveContext {
   artifacts?: readonly ArtifactKey[];
 }
 
-export type ExplosionShape = BombKind | 'cross' | 'rows3' | 'cols3' | 'square5' | 'board';
+export type ExplosionShape = BombKind | 'cross' | 'rows3' | 'cols3' | 'square5' | 'board' | 'card';
 
 export interface Explosion {
   shape: ExplosionShape;
@@ -530,7 +530,27 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
   const rows = board.length;
   const cols = board[0]!.length;
 
-  if (action.type === 'ignite') {
+  if (action.type === 'play') {
+    // 嵌片卡：与一次爆炸同样结算——覆盖的普通方块被清除，覆盖的炸弹被引爆并接力
+    if (action.cells.length === 0 || action.cells.some((p) => !inBounds(board, p))) return invalid('outOfBounds');
+    const bonus = action.bonus;
+    if (bonus) {
+      // 颜色词条按打出前的棋盘计算：覆盖到的该颜色普通方块数
+      const n = action.cells.filter((p) => {
+        const t = getTile(board, p);
+        return t?.kind === 'normal' && t.color === bonus.color;
+      }).length;
+      if (bonus.color === 'catalyst') res.activeClears.catalyst += n * bonus.perTile;
+      else res.socket[bonus.color] += n * bonus.perTile;
+    }
+    res.runWaves('active', {
+      detonations: [],
+      explosions: [{ shape: 'card', origin: action.cells[0]!, sourceId: -1, cells: action.cells }],
+      consume: [],
+      conversions: [],
+    });
+    res.runPassive();
+  } else if (action.type === 'ignite') {
     if (!inBounds(board, action.at)) return invalid('outOfBounds');
     const t = getTile(board, action.at);
     if (!t || t.kind !== 'bomb') return invalid('notBomb');

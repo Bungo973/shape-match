@@ -73,6 +73,17 @@ export function rotate(cells: Pos[]): Pos[] {
   return normalize(cells.map((p) => ({ r: p.c, c: -p.r })));
 }
 
+/** cells 是否为 shape 某个旋转的平移 */
+export function isRotationOf(shape: Pos[], cells: Pos[]): boolean {
+  const target = JSON.stringify(normalize(cells));
+  let s = normalize(shape);
+  for (let i = 0; i < 4; i++) {
+    if (JSON.stringify(s) === target) return true;
+    s = rotate(s);
+  }
+  return false;
+}
+
 export function translate(cells: Pos[], at: Pos): Pos[] {
   return cells.map((p) => ({ r: p.r + at.r, c: p.c + at.c }));
 }

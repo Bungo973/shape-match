@@ -2,12 +2,14 @@
 // 所有函数都是纯函数：输入旧状态，返回新状态与日志；状态可直接序列化存档。
 import { ARTIFACT_PARAMS, type ArtifactKey } from './artifacts';
 import { createBoard, createIdGen, weightedSpawner } from './board';
+import { CARD_DEFS, cardBonus, drawCards, shuffle, type CardInstance, type CardPiles } from './cards';
+import { isRotationOf } from './inserts';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import type { InstalledInsert } from './inserts';
 import { resolveAction, type ActionResult } from './resolve';
 import { createRng } from './rng';
 import { settle, type Settlement } from './score';
-import type { Action, Board, Gravity } from './types';
+import type { Action, Board, Gravity, Pos } from './types';
 
 export const RULES_VERSION = 1;
 
@@ -87,6 +89,8 @@ export interface BattleState {
   current: { erosionArmed: boolean; suppressedId: string | null };
   outcome: 'ongoing' | 'won' | 'lost';
   totalScore: number;
+  /** 嵌片卡模式：抽牌堆、手牌、弃牌堆；交换模式下不存在 */
+  cards?: CardPiles;
 }
 
 export interface StartBattleInput {
@@ -95,6 +99,8 @@ export interface StartBattleInput {
   enemy: EnemyDef;
   inserts?: InstalledInsert[];
   artifacts?: ArtifactKey[];
+  /** 嵌片卡模式的牌组；提供时进入卡牌模式，不能再交换或点燃 */
+  deck?: CardInstance[];
   /** 事件等给敌人的初始护盾 */
   enemyStartShield?: number;
 }
@@ -162,18 +168,46 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     outcome: 'ongoing',
     totalScore: 0,
   };
+  if (input.deck) {
+    // 洗牌与抽牌沿用同一个种子随机数，保证复现
+    const cardRng = createRng(state.rngState);
+    state.cards = { draw: shuffle(clone(input.deck), cardRng), hand: [], discard: [] };
+    drawCards(state.cards, config.drawPerTurn, config.handLimit, cardRng);
+    state.rngState = cardRng.state;
+  }
   revealNextIntent(state);
   return state;
 }
 
+/** 嵌片卡模式的行动：打出手牌中第 index 张，覆盖 cells */
+export type PlayCardAction = { type: 'playCard'; index: number; cells: Pos[] };
+export type BattleAction = Action | PlayCardAction;
+
 export type PlayerActionOutcome =
   | { ok: true; state: BattleState; log: ActionLog }
-  | { ok: false; state: BattleState; reason: 'battleOver' | 'noAp' | NonNullable<ActionResult['reason']> };
+  | { ok: false; state: BattleState; reason: 'battleOver' | 'noAp' | 'cardMode' | 'noCard' | 'badShape' | NonNullable<ActionResult['reason']> };
 
 /** 玩家的一次交换或点燃：结算、施加效果、扣 AP。击杀立即结束战斗。 */
-export function playerAction(prev: BattleState, action: Action, config: EngineConfig = DEFAULT_CONFIG): PlayerActionOutcome {
+export function playerAction(prev: BattleState, input: BattleAction, config: EngineConfig = DEFAULT_CONFIG): PlayerActionOutcome {
   if (prev.outcome !== 'ongoing') return { ok: false, state: prev, reason: 'battleOver' };
-  if (prev.ap <= 0) return { ok: false, state: prev, reason: 'noAp' };
+
+  // 卡牌模式只接受打出卡片；把卡片换算成一次“按形状清除”的结算
+  let action: Action;
+  let cost = 1;
+  let played: CardInstance | null = null;
+  if (input.type === 'playCard') {
+    const card = prev.cards?.hand[input.index];
+    if (!card) return { ok: false, state: prev, reason: 'noCard' };
+    cost = CARD_DEFS[card.defId]!.cost;
+    if (!isRotationOf(card.cells, input.cells)) return { ok: false, state: prev, reason: 'badShape' };
+    const bonus = cardBonus(card);
+    action = { type: 'play', cells: input.cells, ...(bonus ? { bonus } : {}) };
+    played = card;
+  } else {
+    if (prev.cards) return { ok: false, state: prev, reason: 'cardMode' };
+    action = input;
+  }
+  if (prev.ap < cost) return { ok: false, state: prev, reason: 'noAp' };
 
   const state = clone(prev);
   const rng = createRng(state.rngState);
@@ -193,7 +227,11 @@ export function playerAction(prev: BattleState, action: Action, config: EngineCo
   state.board = result.board;
   state.rngState = rng.state;
   state.nextId = ids.peek;
-  state.ap -= result.apSpent;
+  state.ap -= played ? cost : result.apSpent;
+  if (played && state.cards) {
+    state.cards.hand.splice(input.type === 'playCard' ? input.index : 0, 1);
+    state.cards.discard.push(played);
+  }
 
   const log: ActionLog = {
     result,
@@ -309,8 +347,12 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   if (prev.outcome !== 'ongoing') return { state: prev, log: null };
   const state = clone(prev);
 
-  // 1. 玩家回合结束：本回合生效的状态到期；向上重力扣减一回合（提前结束也计）
+  // 1. 玩家回合结束：本回合生效的状态到期；向上重力扣减一回合（提前结束也计）；手牌进弃牌堆
   state.current = { erosionArmed: false, suppressedId: null };
+  if (state.cards) {
+    state.cards.discard.push(...state.cards.hand);
+    state.cards.hand = [];
+  }
   if (state.gravityTurnsLeft > 0) {
     state.gravityTurnsLeft--;
     if (state.gravityTurnsLeft === 0) state.gravity = 'down';
@@ -364,6 +406,11 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   // 4. 下一玩家回合开始：施加敌人上回合成功施加的状态，AP 恢复
   state.turn++;
   state.ap = config.apPerTurn + state.pending.apBonus;
+  if (state.cards) {
+    const cardRng = createRng(state.rngState);
+    drawCards(state.cards, config.drawPerTurn, config.handLimit, cardRng);
+    state.rngState = cardRng.state;
+  }
   log.apBonusNext = state.pending.apBonus;
   enemy.stunnedThisTurn = false;
   if (state.pending.erosion) state.current.erosionArmed = true;
