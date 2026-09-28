@@ -332,6 +332,8 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   if (enemy.stunPending) {
     enemy.stunPending = false;
     log.cancelledByStun = true;
+    // 被取消的攻击连带作废已累积的蓄力加成
+    if (enemy.intent.parts.some((p) => p.kind === 'attack')) enemy.chargeBonus = 0;
     // 回响钟：眩晕成功取消意图后，下回合多 1 AP
     if (state.artifacts.includes('echoBell')) state.pending.apBonus = ARTIFACT_PARAMS.echoBellAp;
   } else {

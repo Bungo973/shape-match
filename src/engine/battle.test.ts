@@ -111,6 +111,17 @@ describe('敌人回合', () => {
     expect(state.enemy.chargeBonus).toBe(0);
   });
 
+  it('攻击被眩晕取消时，蓄力加成作废', () => {
+    let s = battle([{ parts: [{ kind: 'charge', amount: 6 }] }, attack(6), attack(4)]);
+    s = endTurn(s).state;
+    expect(s.enemy.chargeBonus).toBe(6);
+    s.enemy.stunPending = true;
+    const cancelled = endTurn(s);
+    expect(cancelled.log!.cancelledByStun).toBe(true);
+    expect(cancelled.state.enemy.chargeBonus).toBe(0);
+    expect(endTurn(cancelled.state).log!.damageToPlayerHp).toBe(4);
+  });
+
   it('生命归零立即失败', () => {
     const s = battle([attack(10)]);
     s.player.hp = 3;

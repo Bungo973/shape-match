@@ -8,3 +8,5 @@ export * from './score';
 export * from './inserts';
 export * from './battle';
 export * from './artifacts';
+export * from './rewards';
+export * from './content/enemies';
