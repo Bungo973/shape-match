@@ -49,6 +49,8 @@ export interface StageHandlers {
   onPlace?(at: Pos): void;
 }
 
+/** 方块的外观签名：精灵只在签名一致时才能复用 */
+const tileSig = (t: Tile) => (t.kind === 'normal' ? t.color : `bomb-${t.bomb}`);
 const center = (p: Pos) => ({ x: BOARD.x + p.c * CELL + CELL / 2, y: BOARD.y + p.r * CELL + CELL / 2 });
 const chebyshev = (a: Pos, b: Pos) => Math.max(Math.abs(a.r - b.r), Math.abs(a.c - b.c));
 
@@ -300,6 +302,12 @@ export class Stage {
         if (!tile) return null;
         keep.add(tile.id);
         let s = this.sprites.get(tile.id);
+        // 编号相同但种类不同（例如新战斗重新编号）时，旧图片不能复用
+        if (s && s.label !== tileSig(tile)) {
+          this.destroyTile(s);
+          this.sprites.delete(tile.id);
+          s = undefined;
+        }
         if (!s) {
           s = this.makeTile(tile);
           this.sprites.set(tile.id, s);
@@ -330,8 +338,17 @@ export class Stage {
     s.destroy({ children: true });
   }
 
+  /** 新战斗开始：清掉上一场的全部方块精灵与选择状态 */
+  resetBoard(): void {
+    for (const s of this.sprites.values()) this.destroyTile(s);
+    this.sprites.clear();
+    this.grid = [];
+    this.clearSelection();
+  }
+
   private makeTile(tile: Tile): Container {
     const box = new Container();
+    box.label = tileSig(tile);
     let texture: Texture;
     let size = CELL * 0.76;
     let rotation = 0;

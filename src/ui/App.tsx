@@ -213,6 +213,7 @@ export function App() {
     const r = startNextBattle(runRef.current);
     if (apply(r) === null && r.run.battle) {
       setLastLog(null);
+      stageRef.current?.resetBoard();
       showBattle(r.run.battle);
     }
   };
