@@ -1,0 +1,69 @@
+:root {
+  --bg: #07080c;
+  --panel: rgba(12, 16, 26, 0.82);
+  --edge: #b8743a;
+  --text: #f3ead8;
+  --dim: #a9a293;
+  --atk: #e6edf5;
+  --sh: #6fb6ff;
+  --po: #6dff7a;
+  --violet: #ff7ce8;
+  --hp: #e0453c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+.viewport { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.frame { position: relative; flex: none; transform-origin: center; }
+.canvas-host, .canvas-host canvas { position: absolute; inset: 0; }
+
+.panel { position: absolute; background: var(--panel); border: 2px solid var(--edge); border-radius: 10px; padding: 10px 14px; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+.panel .name { font-weight: 800; font-size: 20px; margin-bottom: 6px; letter-spacing: 1px; }
+.panel .turn { font-weight: 500; font-size: 14px; color: var(--dim); margin-left: 8px; }
+.row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.label { color: var(--dim); font-size: 14px; }
+.note { color: var(--dim); font-size: 13px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(255,255,255,.07); border-radius: 999px; padding: 3px 10px; font-size: 15px; }
+.chip.shield { color: #8fd0ff; }
+.chip.intent { color: #ffd08a; font-weight: 700; }
+.chip.warn { color: #ff9d5c; font-weight: 700; }
+.pip { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #ffd76a; display: inline-block; }
+.pip.on { background: #ffd76a; box-shadow: 0 0 8px #ffd76a; }
+.pip.violet { border-color: var(--violet); }
+.pip.violet.on { background: var(--violet); box-shadow: 0 0 8px var(--violet); }
+
+.player-panel { left: 36px; top: 14px; width: 720px; }
+.player-panel .row { margin-top: 6px; }
+.enemy-panel { right: 36px; top: 14px; width: 520px; }
+
+.bar { position: relative; height: 22px; flex: 1; min-width: 160px; background: rgba(0,0,0,.55); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,.15); }
+.bar .fill { position: absolute; inset: 0 auto 0 0; transition: width .35s ease; }
+.bar.hp .fill { background: linear-gradient(#ff6b5e, var(--hp)); }
+.bar.poison { height: 16px; }
+.bar.poison .fill { background: linear-gradient(#8dff8f, #2fae4a); }
+.bar span { position: relative; display: block; text-align: center; font-size: 13px; line-height: 22px; font-weight: 700; text-shadow: 0 1px 2px #000; }
+.bar.poison span { line-height: 16px; font-size: 11px; }
+
+.settle-panel { right: 36px; bottom: 20px; width: 600px; min-height: 120px; }
+.settle-row { display: flex; align-items: baseline; gap: 12px; margin: 4px 0; flex-wrap: wrap; }
+.settle-row.big { font-size: 24px; }
+.settle-row .mult { font-size: 34px; font-weight: 900; color: #ffb347; text-shadow: 0 0 12px rgba(255,160,60,.6); }
+.settle-row .eq { color: var(--dim); }
+.c-atk { color: var(--atk); } .c-sh { color: var(--sh); } .c-po { color: var(--po); }
+.dim { color: var(--dim); font-size: 14px; }
+
+.end-turn { position: absolute; left: 784px; bottom: 20px; }
+button { font: inherit; color: var(--text); background: linear-gradient(#6b3f1c, #3e2410); border: 2px solid var(--edge); border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 700; }
+button:hover:not(:disabled) { filter: brightness(1.2); }
+button:disabled { opacity: .45; cursor: default; }
+button.on { background: linear-gradient(#c77a2e, #7a4516); }
+button small { opacity: .6; margin-left: 4px; font-size: 12px; }
+.end-turn { font-size: 20px; padding: 12px 18px; height: 120px; width: 150px; }
+
+.debug { position: absolute; left: 36px; bottom: 30px; display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--dim); background: var(--panel); padding: 6px 10px; border-radius: 8px; }
+.debug button { padding: 3px 9px; font-size: 13px; }
+
+.toast { position: absolute; left: 396px; top: 470px; transform: translateX(-50%); background: rgba(0,0,0,.8); border: 1px solid var(--edge); padding: 10px 18px; border-radius: 8px; font-size: 18px; pointer-events: none; }
+.result { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,.6); }
+.result h1 { font-size: 72px; margin: 0 0 10px; color: #ffd76a; text-shadow: 0 0 24px rgba(255,200,80,.6); }
+.result button { font-size: 22px; padding: 12px 28px; }

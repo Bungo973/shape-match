@@ -9,8 +9,12 @@
     "exactOptionalPropertyTypes": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "types": []
   },
-  "include": ["src"]
+  "include": [
+    "src/engine"
+  ]
 }
