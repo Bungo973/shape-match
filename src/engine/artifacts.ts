@@ -30,7 +30,7 @@ export interface ArtifactDef {
 
 export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
   piercingNeedle: { key: 'piercingNeedle', id: 'A01', name: '穿甲针', starter: false, text: '攻击对护盾造成双倍削减。' },
-  sealedVial: { key: 'sealedVial', id: 'A02', name: '密封毒瓶', starter: true, text: '眩晕后保留 4 点毒气进度。' },
+  sealedVial: { key: 'sealedVial', id: 'A02', name: '密封毒瓶', starter: true, text: '眩晕后保留三分之一的毒气进度。' },
   overloadFuse: {
     key: 'overloadFuse',
     id: 'A06',
@@ -60,8 +60,8 @@ export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
 export const ARTIFACT_PARAMS = {
   /** 穿甲针：每点攻击削减的敌人护盾 */
   piercingShieldFactor: 2,
-  /** 密封毒瓶：眩晕后保留的进度 */
-  sealedVialRetain: 4,
+  /** 密封毒瓶：眩晕后保留的进度占阈值的比例 */
+  sealedVialRetainRatio: 1 / 3,
   /** 反应线圈：反击伤害 */
   reactionCoilDamage: 2,
   /** 不稳定引信：每枚留存炸弹的伤害 */

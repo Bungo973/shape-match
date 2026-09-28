@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endTurn, playerAction, startBattle, type BattleState, type EnemyDef, type Intent } from './battle';
+import { endTurn, playerAction, poisonDecay, poisonThreshold, startBattle, type BattleState, type EnemyDef, type Intent } from './battle';
 import { DEFAULT_CONFIG } from './config';
 import { findLines } from './match';
 import { multiplierFor } from './score';
@@ -134,7 +134,7 @@ describe('敌人回合', () => {
 describe('毒气与眩晕', () => {
   it('达到阈值挂上眩晕并归零；本回合之后的毒气不再积累；眩晕取消整次意图', () => {
     let s = battle([attack(20)], { board: { '4,0': 'H' } });
-    s.enemy.poison = 11;
+    s.enemy.poison = poisonThreshold(s.enemy.def.maxHp) - 1;
     const first = act(s, ignite(4, 0));
     expect(first.log.stunApplied).toBe(true);
     s = first.state;
@@ -156,7 +156,7 @@ describe('毒气与眩晕', () => {
     s.enemy.stunPending = true;
     const { state, log } = endTurn(s);
     expect(log!.cancelledByStun).toBe(true);
-    expect(state.enemy.poison).toBe(5 - DEFAULT_CONFIG.poisonDecay);
+    expect(state.enemy.poison).toBe(5 - poisonDecay(s.enemy.def.maxHp));
   });
 });
 

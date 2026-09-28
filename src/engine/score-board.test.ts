@@ -9,7 +9,7 @@ import type { Board, Tile } from './types';
 const zero = { attack: 0, shield: 0, poison: 0, catalyst: 0 };
 
 describe('基数 × 倍率结算（GAME_RULES 例子）', () => {
-  it('主例：3 攻击 3 催化剂、P=6、旧充能 1、攻击嵌片 2 → 结算分 68，效果 32/12/12', () => {
+  it('主例：3 攻击 3 催化剂、P=6、旧充能 1、攻击嵌片 2 → 结算分 44，效果 24/4/4', () => {
     const s = settle(
       {
         activeClearsByType: { ...zero, attack: 3, catalyst: 3 },
@@ -21,9 +21,9 @@ describe('基数 × 倍率结算（GAME_RULES 例子）', () => {
       DEFAULT_CONFIG,
     );
     expect(s.multiplier).toBe(4);
-    expect(s.baseValues).toEqual({ attack: 8, shield: 3, poison: 3 });
-    expect(s.settlementScore).toBe(68);
-    expect(s.finalEffects).toEqual({ attack: 32, shield: 12, poison: 12 });
+    expect(s.baseValues).toEqual({ attack: 6, shield: 1, poison: 1 });
+    expect(s.settlementScore).toBe(44);
+    expect(s.finalEffects).toEqual({ attack: 24, shield: 4, poison: 4 });
     expect(s.chargesAfter).toBe(1);
   });
 
@@ -35,8 +35,8 @@ describe('基数 × 倍率结算（GAME_RULES 例子）', () => {
     expect(s.finalEffects).toEqual({ attack: 6, shield: 4, poison: 0 });
   });
 
-  it('倍率封顶 ×8', () => {
-    expect([0, 2, 3, 6, 9, 100].map((p) => multiplierFor(p, DEFAULT_CONFIG))).toEqual([1, 1, 2, 4, 8, 8]);
+  it('倍率封顶 ×4', () => {
+    expect([0, 2, 3, 6, 9, 100].map((p) => multiplierFor(p, DEFAULT_CONFIG))).toEqual([1, 1, 2, 4, 4, 4]);
   });
 
   it('没有主动清除有色方块时保留旧充能；新充能不超过上限', () => {
@@ -44,10 +44,11 @@ describe('基数 × 倍率结算（GAME_RULES 例子）', () => {
     expect(idle.chargesUsed).toBe(0);
     expect(idle.chargesAfter).toBe(2);
     const burst = settle(
-      { activeClearsByType: { ...zero, catalyst: 9 }, passiveClearCount: 0, hadActiveColorClear: true, chargesBefore: 0 },
+      { activeClearsByType: { ...zero, catalyst: 18 }, passiveClearCount: 0, hadActiveColorClear: true, chargesBefore: 0 },
       DEFAULT_CONFIG,
     );
-    expect(burst.chargesAfter).toBe(2);
+    expect(burst.chargesGained).toBe(6);
+    expect(burst.chargesAfter).toBe(DEFAULT_CONFIG.chargeCap);
   });
 });
 

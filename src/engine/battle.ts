@@ -253,14 +253,25 @@ function applyPlayerEffects(state: BattleState, s: Settlement, log: ActionLog, c
   if (poison > 0 && !state.enemy.stunnedThisTurn) {
     state.enemy.poison += poison;
     log.poisonAdded = poison;
-    if (state.enemy.poison >= config.poisonThreshold) {
+    const threshold = poisonThreshold(state.enemy.def.maxHp, config);
+    if (state.enemy.poison >= threshold) {
       state.enemy.stunPending = true;
       state.enemy.stunnedThisTurn = true;
       // 密封毒瓶：眩晕后保留一部分进度，仍低于阈值
-      state.enemy.poison = state.artifacts.includes('sealedVial') ? Math.min(ARTIFACT_PARAMS.sealedVialRetain, config.poisonThreshold - 1) : 0;
+      state.enemy.poison = state.artifacts.includes('sealedVial') ? Math.min(Math.floor(threshold * ARTIFACT_PARAMS.sealedVialRetainRatio), threshold - 1) : 0;
       log.stunApplied = true;
     }
   }
+}
+
+/** 眩晕阈值随敌人最大生命变化 */
+export function poisonThreshold(enemyMaxHp: number, config: EngineConfig = DEFAULT_CONFIG): number {
+  return Math.max(1, Math.round(enemyMaxHp * config.poisonThresholdRatio));
+}
+
+/** 敌人回合末的毒气进度衰减量 */
+export function poisonDecay(enemyMaxHp: number, config: EngineConfig = DEFAULT_CONFIG): number {
+  return Math.max(1, Math.round(poisonThreshold(enemyMaxHp, config) * config.poisonDecayRatio));
 }
 
 /** 对敌人造成伤害：先扣护盾再扣生命；穿甲针使每点攻击削减 2 点护盾。击杀时结束战斗。 */
@@ -344,7 +355,7 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   }
 
   // 3. 回合末毒气衰减（被眩晕跳过意图的回合也衰减），再展示下一次意图
-  const decayed = Math.min(enemy.poison, config.poisonDecay);
+  const decayed = Math.min(enemy.poison, poisonDecay(enemy.def.maxHp, config));
   enemy.poison -= decayed;
   log.poisonDecayed = decayed;
   revealNextIntent(state);

@@ -7,31 +7,32 @@ const atk = (amount: number): Intent => ({ parts: [{ kind: 'attack', amount }] }
 export const CRYSTAL_MOLE: EnemyDef = {
   id: 'crystal-mole',
   name: '晶背鼹鼠',
-  maxHp: 50,
-  fallbackDefend: 4,
-  script: [atk(5), atk(7), atk(5), atk(9)],
+  maxHp: 110,
+  fallbackDefend: 8,
+  script: [atk(11), atk(15), atk(11), atk(19)],
 };
 
 /** 第 2 战：先蓄力再俯冲，教玩家用毒气眩晕打断大招（被打断的攻击连带作废蓄力） */
 export const CAVE_BATS: EnemyDef = {
   id: 'cave-bats',
   name: '洞蝠群',
-  maxHp: 60,
-  fallbackDefend: 4,
-  script: [{ parts: [{ kind: 'charge', amount: 6 }] }, atk(6), atk(4)],
+  maxHp: 130,
+  fallbackDefend: 8,
+  // 蓄力后的俯冲 13+13=26，超过护盾上限 20，必须眩晕、抢杀或硬吃
+  script: [{ parts: [{ kind: 'charge', amount: 13 }] }, atk(13), atk(9)],
 };
 
 /** 第 3 战（精英）：倍率侵蚀，教玩家先用小消除承担侵蚀，再准备爆发 */
 export const ROCK_CRAB: EnemyDef = {
   id: 'rock-crab',
   name: '吞光岩蟹',
-  maxHp: 120,
-  fallbackDefend: 6,
+  maxHp: 210,
+  fallbackDefend: 12,
   script: [
-    atk(8),
-    { parts: [{ kind: 'erodeMultiplier' }, { kind: 'attack', amount: 5 }] },
-    atk(10),
-    { parts: [{ kind: 'defend', amount: 6 }, { kind: 'attack', amount: 4 }] },
+    atk(18),
+    { parts: [{ kind: 'erodeMultiplier' }, { kind: 'attack', amount: 13 }] },
+    atk(26),
+    { parts: [{ kind: 'defend', amount: 12 }, { kind: 'attack', amount: 10 }] },
   ],
 };
 

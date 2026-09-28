@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ARTIFACTS, type ArtifactKey } from './artifacts';
-import { endTurn, playerAction, startBattle, type BattleState, type Intent } from './battle';
+import { endTurn, playerAction, poisonThreshold, startBattle, type BattleState, type Intent } from './battle';
 import { DEFAULT_CONFIG } from './config';
 import { resolveAction } from './resolve';
 import { multiplierFor } from './score';
@@ -41,8 +41,8 @@ describe('神器池', () => {
 
 describe('倍率修正顺序', () => {
   it('神器档位先封顶，再结算倍率侵蚀', () => {
-    // P=9 已是 ×8；连锁透镜 +1 仍封顶 ×8，侵蚀再降一档为 ×4
-    expect(multiplierFor(9, DEFAULT_CONFIG, 1, 1)).toBe(4);
+    // P=9 已是封顶的 ×4；连锁透镜 +1 仍封顶 ×4，侵蚀再降一档为 ×2
+    expect(multiplierFor(9, DEFAULT_CONFIG, 1, 1)).toBe(2);
     expect(multiplierFor(0, DEFAULT_CONFIG, 0, 1)).toBe(1);
   });
 });
@@ -66,12 +66,13 @@ describe('战斗中的神器', () => {
     expect(log.damageToEnemyHp).toBe(atk - 2); // 3 点护盾只需 ceil(3/2)=2 点攻击
   });
 
-  it('密封毒瓶：眩晕后保留 4 点进度', () => {
+  it('密封毒瓶：眩晕后保留三分之一阈值的进度', () => {
     const s = battle(['sealedVial'], { '4,0': 'H' });
-    s.enemy.poison = 11;
+    const threshold = poisonThreshold(s.enemy.def.maxHp);
+    s.enemy.poison = threshold - 1;
     const { state, log } = act(s, igniteRow4);
     expect(log.stunApplied).toBe(true);
-    expect(state.enemy.poison).toBe(4);
+    expect(state.enemy.poison).toBe(Math.floor(threshold / 3));
   });
 
   it('过载引线：单枚直线炸弹清三行，当步护盾为 0；组合技不受影响', () => {

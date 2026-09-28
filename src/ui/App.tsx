@@ -8,6 +8,8 @@ import {
   installInsert,
   newRun,
   pickStarter,
+  poisonDecay,
+  poisonThreshold,
   rerollInserts,
   runAction,
   runEndTurn,
@@ -289,8 +291,8 @@ export function App() {
               </div>
               <div className="row">
                 <span className="label">毒气</span>
-                <Bar value={b.enemy.poison} max={DEFAULT_CONFIG.poisonThreshold} kind="poison" />
-                <span className="note">回合末 −{DEFAULT_CONFIG.poisonDecay}</span>
+                <Bar value={b.enemy.poison} max={poisonThreshold(b.enemy.def.maxHp)} kind="poison" />
+                <span className="note">回合末 −{poisonDecay(b.enemy.def.maxHp)}</span>
               </div>
             </div>
 

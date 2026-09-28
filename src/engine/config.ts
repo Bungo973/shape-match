@@ -24,10 +24,10 @@ export interface EngineConfig {
   playerMaxHp: number;
   apPerTurn: number;
   playerShieldCap: number;
-  /** 毒气眩晕阈值 */
-  poisonThreshold: number;
-  /** 敌人回合末毒气控制进度衰减量 */
-  poisonDecay: number;
+  /** 毒气眩晕阈值 = 敌人最大生命 × 此比例（四舍五入，至少 1） */
+  poisonThresholdRatio: number;
+  /** 敌人回合末毒气进度衰减量 = 阈值 × 此比例（四舍五入，至少 1） */
+  poisonDecayRatio: number;
   /** 重力反转持续的玩家回合数 */
   gravityTurns: number;
   // ---- 一局 ----
@@ -43,18 +43,18 @@ export const DEFAULT_CONFIG: EngineConfig = {
   cols: 8,
   colorWeights: { attack: 30, shield: 25, poison: 25, catalyst: 20 },
   passivePerStep: 3,
-  maxMultiplierSteps: 3,
+  maxMultiplierSteps: 2,
   catalystPerCharge: 3,
-  chargeBonus: 3,
-  chargeCap: 2,
+  chargeBonus: 1,
+  chargeCap: 5,
   socketPerCell: 2,
   maxInstalledInserts: 6,
   maxPhases: 200,
   playerMaxHp: 40,
   apPerTurn: 3,
-  playerShieldCap: 40,
-  poisonThreshold: 12,
-  poisonDecay: 2,
+  playerShieldCap: 20,
+  poisonThresholdRatio: 0.25,
+  poisonDecayRatio: 1 / 6,
   gravityTurns: 3,
   goldMinion: 8,
   goldElite: 16,

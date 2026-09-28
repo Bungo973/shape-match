@@ -8,6 +8,7 @@ npm run dev        # 本地试玩：http://localhost:5173 （加 ?seed=123 固�
 npm test           # 规则引擎测试
 npm run typecheck  # 引擎与界面的类型检查
 npm run assets     # 素材原图缩放为 WebP，输出到 public/game/
+npm run sim        # 数值模拟：自动玩家批量打第一段落，见 docs/BALANCE_LOG.md
 ```
 
 当前可玩：第一段落三战（小怪 → 小怪 → 精英），含开局神器、嵌片三选一与嵌入、营地升级或休息、精英神器奖励与本地续局。左下角是调试工具。
