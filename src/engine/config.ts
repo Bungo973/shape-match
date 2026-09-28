@@ -30,6 +30,12 @@ export interface EngineConfig {
   poisonDecay: number;
   /** 重力反转持续的玩家回合数 */
   gravityTurns: number;
+  // ---- 一局 ----
+  goldMinion: number;
+  goldElite: number;
+  rerollCost: number;
+  upgradeCost: number;
+  restHeal: number;
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
@@ -50,4 +56,9 @@ export const DEFAULT_CONFIG: EngineConfig = {
   poisonThreshold: 12,
   poisonDecay: 2,
   gravityTurns: 3,
+  goldMinion: 8,
+  goldElite: 16,
+  rerollCost: 8,
+  upgradeCost: 15,
+  restHeal: 10,
 };

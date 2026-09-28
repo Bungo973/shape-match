@@ -35,5 +35,16 @@ export const ROCK_CRAB: EnemyDef = {
   ],
 };
 
+export type EnemyTier = 'minion' | 'elite' | 'boss';
+
+export interface RouteNode {
+  enemy: EnemyDef;
+  tier: EnemyTier;
+}
+
 /** 第一段落：小怪 → 小怪 → 精英 */
-export const SEGMENT_1: EnemyDef[] = [CRYSTAL_MOLE, CAVE_BATS, ROCK_CRAB];
+export const SEGMENT_1: RouteNode[] = [
+  { enemy: CRYSTAL_MOLE, tier: 'minion' },
+  { enemy: CAVE_BATS, tier: 'minion' },
+  { enemy: ROCK_CRAB, tier: 'elite' },
+];
