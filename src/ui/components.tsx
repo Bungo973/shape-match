@@ -1,11 +1,16 @@
 // 界面通用组件：神器卡、嵌片卡、形状预览。
 import { ARTIFACTS, INSERT_DEFS, normalize, type ArtifactKey, type InsertType, type Pos } from '../engine';
-import { INSERT_GLYPH, insertCss, RARITY_TEXT } from './insertStyle';
+import { insertCss, insertEmblem, insertSymbolSvg, RARITY_TEXT } from './insertStyle';
+
+/** 嵌片的矢量符号（小尺寸使用） */
+export function InsertSymbol({ type, size = 18 }: { type: InsertType; size?: number }) {
+  return <span className="symbol" style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: insertSymbolSvg(type, size) }} />;
+}
 
 export function InsertBadge({ type, size = 28 }: { type: InsertType; size?: number }) {
   return (
-    <span className="badge" style={{ width: size, height: size, fontSize: size * 0.55, borderColor: insertCss(type), color: insertCss(type) }}>
-      {INSERT_GLYPH[type]}
+    <span className="badge" style={{ width: size, height: size, borderColor: insertCss(type) }}>
+      <InsertSymbol type={type} size={Math.round(size * 0.7)} />
     </span>
   );
 }
@@ -24,11 +29,16 @@ export function ShapePreview({ cells, type, cell = 18 }: { cells: Pos[]; type: I
   );
 }
 
+/** 神器图标文件名：public/game/artifact-{slug}.webp */
+const artifactIcon = (k: ArtifactKey) => `/game/artifact-${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}.webp`;
+
 export function ArtifactCard({ k, onPick, compact }: { k: ArtifactKey; onPick?: () => void; compact?: boolean }) {
   const a = ARTIFACTS[k];
   return (
     <button className={`card artifact ${compact ? 'compact' : ''} ${a.cost ? 'cursed' : ''}`} onClick={onPick} disabled={!onPick}>
+      {!compact && <img className="artifact-icon" src={artifactIcon(k)} alt="" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />}
       <div className="card-title">
+        {compact && <img className="artifact-icon-sm" src={artifactIcon(k)} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />}
         {a.name} <small>{a.id}</small>
       </div>
       <div className="card-text">{a.text}</div>
@@ -58,6 +68,7 @@ export function InsertCard({
   return (
     <button className={`card insert ${selected ? 'selected' : ''}`} onClick={onPick} disabled={!onPick}>
       {slot && <div className={`slot slot-${slot}`}>{SLOT_TEXT[slot]}</div>}
+      <img className="insert-emblem" src={insertEmblem(type)} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />
       <div className="card-title">
         <InsertBadge type={type} /> {d.name} <small className={`rarity r-${d.rarity}`}>{RARITY_TEXT[d.rarity]}</small>
       </div>

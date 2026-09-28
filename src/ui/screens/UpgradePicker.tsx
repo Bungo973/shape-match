@@ -1,8 +1,8 @@
 // 营地升级：选一块拥有的嵌片，再点选要添加的正交相邻格（精工刻刀可选两格）。
 import { useState } from 'react';
 import { DEFAULT_CONFIG, expansionCells, INSERT_DEFS, inventoryExpansionCells, upgradeCellCount, type Pos, type RunState } from '../../engine';
-import { InsertBadge } from '../components';
-import { INSERT_GLYPH, insertCss } from '../insertStyle';
+import { InsertBadge, InsertSymbol } from '../components';
+import { insertCss } from '../insertStyle';
 
 const SIZE = { rows: DEFAULT_CONFIG.rows, cols: DEFAULT_CONFIG.cols };
 const same = (a: Pos, b: Pos) => a.r === b.r && a.c === b.c;
@@ -75,8 +75,8 @@ export function UpgradePicker({ run, onUpgrade, onCancel }: { run: RunState; onU
                   }}
                   onClick={() => can && setChosen([...chosen, p])}
                 >
-                  {mine && <span style={{ color: insertCss(type) }}>{isNew ? '+' : INSERT_GLYPH[type]}</span>}
-                  {other && <span style={{ color: insertCss(other.type), opacity: 0.5 }}>{INSERT_GLYPH[other.type]}</span>}
+                  {mine && (isNew ? <span style={{ color: insertCss(type) }}>+</span> : <InsertSymbol type={type} size={26} />)}
+                  {other && <span style={{ opacity: 0.5 }}><InsertSymbol type={other.type} size={22} /></span>}
                 </div>
               );
             }),

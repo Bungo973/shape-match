@@ -1,7 +1,7 @@
 // 战斗舞台（PixiJS）：绘制场景与棋盘，按引擎事件日志播放动画，并把玩家输入转成交换／点燃请求。
 // 舞台只负责呈现，不做任何规则计算；动画结束后以引擎给出的棋盘为准重新同步。
 import gsap from 'gsap';
-import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Assets, Container, Graphics, GraphicsContext, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import {
   posKey,
   type ActionLog,
@@ -9,12 +9,13 @@ import {
   type Color,
   type EnemyTurnLog,
   type Explosion,
+  type InsertType,
   type InstalledInsert,
   type Pos,
   type ResolutionEvent,
   type Tile,
 } from '../../engine';
-import { INSERT_GLYPH, INSERT_HEX } from '../insertStyle';
+import { INSERT_HEX, insertSymbolSvg } from '../insertStyle';
 
 export const STAGE_W = 1600;
 export const STAGE_H = 900;
@@ -24,10 +25,12 @@ const FRAME = { x: 36, y: 120, size: 720 };
 const BOARD = { x: FRAME.x + (FRAME.size - 640) / 2, y: FRAME.y + (FRAME.size - 640) / 2, size: 640 };
 /** 爆炸从锚点向外每扩散一格的延迟（秒） */
 const RIPPLE_STEP = 0.035;
+/** 棋盘格角标符号的像素尺寸 */
+const SYMBOL_SIZE = 20;
 
 const COLOR_HEX: Record<Color, number> = { attack: 0xe6edf5, shield: 0x5aa8ff, poison: 0x5cff6a, catalyst: 0xff5ce1 };
 const BOMB_HEX = 0xff8a2a;
-type TextureKey = 'attack' | 'shield' | 'poison' | 'catalyst' | 'line' | 'area' | 'color' | 'alchemist' | 'mole' | 'bg' | 'frame';
+type TextureKey = 'attack' | 'shield' | 'poison' | 'catalyst' | 'line' | 'area' | 'color' | 'alchemist' | 'bg' | 'frame';
 const TEXTURE_URLS: Record<TextureKey, string> = {
   attack: '/game/tile-attack.webp',
   shield: '/game/tile-shield.webp',
@@ -37,10 +40,18 @@ const TEXTURE_URLS: Record<TextureKey, string> = {
   area: '/game/bomb-area.webp',
   color: '/game/bomb-color.webp',
   alchemist: '/game/alchemist.webp',
-  mole: '/game/mole.webp',
   bg: '/game/bg-entrance.webp',
   frame: '/game/board-frame.webp',
 };
+
+/** 敌人外观：图片、显示宽度、脚底所在的 y；飞行敌人悬空并上下浮动 */
+const ENEMY_LOOKS: Record<string, { width: number; bottom: number; x: number; flying?: boolean }> = {
+  'crystal-mole': { width: 470, bottom: 720, x: 1375 },
+  'cave-bats': { width: 400, bottom: 600, x: 1390, flying: true },
+  'rock-crab': { width: 440, bottom: 735, x: 1382 },
+};
+/** 主角站位 */
+const HERO = { x: 985, bottom: 720, height: 420 };
 
 export interface StageHandlers {
   onSwap(from: Pos, to: Pos): void;
@@ -67,10 +78,12 @@ export class Stage {
   private readonly cursor = new Graphics();
   private readonly hint: Text;
   private alchemist!: Sprite;
-  private mole!: Sprite;
-  private moleBaseScale = 1;
-  private moleIdle: gsap.core.Tween | null = null;
+  private enemy!: Sprite;
+  private readonly enemyTex = new Map<string, Texture>();
+  private enemyIdle: gsap.core.Tween[] = [];
   private enemyNote!: Text;
+  /** 当前敌人的站位 x，动画以此为基准 */
+  private enemyX = 1380;
 
   private readonly sprites = new Map<number, Container>();
   private grid: (number | null)[][] = [];
@@ -112,22 +125,24 @@ export class Stage {
     this.app.destroy(true, { children: true });
   }
 
-  /** 切换敌人外观。新敌人美术到位前，用着色与缩放后的鼹鼠作占位 */
+  /** 切换敌人外观；缺少该敌人的图片时，用着色的鼹鼠占位并标注 */
   setEnemy(id: string): void {
-    const look: Record<string, { tint: number; scale: number; note: string }> = {
-      'crystal-mole': { tint: 0xffffff, scale: 1, note: '' },
-      'cave-bats': { tint: 0x8fb0ff, scale: 0.85, note: '（洞蝠群占位图）' },
-      'rock-crab': { tint: 0xc49cff, scale: 1.2, note: '（吞光岩蟹占位图）' },
-    };
-    const l = look[id] ?? { tint: 0xcccccc, scale: 1, note: '（占位图）' };
-    this.moleIdle?.kill();
-    gsap.killTweensOf(this.mole);
-    this.mole.tint = l.tint;
-    this.mole.position.set(1390, 720);
-    this.mole.rotation = 0;
-    this.mole.scale.set(this.moleBaseScale * l.scale);
-    this.moleIdle = gsap.to(this.mole.scale, { y: this.mole.scale.y * 1.02, duration: 1.3, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.enemyNote.text = l.note;
+    const look = ENEMY_LOOKS[id] ?? { width: 470, bottom: 720, x: 1380 };
+    this.enemyX = look.x;
+    const tex = this.enemyTex.get(id);
+    const fallback = this.enemyTex.get('crystal-mole')!;
+    this.enemyIdle.forEach((t) => t.kill());
+    gsap.killTweensOf(this.enemy);
+    gsap.killTweensOf(this.enemy.scale);
+    this.enemy.texture = tex ?? fallback;
+    this.enemy.tint = tex ? 0xffffff : 0xa0a8ff;
+    this.enemy.rotation = 0;
+    this.enemy.scale.set(look.width / this.enemy.texture.width);
+    this.enemy.position.set(look.x, look.bottom);
+    this.enemyIdle = [gsap.to(this.enemy.scale, { y: this.enemy.scale.y * 1.02, duration: 1.3, yoyo: true, repeat: -1, ease: 'sine.inOut' })];
+    if (look.flying) this.enemyIdle.push(gsap.to(this.enemy, { y: look.bottom - 18, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' }));
+    this.enemyNote.text = tex ? '' : '（占位图）';
+    this.enemyNote.position.set(look.x, look.bottom + 8);
   }
 
   setSpeed(scale: number): void {
@@ -138,6 +153,16 @@ export class Stage {
     await Promise.all(
       (Object.keys(TEXTURE_URLS) as TextureKey[]).map(async (k) => {
         this.tex[k] = await Assets.load<Texture>(TEXTURE_URLS[k]);
+      }),
+    );
+    // 敌人图片逐个加载，缺失的不影响启动
+    await Promise.all(
+      Object.keys(ENEMY_LOOKS).map(async (id) => {
+        try {
+          this.enemyTex.set(id, await Assets.load<Texture>(`/game/enemy-${id}.webp`));
+        } catch {
+          // 缺图时由 setEnemy 使用占位
+        }
       }),
     );
     const dot = new Graphics().circle(0, 0, 10).fill(0xffffff);
@@ -161,18 +186,14 @@ export class Stage {
     // 角色
     this.alchemist = new Sprite(this.tex.alchemist);
     this.alchemist.anchor.set(0.5, 1);
-    this.alchemist.scale.set(440 / this.tex.alchemist.height);
-    this.alchemist.position.set(1010, 720);
-    this.mole = new Sprite(this.tex.mole);
-    this.mole.anchor.set(0.5, 1);
-    this.mole.scale.set(480 / this.tex.mole.width);
-    this.mole.position.set(1390, 720);
-    this.root.addChild(this.alchemist, this.mole);
+    this.alchemist.scale.set(HERO.height / this.tex.alchemist.height);
+    this.alchemist.position.set(HERO.x, HERO.bottom);
+    this.enemy = new Sprite(this.enemyTex.get('crystal-mole'));
+    this.enemy.anchor.set(0.5, 1);
+    this.root.addChild(this.alchemist, this.enemy);
     gsap.to(this.alchemist.scale, { y: this.alchemist.scale.y * 1.015, duration: 1.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.moleBaseScale = this.mole.scale.x;
     this.enemyNote = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 16, fill: 0xd8d0c0, stroke: { color: 0x000000, width: 4 } } });
     this.enemyNote.anchor.set(0.5, 0);
-    this.enemyNote.position.set(1390, 728);
     this.root.addChild(this.enemyNote);
     this.setEnemy('crystal-mole');
 
@@ -376,6 +397,18 @@ export class Stage {
     return box;
   }
 
+  private readonly symbolContexts = new Map<InsertType, GraphicsContext>();
+
+  /** 同一种嵌片的符号只解析一次 SVG，所有格子共享 */
+  private symbolContext(type: InsertType): GraphicsContext {
+    let ctx = this.symbolContexts.get(type);
+    if (!ctx) {
+      ctx = new GraphicsContext().svg(insertSymbolSvg(type));
+      this.symbolContexts.set(type, ctx);
+    }
+    return ctx;
+  }
+
   /** 嵌片覆盖层：每格浅底纹 + 外围连续轮廓 + 角落效果标志，没有核心格 */
   drawInserts(inserts: InstalledInsert[], suppressedId: string | null): void {
     this.inserts = inserts;
@@ -400,14 +433,21 @@ export class Stage {
       }
       g.stroke({ width: 2.5, color, alpha: suppressed ? 0.6 : 0.95 });
       this.insertLayer.addChild(g);
+      // 每个覆盖格左上角放同一个矢量符号；被压制时改为“封”字
       for (const p of ins.cells) {
-        const label = new Text({
-          text: suppressed ? '封' : INSERT_GLYPH[ins.type],
-          style: { fontFamily: 'system-ui, sans-serif', fontSize: 13, fill: color, fontWeight: '700' },
-        });
-        label.alpha = 0.9;
-        label.position.set(BOARD.x + p.c * CELL + 5, BOARD.y + p.r * CELL + 3);
-        this.insertLayer.addChild(label);
+        const x = BOARD.x + p.c * CELL + 4;
+        const y = BOARD.y + p.r * CELL + 4;
+        if (suppressed) {
+          const label = new Text({ text: '封', style: { fontFamily: 'system-ui, sans-serif', fontSize: 14, fill: color, fontWeight: '700' } });
+          label.position.set(x + 1, y - 1);
+          this.insertLayer.addChild(label);
+        } else {
+          const sym = new Graphics(this.symbolContext(ins.type));
+          sym.scale.set(SYMBOL_SIZE / 24);
+          sym.position.set(x, y);
+          sym.alpha = 0.95;
+          this.insertLayer.addChild(sym);
+        }
       }
     }
   }
@@ -672,14 +712,14 @@ export class Stage {
     const tl = gsap.timeline();
     const dealt = log.damageToEnemyHp + log.damageToEnemyShield;
     if (dealt > 0) {
-      tl.to(this.alchemist, { x: 1060, duration: 0.12, ease: 'power2.out' }, 0);
-      tl.to(this.alchemist, { x: 1010, duration: 0.25, ease: 'power2.inOut' }, 0.12);
-      tl.to(this.mole, { x: 1410, duration: 0.05, yoyo: true, repeat: 3 }, 0.12);
-      tl.call(() => this.floatText(1390, 460, `-${dealt}`, 0xff5a5a, 48), [], 0.12);
+      tl.to(this.alchemist, { x: HERO.x + 50, duration: 0.12, ease: 'power2.out' }, 0);
+      tl.to(this.alchemist, { x: HERO.x, duration: 0.25, ease: 'power2.inOut' }, 0.12);
+      tl.to(this.enemy, { x: this.enemyX + 20, duration: 0.05, yoyo: true, repeat: 3 }, 0.12);
+      tl.call(() => this.floatText(this.enemyX, 460, `-${dealt}`, 0xff5a5a, 48), [], 0.12);
     }
-    if (log.shieldGained > 0) tl.call(() => this.floatText(1010, 300, `+${log.shieldGained} 护盾`, 0x7cc4ff), [], 0.05);
-    if (log.poisonAdded > 0) tl.call(() => this.floatText(1390, 520, `+${log.poisonAdded} 毒`, 0x6dff7a, 30), [], 0.2);
-    if (log.stunApplied) tl.call(() => this.floatText(1390, 400, '眩晕！', 0xd6ff5c, 44), [], 0.35);
+    if (log.shieldGained > 0) tl.call(() => this.floatText(HERO.x, 300, `+${log.shieldGained} 护盾`, 0x7cc4ff), [], 0.05);
+    if (log.poisonAdded > 0) tl.call(() => this.floatText(this.enemyX, 520, `+${log.poisonAdded} 毒`, 0x6dff7a, 30), [], 0.2);
+    if (log.stunApplied) tl.call(() => this.floatText(this.enemyX, 400, '眩晕！', 0xd6ff5c, 44), [], 0.35);
     tl.to({}, { duration: 0.45 });
     await tl;
   }
@@ -688,26 +728,26 @@ export class Stage {
     const tl = gsap.timeline();
     const fuse = log.fuseDamageToShield + log.fuseDamageToHp;
     if (fuse > 0) {
-      tl.call(() => this.floatText(1010, 360, `引信 -${fuse}`, 0xff8a2a, 34), [], 0);
+      tl.call(() => this.floatText(HERO.x, 360, `引信 -${fuse}`, 0xff8a2a, 34), [], 0);
       tl.to({}, { duration: 0.5 });
     }
     const t0 = fuse > 0 ? 0.5 : 0;
-    if (log.counterDamage > 0) tl.call(() => this.floatText(1390, 440, `反击 -${log.counterDamage}`, 0x9fe0ff, 36), [], t0 + 0.35);
-    if (log.apBonusNext > 0) tl.call(() => this.floatText(1010, 250, `下回合 +${log.apBonusNext} 行动力`, 0xffd76a, 28), [], t0 + 0.4);
+    if (log.counterDamage > 0) tl.call(() => this.floatText(this.enemyX, 440, `反击 -${log.counterDamage}`, 0x9fe0ff, 36), [], t0 + 0.35);
+    if (log.apBonusNext > 0) tl.call(() => this.floatText(HERO.x, 250, `下回合 +${log.apBonusNext} 行动力`, 0xffd76a, 28), [], t0 + 0.4);
     if (log.cancelledByStun) {
-      tl.to(this.mole, { rotation: -0.08, duration: 0.1, yoyo: true, repeat: 3 }, t0);
-      tl.call(() => this.floatText(1390, 420, '眩晕中，行动取消', 0xd6ff5c, 30), [], t0);
+      tl.to(this.enemy, { rotation: -0.08, duration: 0.1, yoyo: true, repeat: 3 }, t0);
+      tl.call(() => this.floatText(this.enemyX, 420, '眩晕中，行动取消', 0xd6ff5c, 30), [], t0);
     } else {
       const hit = log.damageToPlayerHp + log.damageToPlayerShield;
       if (hit > 0) {
-        tl.to(this.mole, { x: 1280, duration: 0.14, ease: 'power3.in' }, t0);
-        tl.to(this.mole, { x: 1390, duration: 0.3, ease: 'power2.out' }, t0 + 0.14);
-        tl.to(this.alchemist, { x: 990, duration: 0.05, yoyo: true, repeat: 3 }, t0 + 0.14);
+        tl.to(this.enemy, { x: this.enemyX - 110, duration: 0.14, ease: 'power3.in' }, t0);
+        tl.to(this.enemy, { x: this.enemyX, duration: 0.3, ease: 'power2.out' }, t0 + 0.14);
+        tl.to(this.alchemist, { x: HERO.x - 20, duration: 0.05, yoyo: true, repeat: 3 }, t0 + 0.14);
         tl.call(() => this.shake(10), [], t0 + 0.14);
-        if (log.damageToPlayerShield > 0) tl.call(() => this.floatText(1010, 330, `-${log.damageToPlayerShield} 护盾`, 0x7cc4ff, 32), [], t0 + 0.14);
-        if (log.damageToPlayerHp > 0) tl.call(() => this.floatText(1010, 400, `-${log.damageToPlayerHp}`, 0xff5a5a, 48), [], t0 + 0.2);
+        if (log.damageToPlayerShield > 0) tl.call(() => this.floatText(HERO.x, 330, `-${log.damageToPlayerShield} 护盾`, 0x7cc4ff, 32), [], t0 + 0.14);
+        if (log.damageToPlayerHp > 0) tl.call(() => this.floatText(HERO.x, 400, `-${log.damageToPlayerHp}`, 0xff5a5a, 48), [], t0 + 0.2);
       } else {
-        tl.to(this.mole.scale, { x: this.mole.scale.x * 1.05, duration: 0.15, yoyo: true, repeat: 1 }, t0);
+        tl.to(this.enemy.scale, { x: this.enemy.scale.x * 1.05, duration: 0.15, yoyo: true, repeat: 1 }, t0);
       }
     }
     tl.to({}, { duration: 0.5 });

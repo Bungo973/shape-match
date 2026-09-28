@@ -1,8 +1,8 @@
 // 棋盘调整（非战斗阶段）：从随身匣选嵌片、旋转、预览合法落位、确认嵌入。嵌入即固定。
 import { useEffect, useMemo, useState } from 'react';
 import { canPlace, DEFAULT_CONFIG, INSERT_DEFS, normalize, rotate, type Pos, type RunState } from '../../engine';
-import { InsertBadge, ShapePreview } from '../components';
-import { INSERT_GLYPH, insertCss } from '../insertStyle';
+import { InsertBadge, InsertSymbol, ShapePreview } from '../components';
+import { insertCss } from '../insertStyle';
 
 const CELL = 60;
 const SIZE = { rows: DEFAULT_CONFIG.rows, cols: DEFAULT_CONFIG.cols };
@@ -94,7 +94,7 @@ export function BoardEditor({
                     if (legal) setPending(preview);
                   }}
                 >
-                  {owner && <span style={{ color: insertCss(owner.type) }}>{INSERT_GLYPH[owner.type]}</span>}
+                  {owner && <InsertSymbol type={owner.type} size={24} />}
                 </div>
               );
             }),

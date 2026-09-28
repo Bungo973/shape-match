@@ -145,3 +145,14 @@ button.primary { background: linear-gradient(#d48a34, #8a4d17); font-size: 22px;
 
 .result-screen h1 { font-size: 64px; margin: 0; color: #ffd76a; }
 .screen.editor { background: #0a0c12; }
+
+/* ---- 神器图标 ---- */
+.artifact-icon { width: 104px; height: 104px; align-self: center; filter: drop-shadow(0 6px 12px rgba(0,0,0,.5)); }
+.artifact-icon-sm { width: 26px; height: 26px; flex: none; }
+.card.artifact:not(.compact) { min-height: 300px; }
+
+/* ---- 嵌片标志与符号 ---- */
+.symbol { display: inline-flex; flex: none; }
+.symbol svg { display: block; }
+.insert-emblem { width: 96px; height: 96px; align-self: center; filter: drop-shadow(0 6px 12px rgba(0,0,0,.5)); }
+.card.insert { min-height: 360px; }
