@@ -14,6 +14,7 @@ import {
   type TileMove,
   type TileSpawn,
 } from './board';
+import type { ArtifactKey } from './artifacts';
 import type { EngineConfig } from './config';
 import { INSERT_DEFS, type InsertType, type InstalledInsert } from './inserts';
 import { findGroups, passiveBombCell } from './match';
@@ -42,6 +43,8 @@ export interface ResolveContext {
   gravity: Gravity;
   /** 已安装的嵌片；被压制的嵌片不参与结算 */
   inserts?: readonly InstalledInsert[];
+  /** 持有的神器；这里只处理作用于爆炸过程的几件 */
+  artifacts?: readonly ArtifactKey[];
 }
 
 export type ExplosionShape = BombKind | 'cross' | 'rows3' | 'cols3' | 'square5' | 'board';
@@ -56,6 +59,8 @@ export interface Explosion {
   targetColor?: Color | null;
   /** 由嵌片追加或改变范围时，记录该嵌片 */
   byInsert?: string;
+  /** 由神器改变范围时，记录该神器 */
+  byArtifact?: ArtifactKey;
 }
 
 export interface ClearedEntry {
@@ -75,6 +80,8 @@ export interface InsertTrigger {
   effect: 'base' | 'catalyst' | 'produce' | 'ignite' | 'ember' | 'quake' | 'powder';
   at: Pos[];
   amount?: number;
+  /** 经锁位共鸣器传递而被视为波及 */
+  via?: 'lockResonator';
 }
 
 export type ResolutionEvent =
@@ -119,6 +126,10 @@ export interface ActionResult {
   socketBonuses: EffectValues;
   /** 本次行动中发生过有效触发的嵌片，按 ID 排序 */
   triggeredInsertIds: string[];
+  /** 主动阶段作为来源被引爆或消耗的炸弹数（不稳定引信） */
+  activeBombsDetonated: number;
+  /** 是否有过载直线炸弹引爆（过载引线的代价） */
+  overloadFired: boolean;
 }
 
 interface Detonation {
@@ -156,6 +167,8 @@ class Resolver {
   readonly socket: EffectValues = { attack: 0, shield: 0, poison: 0 };
   readonly triggeredIds = new Set<string>();
   passiveCount = 0;
+  activeBombsDetonated = 0;
+  overloadFired = false;
   /** 本次行动中已引爆或已消耗的炸弹，保证每枚只引爆一次 */
   private readonly spent = new Set<number>();
   private readonly insertAt = new Map<number, InstalledInsert>();
@@ -171,6 +184,10 @@ class Resolver {
     this.board = cloneBoard(board);
     this.activeInserts = (ctx.inserts ?? []).filter((i) => !i.suppressed).sort((a, b) => a.id.localeCompare(b.id));
     for (const ins of this.activeInserts) for (const p of ins.cells) this.insertAt.set(posKey(p), ins);
+  }
+
+  private has(key: ArtifactKey): boolean {
+    return this.ctx.artifacts?.includes(key) ?? false;
   }
 
   private insertOn(pos: Pos, type: InsertType): InstalledInsert | undefined {
@@ -295,6 +312,7 @@ class Resolver {
       for (const d of detonations) explosions.push(...this.explosionsOf(d, snapshot));
       for (const d of [...detonations, ...input.consume]) {
         this.spent.add(d.id);
+        if (phase === 'active') this.activeBombsDetonated++;
         const entry = this.clearAt(phase, d.pos);
         if (entry) consumed.push(entry);
       }
@@ -303,13 +321,18 @@ class Resolver {
       const hit = new Map<number, Pos>();
       for (const e of explosions) for (const p of e.cells) hit.set(posKey(p), p);
       const targets = new Map(hit);
-      for (const ins of this.activeInserts) {
-        if (ins.type !== 'blastPowder' || !ins.cells.some((p) => hit.has(posKey(p)))) continue;
+      const direct = this.activeInserts.filter((ins) => ins.cells.some((p) => hit.has(posKey(p))));
+      // 锁位共鸣器：与被直接波及的嵌片有边相接的嵌片也视为被波及，只传一层
+      const resonated = this.has('lockResonator')
+        ? this.activeInserts.filter((ins) => !direct.includes(ins) && direct.some((d) => edgeAdjacent(d, ins)))
+        : [];
+      for (const ins of [...direct, ...resonated]) {
+        if (ins.type !== 'blastPowder') continue;
         // 只有覆盖格上仍有方块、且未被爆炸本身覆盖时才算有效触发
         const extra = ins.cells.filter((p) => !hit.has(posKey(p)) && getTile(this.board, p));
         if (extra.length === 0) continue;
         for (const p of extra) targets.set(posKey(p), p);
-        this.trigger({ insertId: ins.id, type: ins.type, effect: 'powder', at: extra });
+        this.trigger({ insertId: ins.id, type: ins.type, effect: 'powder', at: extra, ...(resonated.includes(ins) ? { via: 'lockResonator' as const } : {}) });
       }
       for (const [, p] of [...targets].sort((x, y) => x[0] - y[0])) {
         const tile = getTile(this.board, p);
@@ -369,10 +392,14 @@ class Resolver {
     switch (d.bomb) {
       case 'H':
       case 'V': {
+        // 过载引线：单枚直线炸弹清三行／三列
+        const w = this.has('overloadFuse') ? 1 : 0;
+        if (w) this.overloadFired = true;
         const line: Explosion =
           d.bomb === 'H'
-            ? { ...base, shape: 'H', cells: rect(rows, cols, r, r, 0, cols - 1) }
-            : { ...base, shape: 'V', cells: rect(rows, cols, 0, rows - 1, c, c) };
+            ? { ...base, shape: 'H', cells: rect(rows, cols, r - w, r + w, 0, cols - 1) }
+            : { ...base, shape: 'V', cells: rect(rows, cols, 0, rows - 1, c - w, c + w) };
+        if (w) line.byArtifact = 'overloadFuse';
         const ember = this.insertOn(d.pos, 'emberClay');
         if (!ember) return [line];
         this.trigger({ insertId: ember.id, type: ember.type, effect: 'ember', at: [d.pos] });
@@ -422,6 +449,10 @@ class Resolver {
       this.matchesThenWaves('passive');
     }
   }
+}
+
+function edgeAdjacent(a: InstalledInsert, b: InstalledInsert): boolean {
+  return a.cells.some((p) => b.cells.some((q) => Math.abs(p.r - q.r) + Math.abs(p.c - q.c) === 1));
 }
 
 function rect(rows: number, cols: number, r0: number, r1: number, c0: number, c1: number): Pos[] {
@@ -491,6 +522,8 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     hadActiveColorClear: false,
     socketBonuses: { attack: 0, shield: 0, poison: 0 },
     triggeredInsertIds: [],
+    activeBombsDetonated: 0,
+    overloadFired: false,
   });
 
   const res = new Resolver(board, ctx);
@@ -546,5 +579,7 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     hadActiveColorClear: colorClears > 0,
     socketBonuses: res.socket,
     triggeredInsertIds: [...res.triggeredIds].sort(),
+    activeBombsDetonated: res.activeBombsDetonated,
+    overloadFired: res.overloadFired,
   };
 }

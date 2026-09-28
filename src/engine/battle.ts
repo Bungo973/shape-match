@@ -1,5 +1,6 @@
 // 一场战斗的状态与回合流程，规则见 docs/GAME_RULES.md §1、§3、§4 与 docs/ENEMY_DESIGN.md。
 // 所有函数都是纯函数：输入旧状态，返回新状态与日志；状态可直接序列化存档。
+import { ARTIFACT_PARAMS, type ArtifactKey } from './artifacts';
 import { createBoard, createIdGen, weightedSpawner } from './board';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import type { InstalledInsert } from './inserts';
@@ -71,6 +72,8 @@ export interface BattleState {
   board: Board;
   /** 战斗中布局锁定 */
   inserts: InstalledInsert[];
+  /** 持有的神器，整局持续生效 */
+  artifacts: ArtifactKey[];
   player: PlayerState;
   enemy: EnemyState;
   turn: number;
@@ -79,7 +82,7 @@ export interface BattleState {
   /** 向上重力剩余的玩家回合数；0 表示未生效 */
   gravityTurnsLeft: number;
   /** 敌人本回合成功施加、从下一玩家回合起生效的状态 */
-  pending: { erosion: boolean; suppressId: string | null; gravity: boolean };
+  pending: { erosion: boolean; suppressId: string | null; gravity: boolean; apBonus: number };
   /** 本玩家回合生效中的状态 */
   current: { erosionArmed: boolean; suppressedId: string | null };
   outcome: 'ongoing' | 'won' | 'lost';
@@ -91,6 +94,7 @@ export interface StartBattleInput {
   player: PlayerState;
   enemy: EnemyDef;
   inserts?: InstalledInsert[];
+  artifacts?: ArtifactKey[];
   /** 事件等给敌人的初始护盾 */
   enemyStartShield?: number;
 }
@@ -109,11 +113,18 @@ export interface ActionLog {
 }
 
 export interface EnemyTurnLog {
+  /** 不稳定引信：回合末留存炸弹对自己造成的伤害 */
+  fuseDamageToShield: number;
+  fuseDamageToHp: number;
   cancelledByStun: boolean;
   executed: IntentPart[];
   damageToPlayerShield: number;
   damageToPlayerHp: number;
   poisonDecayed: number;
+  /** 反应线圈的反击伤害 */
+  counterDamage: number;
+  /** 回响钟：下一玩家回合额外获得的 AP */
+  apBonusNext: number;
   nextIntent: Intent;
 }
 
@@ -129,6 +140,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     nextId: ids.peek,
     board,
     inserts: clone(input.inserts ?? []),
+    artifacts: [...(input.artifacts ?? [])],
     player: clone(input.player),
     enemy: {
       def: input.enemy,
@@ -145,7 +157,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     ap: config.apPerTurn,
     gravity: 'down',
     gravityTurnsLeft: 0,
-    pending: { erosion: false, suppressId: null, gravity: false },
+    pending: { erosion: false, suppressId: null, gravity: false, apBonus: 0 },
     current: { erosionArmed: false, suppressedId: null },
     outcome: 'ongoing',
     totalScore: 0,
@@ -174,6 +186,7 @@ export function playerAction(prev: BattleState, action: Action, config: EngineCo
     spawn: weightedSpawner(rng, config),
     gravity: state.gravity,
     inserts,
+    artifacts: state.artifacts,
   });
   if (!result.valid) return { ok: false, state: prev, reason: result.reason! };
 
@@ -199,14 +212,20 @@ export function playerAction(prev: BattleState, action: Action, config: EngineCo
     // 倍率侵蚀只由本回合首次主动清除有色方块的行动承担
     const erode = state.current.erosionArmed && result.hadActiveColorClear;
     if (erode) state.current.erosionArmed = false;
+    // 倍率修正顺序：不稳定引信修正 P → 基础倍率 → 连锁透镜 → 共振底座 → 敌方倍率侵蚀（GAME_RULES §6）
+    const has = (k: ArtifactKey) => state.artifacts.includes(k);
+    const P = result.passiveClearCount + (has('unstableFuse') ? result.activeBombsDetonated : 0);
+    const stepDelta = (has('chainLens') && P >= 3 ? 1 : 0) + (has('resonanceBase') && result.triggeredInsertIds.length >= 2 ? 1 : 0);
     const s = settle(
       {
         activeClearsByType: result.activeClearsByType,
-        passiveClearCount: result.passiveClearCount,
+        passiveClearCount: P,
         hadActiveColorClear: result.hadActiveColorClear,
         chargesBefore: state.player.catalystCharges,
         socketBonuses: result.socketBonuses,
-        multiplierStepDelta: erode ? -1 : 0,
+        multiplierStepDelta: stepDelta,
+        erosionSteps: erode ? 1 : 0,
+        zeroShieldEffect: result.overloadFired,
       },
       config,
     );
@@ -226,16 +245,10 @@ function applyPlayerEffects(state: BattleState, s: Settlement, log: ActionLog, c
   state.player.shield = Math.min(config.playerShieldCap, before + shield);
   log.shieldGained = state.player.shield - before;
   // 攻击先扣敌人护盾再扣生命
-  const toShield = Math.min(state.enemy.shield, attack);
-  state.enemy.shield -= toShield;
-  const toHp = Math.min(state.enemy.hp, attack - toShield);
-  state.enemy.hp -= toHp;
-  log.damageToEnemyShield = toShield;
-  log.damageToEnemyHp = toHp;
-  if (state.enemy.hp <= 0) {
-    state.outcome = 'won';
-    return;
-  }
+  const hit = damageEnemy(state, attack);
+  log.damageToEnemyShield = hit.toShield;
+  log.damageToEnemyHp = hit.toHp;
+  if (state.outcome === 'won') return;
   // 毒气：一回合至多挂一次眩晕，挂上后本回合的毒气不再积累
   if (poison > 0 && !state.enemy.stunnedThisTurn) {
     state.enemy.poison += poison;
@@ -243,10 +256,41 @@ function applyPlayerEffects(state: BattleState, s: Settlement, log: ActionLog, c
     if (state.enemy.poison >= config.poisonThreshold) {
       state.enemy.stunPending = true;
       state.enemy.stunnedThisTurn = true;
-      state.enemy.poison = 0;
+      // 密封毒瓶：眩晕后保留一部分进度，仍低于阈值
+      state.enemy.poison = state.artifacts.includes('sealedVial') ? Math.min(ARTIFACT_PARAMS.sealedVialRetain, config.poisonThreshold - 1) : 0;
       log.stunApplied = true;
     }
   }
+}
+
+/** 对敌人造成伤害：先扣护盾再扣生命；穿甲针使每点攻击削减 2 点护盾。击杀时结束战斗。 */
+function damageEnemy(state: BattleState, amount: number): { toShield: number; toHp: number } {
+  const enemy = state.enemy;
+  const factor = state.artifacts.includes('piercingNeedle') ? ARTIFACT_PARAMS.piercingShieldFactor : 1;
+  let toShield: number;
+  let rest: number;
+  if (amount * factor <= enemy.shield) {
+    toShield = amount * factor;
+    rest = 0;
+  } else {
+    toShield = enemy.shield;
+    rest = amount - Math.ceil(enemy.shield / factor);
+  }
+  enemy.shield -= toShield;
+  const toHp = Math.min(enemy.hp, rest);
+  enemy.hp -= toHp;
+  if (enemy.hp <= 0) state.outcome = 'won';
+  return { toShield, toHp };
+}
+
+/** 对主角造成伤害：先扣护盾再扣生命。生命归零时失败。 */
+function damagePlayer(state: BattleState, amount: number): { toShield: number; toHp: number } {
+  const toShield = Math.min(state.player.shield, amount);
+  state.player.shield -= toShield;
+  const toHp = Math.min(state.player.hp, amount - toShield);
+  state.player.hp -= toHp;
+  if (state.player.hp <= 0) state.outcome = 'lost';
+  return { toShield, toHp };
 }
 
 /** 玩家结束回合：回合末结算 → 敌人回合 → 下一玩家回合开始。 */
@@ -261,23 +305,39 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
     if (state.gravityTurnsLeft === 0) state.gravity = 'down';
   }
 
-  // 2. 敌人回合：眩晕取消整次意图，否则按部件顺序执行
   const enemy = state.enemy;
   const log: EnemyTurnLog = {
+    fuseDamageToShield: 0,
+    fuseDamageToHp: 0,
     cancelledByStun: false,
     executed: [],
     damageToPlayerShield: 0,
     damageToPlayerHp: 0,
     poisonDecayed: 0,
+    counterDamage: 0,
+    apBonusNext: 0,
     nextIntent: enemy.intent,
   };
+
+  // 不稳定引信的代价：回合结束时每枚留存炸弹伤害自己，在敌人行动前结算
+  if (state.artifacts.includes('unstableFuse')) {
+    const bombs = state.board.flat().filter((t) => t?.kind === 'bomb').length;
+    const hurt = damagePlayer(state, bombs * ARTIFACT_PARAMS.unstableFuseDamage);
+    log.fuseDamageToShield = hurt.toShield;
+    log.fuseDamageToHp = hurt.toHp;
+    if (state.outcome === 'lost') return { state, log };
+  }
+
+  // 2. 敌人回合：眩晕取消整次意图，否则按部件顺序执行
   if (enemy.stunPending) {
     enemy.stunPending = false;
     log.cancelledByStun = true;
+    // 回响钟：眩晕成功取消意图后，下回合多 1 AP
+    if (state.artifacts.includes('echoBell')) state.pending.apBonus = ARTIFACT_PARAMS.echoBellAp;
   } else {
     for (const part of enemy.intent.parts) {
       executePart(state, part, log);
-      if (state.outcome === 'lost') return { state, log };
+      if (state.outcome !== 'ongoing') return { state, log };
     }
   }
 
@@ -290,7 +350,8 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
 
   // 4. 下一玩家回合开始：施加敌人上回合成功施加的状态，AP 恢复
   state.turn++;
-  state.ap = config.apPerTurn;
+  state.ap = config.apPerTurn + state.pending.apBonus;
+  log.apBonusNext = state.pending.apBonus;
   enemy.stunnedThisTurn = false;
   if (state.pending.erosion) state.current.erosionArmed = true;
   if (state.pending.suppressId) state.current.suppressedId = state.pending.suppressId;
@@ -298,7 +359,7 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
     state.gravity = 'up';
     state.gravityTurnsLeft = config.gravityTurns;
   }
-  state.pending = { erosion: false, suppressId: null, gravity: false };
+  state.pending = { erosion: false, suppressId: null, gravity: false, apBonus: 0 };
   return { state, log };
 }
 
@@ -309,13 +370,14 @@ function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog): v
     case 'attack': {
       const dmg = part.amount + enemy.chargeBonus;
       enemy.chargeBonus = 0;
-      const toShield = Math.min(state.player.shield, dmg);
-      state.player.shield -= toShield;
-      const toHp = Math.min(state.player.hp, dmg - toShield);
-      state.player.hp -= toHp;
-      log.damageToPlayerShield += toShield;
-      log.damageToPlayerHp += toHp;
-      if (state.player.hp <= 0) state.outcome = 'lost';
+      const hurt = damagePlayer(state, dmg);
+      log.damageToPlayerShield += hurt.toShield;
+      log.damageToPlayerHp += hurt.toHp;
+      // 反应线圈：一次攻击被护盾完全挡下时反击
+      if (dmg > 0 && hurt.toHp === 0 && state.outcome === 'ongoing' && state.artifacts.includes('reactionCoil')) {
+        const back = damageEnemy(state, ARTIFACT_PARAMS.reactionCoilDamage);
+        log.counterDamage += back.toHp + back.toShield;
+      }
       return;
     }
     case 'defend':

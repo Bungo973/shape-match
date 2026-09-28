@@ -157,7 +157,7 @@ describe('特殊意图', () => {
     s.board = boardWith({ '4,0': 'H', '7,7': 'V' });
     const first = act(s, ignite(4, 0));
     expect(first.log.erosionConsumed).toBe(true);
-    expect(first.log.settlement!.multiplier).toBe(multiplierFor(first.log.result.passiveClearCount, DEFAULT_CONFIG, -1));
+    expect(first.log.settlement!.multiplier).toBe(multiplierFor(first.log.result.passiveClearCount, DEFAULT_CONFIG, 0, 1));
     expect(first.state.current.erosionArmed).toBe(false);
   });
 

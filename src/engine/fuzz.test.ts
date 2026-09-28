@@ -24,14 +24,14 @@ const ALL_BATCH1: InstalledInsert[] = [
 // 随机对局压力测试：检查每次行动后的不变量，而不是具体数值
 describe.each([
   ['无嵌片', [] as InstalledInsert[]],
-  ['第一批九种嵌片', ALL_BATCH1],
+  ['第一批九种嵌片 + 过载引线、锁位共鸣器', ALL_BATCH1],
 ])('随机行动的不变量（%s）', (_label, inserts) => {
   it('200 个种子 × 40 步：棋盘稳定、计数与日志一致、结算必定终止', () => {
     let bombActions = 0;
     for (let seed = 1; seed <= 200; seed++) {
       const rng = createRng(seed);
       const ids = createIdGen();
-      const ctx = { config: DEFAULT_CONFIG, rng, ids, spawn: weightedSpawner(rng, DEFAULT_CONFIG), gravity: seed % 2 ? ('down' as const) : ('up' as const), inserts };
+      const ctx = { config: DEFAULT_CONFIG, rng, ids, spawn: weightedSpawner(rng, DEFAULT_CONFIG), gravity: seed % 2 ? ('down' as const) : ('up' as const), inserts, artifacts: inserts.length ? (['overloadFuse', 'lockResonator'] as const) : [] };
       let board: Board = createBoard(rng, ids, DEFAULT_CONFIG);
       for (let step = 0; step < 40; step++) {
         const action = randomAction(board, rng.int.bind(rng));

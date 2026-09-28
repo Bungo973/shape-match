@@ -16,8 +16,12 @@ export interface SettlementInput {
   chargesBefore: number;
   /** 主动消除触发的嵌片基础值 E */
   socketBonuses?: EffectValues;
-  /** 倍率档位修正（神器提高为正，倍率侵蚀为负）；结果限制在 ×1 至封顶之间 */
+  /** 神器的倍率档位修正（连锁透镜、共振底座），结果先限制在封顶以内 */
   multiplierStepDelta?: number;
+  /** 敌方倍率侵蚀：在神器修正之后再降的档数，最低 ×1 */
+  erosionSteps?: number;
+  /** 过载引线的代价：本步护盾效果为 0，结算分不变 */
+  zeroShieldEffect?: boolean;
 }
 
 export interface Settlement {
@@ -31,15 +35,16 @@ export interface Settlement {
   chargesAfter: number;
 }
 
-export function multiplierFor(passiveClearCount: number, config: EngineConfig, stepDelta = 0): number {
-  const steps = Math.min(Math.floor(passiveClearCount / config.passivePerStep), config.maxMultiplierSteps) + stepDelta;
-  return 2 ** Math.max(0, Math.min(config.maxMultiplierSteps, steps));
+export function multiplierFor(passiveClearCount: number, config: EngineConfig, stepDelta = 0, erosionSteps = 0): number {
+  const base = Math.min(Math.floor(passiveClearCount / config.passivePerStep), config.maxMultiplierSteps);
+  const boosted = Math.max(0, Math.min(config.maxMultiplierSteps, base + stepDelta));
+  return 2 ** Math.max(0, boosted - erosionSteps);
 }
 
 export function settle(input: SettlementInput, config: EngineConfig): Settlement {
   const A = input.activeClearsByType;
   const E = input.socketBonuses ?? { attack: 0, shield: 0, poison: 0 };
-  const M = multiplierFor(input.passiveClearCount, config, input.multiplierStepDelta ?? 0);
+  const M = multiplierFor(input.passiveClearCount, config, input.multiplierStepDelta ?? 0, input.erosionSteps ?? 0);
   // 至少主动清除一枚有色普通方块的行动才消耗旧充能（GAME_RULES §2 第 5 步）
   const C = input.hadActiveColorClear ? input.chargesBefore : 0;
   const bonus = config.chargeBonus * C;
@@ -56,7 +61,7 @@ export function settle(input: SettlementInput, config: EngineConfig): Settlement
     chargesUsed: C,
     baseValues,
     settlementScore,
-    finalEffects: { attack: baseValues.attack * M, shield: baseValues.shield * M, poison: baseValues.poison * M },
+    finalEffects: { attack: baseValues.attack * M, shield: input.zeroShieldEffect ? 0 : baseValues.shield * M, poison: baseValues.poison * M },
     chargesGained,
     chargesAfter: Math.min(config.chargeCap, kept + chargesGained),
   };

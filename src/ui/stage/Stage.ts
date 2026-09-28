@@ -667,20 +667,28 @@ export class Stage {
 
   async playEnemyTurn(log: EnemyTurnLog): Promise<void> {
     const tl = gsap.timeline();
+    const fuse = log.fuseDamageToShield + log.fuseDamageToHp;
+    if (fuse > 0) {
+      tl.call(() => this.floatText(1010, 360, `引信 -${fuse}`, 0xff8a2a, 34), [], 0);
+      tl.to({}, { duration: 0.5 });
+    }
+    const t0 = fuse > 0 ? 0.5 : 0;
+    if (log.counterDamage > 0) tl.call(() => this.floatText(1390, 440, `反击 -${log.counterDamage}`, 0x9fe0ff, 36), [], t0 + 0.35);
+    if (log.apBonusNext > 0) tl.call(() => this.floatText(1010, 250, `下回合 +${log.apBonusNext} 行动力`, 0xffd76a, 28), [], t0 + 0.4);
     if (log.cancelledByStun) {
-      tl.to(this.mole, { rotation: -0.08, duration: 0.1, yoyo: true, repeat: 3 }, 0);
-      tl.call(() => this.floatText(1390, 420, '眩晕中，行动取消', 0xd6ff5c, 30), [], 0);
+      tl.to(this.mole, { rotation: -0.08, duration: 0.1, yoyo: true, repeat: 3 }, t0);
+      tl.call(() => this.floatText(1390, 420, '眩晕中，行动取消', 0xd6ff5c, 30), [], t0);
     } else {
       const hit = log.damageToPlayerHp + log.damageToPlayerShield;
       if (hit > 0) {
-        tl.to(this.mole, { x: 1280, duration: 0.14, ease: 'power3.in' }, 0);
-        tl.to(this.mole, { x: 1390, duration: 0.3, ease: 'power2.out' }, 0.14);
-        tl.to(this.alchemist, { x: 990, duration: 0.05, yoyo: true, repeat: 3 }, 0.14);
-        tl.call(() => this.shake(10), [], 0.14);
-        if (log.damageToPlayerShield > 0) tl.call(() => this.floatText(1010, 330, `-${log.damageToPlayerShield} 护盾`, 0x7cc4ff, 32), [], 0.14);
-        if (log.damageToPlayerHp > 0) tl.call(() => this.floatText(1010, 400, `-${log.damageToPlayerHp}`, 0xff5a5a, 48), [], 0.2);
+        tl.to(this.mole, { x: 1280, duration: 0.14, ease: 'power3.in' }, t0);
+        tl.to(this.mole, { x: 1390, duration: 0.3, ease: 'power2.out' }, t0 + 0.14);
+        tl.to(this.alchemist, { x: 990, duration: 0.05, yoyo: true, repeat: 3 }, t0 + 0.14);
+        tl.call(() => this.shake(10), [], t0 + 0.14);
+        if (log.damageToPlayerShield > 0) tl.call(() => this.floatText(1010, 330, `-${log.damageToPlayerShield} 护盾`, 0x7cc4ff, 32), [], t0 + 0.14);
+        if (log.damageToPlayerHp > 0) tl.call(() => this.floatText(1010, 400, `-${log.damageToPlayerHp}`, 0xff5a5a, 48), [], t0 + 0.2);
       } else {
-        tl.to(this.mole.scale, { x: this.mole.scale.x * 1.05, duration: 0.15, yoyo: true, repeat: 1 }, 0);
+        tl.to(this.mole.scale, { x: this.mole.scale.x * 1.05, duration: 0.15, yoyo: true, repeat: 1 }, t0);
       }
     }
     tl.to({}, { duration: 0.5 });
