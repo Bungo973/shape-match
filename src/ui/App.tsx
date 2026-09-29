@@ -4,14 +4,13 @@ import {
   campUpgrade,
   debugLevelUp,
   chooseArtifact,
-  chooseInsert,
+  chooseUpgrade,
   DEFAULT_CONFIG,
-  installInsert,
   newRun,
   pickStarter,
   poisonDecay,
   poisonThreshold,
-  rerollInserts,
+  rerollRewards,
   runAction,
   runEndTurn,
   startNextBattle,
@@ -31,7 +30,6 @@ import { ArtifactStrip, EnemyPanel, PlayerPanel, REASON_TEXT, SettlePanel } from
 import { isMuted, setMuted } from './audio';
 import { rateMove } from './rating';
 import { clearRun, loadRun, saveRun } from './save';
-import { BoardEditor } from './screens/BoardEditor';
 import { ArtifactScreen, CampScreen, MapScreen, ResultScreen, RewardScreen, StarterScreen } from './screens/Screens';
 import { Stage, STAGE_H, STAGE_W } from './stage/Stage';
 
@@ -62,7 +60,6 @@ export function App() {
   const [placeBomb, setPlaceBomb] = useState<BombKind | null>(null);
   const placeRef = useRef(placeBomb);
   placeRef.current = placeBomb;
-  const [editing, setEditing] = useState(false);
 
   const setRun = (r: RunState) => {
     runRef.current = r;
@@ -205,7 +202,6 @@ export function App() {
   const restart = () => {
     clearRun();
     setLastLog(null);
-    setEditing(false);
     setRun(newRun(newSeed()));
   };
 
@@ -243,16 +239,13 @@ export function App() {
         )}
 
         {run.phase === 'starter' && <StarterScreen run={run} onPick={(k) => apply(pickStarter(run, k))} />}
-        {run.phase === 'map' && <MapScreen run={run} onStart={startBattle} onEdit={() => setEditing(true)} />}
-        {run.phase === 'reward' && <RewardScreen run={run} onPick={(i) => apply(chooseInsert(run, i))} onReroll={(keep) => apply(rerollInserts(run, keep))} />}
+        {run.phase === 'map' && <MapScreen run={run} onStart={startBattle} />}
+        {run.phase === 'reward' && <RewardScreen run={run} onPick={(i) => apply(chooseUpgrade(run, i))} onReroll={(keep) => apply(rerollRewards(run, keep))} />}
         {run.phase === 'artifact' && <ArtifactScreen run={run} onPick={(k) => apply(chooseArtifact(run, k))} />}
         {run.phase === 'camp' && (
-          <CampScreen run={run} onRest={() => apply(campRest(run))} onUpgrade={(id, cells) => apply(campUpgrade(run, id, cells))} onEdit={() => setEditing(true)} />
+          <CampScreen run={run} onRest={() => apply(campRest(run))} onUpgrade={(key) => apply(campUpgrade(run, key))} />
         )}
         {run.phase === 'over' && <ResultScreen run={run} onRestart={restart} />}
-        {editing && run.phase !== 'battle' && run.phase !== 'over' && (
-          <BoardEditor run={run} onInstall={(id, cells) => apply(installInsert(runRef.current, id, cells))} onClose={() => setEditing(false)} />
-        )}
 
         {/* 调试工具 */}
         <div className="debug">
@@ -285,23 +278,25 @@ export function App() {
           )}
         </div>
 
-        <div className="levels-debug" title="原型：左键 +1 级，右键 −1 级">
-          <div className="levels-title">升级（原型）</div>
-          {UPGRADE_KEYS.map((k) => (
-            <button
-              key={k}
-              className={run.levels[k] > 1 ? 'on' : ''}
-              title={`${UPGRADE_NAMES[k]} ${run.levels[k]} 级`}
-              onClick={() => debugLevel(k, 1)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                debugLevel(k, -1);
-              }}
-            >
-              {LEVEL_LABEL[k]} {run.levels[k]}
-            </button>
-          ))}
-        </div>
+        {run.phase === 'battle' && (
+          <div className="levels-debug" title="原型：左键 +1 级，右键 −1 级">
+            <div className="levels-title">升级（原型）</div>
+            {UPGRADE_KEYS.map((k) => (
+              <button
+                key={k}
+                className={run.levels[k] > 1 ? 'on' : ''}
+                title={`${UPGRADE_NAMES[k]} ${run.levels[k]} 级`}
+                onClick={() => debugLevel(k, 1)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  debugLevel(k, -1);
+                }}
+              >
+                {LEVEL_LABEL[k]} {run.levels[k]}
+              </button>
+            ))}
+          </div>
+        )}
 
         {toast && <div className="toast">{toast}</div>}
       </div>

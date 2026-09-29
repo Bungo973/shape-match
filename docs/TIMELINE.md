@@ -19,7 +19,7 @@
 | [GAME_RULES](GAME_RULES.md) | 战斗与成长的统一规则源：基数 × 倍率、结算顺序 | 现行（§5 嵌片待修订） |
 | [SPECIAL_TILES](SPECIAL_TILES.md) | 四种无属性炸弹、生成优先级、匹配归组、组合矩阵 | 现行 |
 | [BOARD_SIZE_DECISION](BOARD_SIZE_DECISION.md) | 棋盘定为 8×8 的理由 | 现行 |
-| [INSERT_DESIGN](INSERT_DESIGN.md) | 嵌片池、触发引擎与波次结算、**防卡壳五条规矩** | 待修订（嵌片将去掉；触发引擎与五条规矩仍适用） |
+| [INSERT_DESIGN](INSERT_DESIGN.md) | 嵌片池、触发引擎与波次结算、**防卡壳五条规矩** | 记录（嵌片已移出一局流程；触发引擎与五条规矩仍适用） |
 | [ARTIFACT_DESIGN](ARTIFACT_DESIGN.md) | 神器设计空间与首版 12 件 | 现行（依赖嵌片的几件待修订） |
 | [ENEMY_DESIGN](ENEMY_DESIGN.md) | 九战学习顺序、倍率侵蚀、嵌片压制、重力异常 | 现行（第 6 场嵌片压制待修订） |
 | [MAP](MAP.md) | 固定九战路线、战后流程、金币、事件、商店 | 待修订 |
@@ -55,7 +55,9 @@
 
 | 文档 | 内容 | 状态 |
 | --- | --- | --- |
-| [BLOCK_BUILD](BLOCK_BUILD.md) | 方块构筑讨论稿：升级只有 4 种方块 + 4 类炸弹（含新增十字炸弹），等级 × 基础值；条件神器、闪电引线；传统道具 | 讨论稿（部分已定） |
+| [BLOCK_BUILD](BLOCK_BUILD.md) | 方块构筑讨论稿：升级只有 4 种方块 + 3 类炸弹，等级 × 基础值（十字炸弹已撤回）；条件神器、闪电引线；传统道具 | 讨论稿（部分已定） |
 | [BOARD_SIZE_DECISION](BOARD_SIZE_DECISION.md) · [BALANCE_LOG](BALANCE_LOG.md) · [ENEMY_DESIGN](ENEMY_DESIGN.md) | 棋盘改为 10×10；敌人生命 ×2.1 | 现行 |
 | [GAME_RULES](GAME_RULES.md) · [BALANCE_LOG](BALANCE_LOG.md) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) | 主角护盾改为每回合清空、不带入下一场，上限 40；敌人攻击校准 | 现行 |
 | [GAME_RULES](GAME_RULES.md) · [BALANCE_LOG](BALANCE_LOG.md) | 升级表原型：方块等级、炸弹加成取代特殊匹配 ×2；各项强度对比 | 现行（原型） |
+| [BLOCK_BUILD](BLOCK_BUILD.md) · [MAP](MAP.md) · [GAME_RULES](GAME_RULES.md) | 战后奖励改为升级三选一，营地升级任选一项；一局流程移除嵌片 | 现行 |
+| [ARTIFACT_DESIGN](ARTIFACT_DESIGN.md) · [GAME_RULES](GAME_RULES.md) · [BALANCE_LOG](BALANCE_LOG.md) | 5 件方块构筑神器（A18–A22）；共振底座、锁位共鸣器下架 | 现行 |

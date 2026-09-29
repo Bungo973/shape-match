@@ -4,7 +4,7 @@ import { endTurn, playerAction, poisonThreshold, startBattle, type BattleState, 
 import { DEFAULT_CONFIG } from './config';
 import { resolveAction } from './resolve';
 import { multiplierFor } from './score';
-import { boardWith, ins, testCtx } from './test-utils';
+import { boardWith, ins, randomCtx, testCtx } from './test-utils';
 import type { Action } from './types';
 
 const attack = (amount: number): Intent => ({ parts: [{ kind: 'attack', amount }] });
@@ -30,10 +30,11 @@ function act(s: BattleState, action: Action) {
 const igniteRow4: Action = { type: 'ignite', at: { r: 4, c: 0 } };
 
 describe('神器池', () => {
-  it('首版 12 件，开局池 5 件，带代价的 2 件', () => {
+  it('共 17 件（2 件依赖嵌片已下架），开局池 7 件，带代价的 2 件', () => {
     const all = Object.values(ARTIFACTS);
-    expect(all).toHaveLength(12);
-    expect(all.filter((a) => a.starter).map((a) => a.name)).toEqual(['密封毒瓶', '反应线圈', '连锁透镜', '回响钟', '藏宝图残页']);
+    expect(all).toHaveLength(17);
+    expect(all.filter((a) => a.retired).map((a) => a.name)).toEqual(['共振底座', '锁位共鸣器']);
+    expect(all.filter((a) => a.starter).map((a) => a.name)).toEqual(['密封毒瓶', '反应线圈', '连锁透镜', '回响钟', '藏宝图残页', '纯粹结晶', '爆破手册']);
     expect(all.filter((a) => a.cost).map((a) => a.name)).toEqual(['过载引线', '不稳定引信']);
     expect(all.some((a) => a.starter && a.cost)).toBe(false);
   });
@@ -163,3 +164,69 @@ describe('锁位共鸣器', () => {
     expect(run([]).triggeredInsertIds).toEqual(['A']);
   });
 });
+
+describe('条件基数类神器', () => {
+  // 横向炸弹炸掉第 0 行：含攻击、护盾与填充的毒气／催化剂，四种颜色都有
+  const rowBoard = { '0,0': 'H', '0,1': 'a', '0,2': 's' };
+  const igniteRow0: Action = { type: 'ignite', at: { r: 0, c: 0 } };
+
+  it('纯粹结晶：只清一种颜色时该色 +3；清到多种颜色时不触发', () => {
+    const single = act(battle(['pureCrystal'], { '0,0': 'a', '0,1': 'a', '0,2': 's', '1,2': 'a' }), { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } });
+    expect(single.log.artifactBaseBonus).toEqual({ attack: 3, shield: 0, poison: 0, catalyst: 0 });
+    expect(single.log.settlement!.baseValues.attack).toBe(3 + 3);
+    const mixed = act(battle(['pureCrystal'], rowBoard), igniteRow0);
+    expect(mixed.log.artifactBaseBonus).toEqual({ attack: 0, shield: 0, poison: 0, catalyst: 0 });
+  });
+
+  it('四色棱镜：四种颜色都清到时每种 +2', () => {
+    const out = act(battle(['fourPrism'], rowBoard), igniteRow0);
+    expect(out.log.artifactBaseBonus).toEqual({ attack: 2, shield: 2, poison: 2, catalyst: 2 });
+  });
+
+  it('爆破手册：亲手每做出一枚炸弹，该组颜色 +2', () => {
+    const board = { '1,2': 's', '2,2': 's', '3,2': 'a', '4,2': 's', '1,3': 'a', '2,3': 'a', '3,3': 's', '4,3': 'a' };
+    const out = act(battle(['blastManual'], board), { type: 'swap', from: { r: 3, c: 2 }, to: { r: 3, c: 3 } });
+    expect(out.log.artifactBaseBonus).toMatchObject({ attack: 2, shield: 2 });
+  });
+
+  it('清场号角：主动清除不足 10 格不触发，达到 10 格时攻击、护盾、毒气各 +1', () => {
+    const few = act(battle(['sweepHorn'], rowBoard), igniteRow0);
+    expect(few.log.artifactBaseBonus).toEqual({ attack: 0, shield: 0, poison: 0, catalyst: 0 });
+    // 横向炸弹波及第 5 列的竖向炸弹，一行加一列共 14 个方块
+    const many = act(battle(['sweepHorn'], { ...rowBoard, '0,5': 'V' }), igniteRow0);
+    expect(many.log.artifactBaseBonus).toEqual({ attack: 1, shield: 1, poison: 1, catalyst: 0 });
+  });
+});
+
+describe('雷鸣引线', () => {
+  const lightning = (seed: number) => {
+    const ctx = { ...randomCtx(seed), artifacts: ['thunderFuse' as const] };
+    const res = resolveAction(boardWith({ '4,0': 'H' }), igniteRow4, ctx);
+    const wave = res.events.find((e) => e.type === 'wave')!;
+    if (wave.type !== 'wave') throw new Error('缺少波次');
+    return wave.explosions.find((e) => e.shape === 'lightning')!;
+  };
+
+  it('直线炸弹爆炸时追加 5–8 格闪电，都在直线两侧 2 行内、不在直线上', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const e = lightning(seed);
+      expect(e.cells.length).toBeGreaterThanOrEqual(5);
+      expect(e.cells.length).toBeLessThanOrEqual(8);
+      for (const p of e.cells) expect([2, 3, 5, 6]).toContain(p.r);
+    }
+  });
+
+  it('落点错落：彼此不上下左右相邻；同一种子结果相同', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const cells = lightning(seed).cells;
+      for (const p of cells) for (const q of cells) if (p !== q) expect(Math.abs(p.r - q.r) + Math.abs(p.c - q.c)).toBeGreaterThan(1);
+    }
+    expect(lightning(3)).toEqual(lightning(3));
+  });
+
+  it('没有雷鸣引线时直线炸弹不带闪电', () => {
+    const res = resolveAction(boardWith({ '4,0': 'H' }), igniteRow4, testCtx());
+    expect(res.events.some((e) => e.type === 'wave' && e.explosions.some((x) => x.shape === 'lightning'))).toBe(false);
+  });
+});
+

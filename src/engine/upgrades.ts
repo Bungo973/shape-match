@@ -31,3 +31,11 @@ export const bombMakeBonus = (levels: UpgradeLevels | undefined, bomb: BombKind,
   const key = bombUpgradeOf(bomb);
   return config.bombMakeBonus[key] * (levels?.[key] ?? 1);
 };
+
+const BOMB_NAME: Record<BombUpgrade, string> = { line: '直线炸弹', area: '3×3 炸弹', color: '五连炸弹' };
+
+/** 某项在给定等级下的效果说明，供奖励与营地卡面使用 */
+export function upgradeEffectText(key: UpgradeKey, level: number, config: EngineConfig): string {
+  if (key === 'line' || key === 'area' || key === 'color') return `亲手做出${key === 'area' ? ' ' : ''}${BOMB_NAME[key]}时，该组颜色基数 +${config.bombMakeBonus[key] * level}`;
+  return `主动清除时每块计 ${level} 基数`;
+}

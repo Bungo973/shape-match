@@ -124,6 +124,7 @@ export function SettlePanel({ b, lastLog, hint, className = '' }: { b: BattleSta
             <b className="c-po">毒 {st.baseValues.poison}</b>
             <span className="dim">
               （方块 攻{A.attack} 盾{A.shield} 毒{A.poison} 催{A.catalyst}
+              {artifactBonusText(lastLog)}
               {st.chargesUsed > 0 ? `，充能各 +${st.chargesUsed * DEFAULT_CONFIG.chargeBonus}` : ''}
               {lastLog.result.socketBonuses.attack + lastLog.result.socketBonuses.shield + lastLog.result.socketBonuses.poison > 0 ? '，含加成' : ''}）
             </span>
@@ -151,3 +152,13 @@ export function SettlePanel({ b, lastLog, hint, className = '' }: { b: BattleSta
     </div>
   );
 }
+
+/** 条件基数类神器本步追加的基数，例如“，神器 攻+3” */
+function artifactBonusText(log: ActionLog): string {
+  const b = log.artifactBaseBonus;
+  const parts = (['attack', 'shield', 'poison', 'catalyst'] as const).filter((c) => b[c] > 0).map((c) => `${SHORT[c]}+${b[c]}`);
+  return parts.length ? `，神器 ${parts.join(' ')}` : '';
+}
+
+const SHORT = { attack: '攻', shield: '盾', poison: '毒', catalyst: '催' } as const;
+

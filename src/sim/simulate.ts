@@ -2,29 +2,23 @@
 import {
   campRest,
   campUpgrade,
-  canPlace,
   chooseArtifact,
-  chooseInsert,
+  chooseUpgrade,
   DEFAULT_CONFIG,
-  type UpgradeLevels,
-  expansionCells,
-  installInsert,
   mixSeed,
   newRun,
-  normalize,
   pickStarter,
-  rotate,
   runAction,
   runEndTurn,
   SEGMENT_1,
   startNextBattle,
-  translate,
+  UPGRADE_KEYS,
   type ArtifactKey,
   type EngineConfig,
-  type Pos,
   type RouteNode,
   type RunResult,
   type RunState,
+  type UpgradeLevels,
 } from '../engine';
 import { chooseAction, type BotStyle } from './bot';
 
@@ -61,6 +55,8 @@ export interface SimOptions {
   maxTurns?: number;
   /** 开局即拥有的升级等级，用于衡量升级强度 */
   levels?: Partial<UpgradeLevels>;
+  /** 指定开局持有的神器（替代随机的开局三选一），用于衡量单件神器的强度 */
+  artifacts?: ArtifactKey[];
 }
 
 const ok = (r: RunResult): RunState => {
@@ -68,42 +64,11 @@ const ok = (r: RunResult): RunState => {
   return r.run;
 };
 
-/** 自动摆放：从棋盘中央向外找第一个合法位置 */
-function autoInstall(run: RunState, config: EngineConfig): RunState {
-  let cur = run;
-  const size = { rows: config.rows, cols: config.cols };
-  const order: Pos[] = [];
-  for (let r = 0; r < size.rows; r++) for (let c = 0; c < size.cols; c++) order.push({ r, c });
-  order.sort((a, b) => Math.abs(a.r - 3.5) + Math.abs(a.c - 3.5) - (Math.abs(b.r - 3.5) + Math.abs(b.c - 3.5)));
-  for (const item of [...cur.inventory]) {
-    let shape = normalize(item.shape);
-    let placed = false;
-    for (let rot = 0; rot < 4 && !placed; rot++) {
-      for (const at of order) {
-        const cells = translate(shape, at);
-        if (canPlace(size, cur.installed, cells, config.maxInstalledInserts)) {
-          const r = installInsert(cur, item.id, cells, config);
-          if (r.ok) {
-            cur = r.run;
-            placed = true;
-            break;
-          }
-        }
-      }
-      shape = rotate(shape);
-    }
-  }
-  return cur;
-}
-
 function autoCamp(run: RunState, config: EngineConfig): RunState {
-  // 残血就休息；否则有钱时升级第一块已安装嵌片
-  if (run.player.hp <= run.player.maxHp - config.restHeal / 2 || run.gold < config.upgradeCost || run.installed.length === 0) {
-    return ok(campRest(run, config));
-  }
-  const target = run.installed[0]!;
-  const cell = expansionCells({ rows: config.rows, cols: config.cols }, run.installed, target)[0];
-  return cell ? ok(campUpgrade(run, target.id, [cell], config)) : ok(campRest(run, config));
+  // 残血或没钱就休息；否则给当前等级最高的一项再加码（同级时按升级表顺序取第一项）
+  if (run.player.hp <= run.player.maxHp - config.restHeal / 2 || run.gold < config.upgradeCost) return ok(campRest(run, config));
+  const best = [...UPGRADE_KEYS].sort((x, y) => run.levels[y] - run.levels[x])[0]!;
+  return ok(campUpgrade(run, best, config));
 }
 
 export function simulateRun(seed: number, opts: SimOptions): RunReport {
@@ -113,12 +78,13 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
   if (opts.levels) run.levels = { ...run.levels, ...opts.levels };
   const starter = run.starterChoices[0] ?? null;
   run = ok(pickStarter(run, starter!));
+  if (opts.artifacts) run.artifacts = [...opts.artifacts];
   const battles: BattleReport[] = [];
   let step = 0;
 
   while (run.phase !== 'over') {
     if (run.phase === 'map') {
-      run = ok(startNextBattle(autoInstall(run, config), config));
+      run = ok(startNextBattle(run, config));
       const b = run.battle!;
       battles.push({
         enemy: b.enemy.def.name,
@@ -163,7 +129,7 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
       }
       if (run.phase !== 'battle') report.won = run.outcome !== 'lost';
     } else if (run.phase === 'reward') {
-      run = ok(chooseInsert(run, 0));
+      run = ok(chooseUpgrade(run, 0));
     } else if (run.phase === 'artifact') {
       run = ok(chooseArtifact(run, run.artifactChoices[0]!));
     } else if (run.phase === 'camp') {

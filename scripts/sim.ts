@@ -1,7 +1,7 @@
 // 数值模拟：让自动玩家批量打第一段落，统计每场战斗的表现。
 // 用法：npm run sim -- [--runs 200] [--style skilled|novice|both] [--set 参数=值 ...] [--hp 倍数] [--atk 倍数]
 // 例：npm run sim -- --set chargeCap=3 --hp 1.5 --level attack=3 --level line=2
-import { DEFAULT_CONFIG, SEGMENT_1, UPGRADE_KEYS, type EngineConfig, type RouteNode } from '../src/engine';
+import { ARTIFACTS, DEFAULT_CONFIG, SEGMENT_1, UPGRADE_KEYS, type ArtifactKey, type EngineConfig, type RouteNode } from '../src/engine';
 import type { BotStyle } from '../src/sim/bot';
 import { simulateRun, type BattleReport } from '../src/sim/simulate';
 
@@ -14,6 +14,13 @@ const runs = Number(opt('runs', '200'));
 const styleArg = opt('style', 'both');
 const hpScale = Number(opt('hp', '1'));
 const atkScale = Number(opt('atk', '1'));
+
+// --artifact 可重复：开局只持有这些神器（替代随机开局神器），--artifact none 表示一件都不带
+const artifactArgs = args.flatMap((a, i) => (a === '--artifact' ? [args[i + 1]!] : []));
+const artifacts = artifactArgs.length ? (artifactArgs.filter((k) => k !== 'none') as ArtifactKey[]) : undefined;
+artifacts?.forEach((k) => {
+  if (!(k in ARTIFACTS)) throw new Error(`未知神器 ${k}`);
+});
 
 // --level 可重复：开局即拥有的升级等级，如 --level attack=3
 const levels: Record<string, number> = {};
@@ -54,7 +61,7 @@ const f1 = (x: number) => x.toFixed(1);
 const pc = (x: number) => `${(x * 100).toFixed(0)}%`;
 
 function report(style: BotStyle) {
-  const all = Array.from({ length: runs }, (_, i) => simulateRun(i + 1, { style, config, route, levels }));
+  const all = Array.from({ length: runs }, (_, i) => simulateRun(i + 1, { style, config, route, levels, ...(artifacts ? { artifacts } : {}) }));
   const won = all.filter((r) => r.outcome === 'won').length;
   const stalled = all.filter((r) => r.outcome === 'stalled').length;
   console.log(`\n=== ${style === 'skilled' ? '熟练' : '新手'}玩家 · ${runs} 局 · 段落通关 ${pc(won / runs)}${stalled ? ` · 卡住 ${stalled}` : ''} ===`);
@@ -88,6 +95,6 @@ function report(style: BotStyle) {
 }
 
 const changed = Object.entries(config).filter(([k, v]) => (DEFAULT_CONFIG as unknown as Record<string, unknown>)[k] !== v);
-console.log(`参数：${changed.length ? changed.map(([k, v]) => `${k}=${v}`).join(', ') : '默认'}${hpScale !== 1 ? `，敌人生命 ×${hpScale}` : ''}${atkScale !== 1 ? `，敌人数值 ×${atkScale}` : ''}${Object.keys(levels).length ? `，升级 ${Object.entries(levels).map(([k, v]) => `${k}=${v}`).join(' ')}` : ''}`);
+console.log(`参数：${changed.length ? changed.map(([k, v]) => `${k}=${v}`).join(', ') : '默认'}${hpScale !== 1 ? `，敌人生命 ×${hpScale}` : ''}${atkScale !== 1 ? `，敌人数值 ×${atkScale}` : ''}${Object.keys(levels).length ? `，升级 ${Object.entries(levels).map(([k, v]) => `${k}=${v}`).join(' ')}` : ''}${artifacts ? `，神器 ${artifacts.join(' ') || '无'}` : ''}`);
 if (styleArg === 'both' || styleArg === 'skilled') report('skilled');
 if (styleArg === 'both' || styleArg === 'novice') report('novice');

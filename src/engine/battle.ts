@@ -1,6 +1,6 @@
 // 一场战斗的状态与回合流程，规则见 docs/GAME_RULES.md §1、§3、§4 与 docs/ENEMY_DESIGN.md。
 // 所有函数都是纯函数：输入旧状态，返回新状态与日志；状态可直接序列化存档。
-import { ARTIFACT_PARAMS, type ArtifactKey } from './artifacts';
+import { ARTIFACT_PARAMS, artifactBaseBonus, type ArtifactKey } from './artifacts';
 import { defaultLevels, type UpgradeLevels } from './upgrades';
 import { createBoard, createIdGen, weightedSpawner } from './board';
 import { CARD_DEFS, cardBonus, drawCards, shuffle, type CardInstance, type CardPiles } from './cards';
@@ -10,7 +10,7 @@ import type { InstalledInsert } from './inserts';
 import { resolveAction, type ActionResult } from './resolve';
 import { createRng } from './rng';
 import { settle, type Settlement } from './score';
-import type { Action, Board, Gravity, Pos } from './types';
+import { COLORS, emptyClears, type Action, type Board, type ClearsByType, type Gravity, type Pos } from './types';
 
 export const RULES_VERSION = 2;
 
@@ -120,6 +120,8 @@ export interface ActionLog {
   poisonAdded: number;
   stunApplied: boolean;
   erosionConsumed: boolean;
+  /** 条件基数类神器本步追加的基数（已计入结算） */
+  artifactBaseBonus: ClearsByType;
 }
 
 export interface EnemyTurnLog {
@@ -248,6 +250,7 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     poisonAdded: 0,
     stunApplied: false,
     erosionConsumed: false,
+    artifactBaseBonus: emptyClears(),
   };
 
   // 没有任何清除（未消除交换）时不结算
@@ -260,9 +263,12 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     const has = (k: ArtifactKey) => state.artifacts.includes(k);
     const P = result.passiveClearCount + (has('unstableFuse') ? result.activeBombsDetonated : 0);
     const stepDelta = (has('chainLens') && P >= 3 ? 1 : 0) + (has('resonanceBase') && result.triggeredInsertIds.length >= 2 ? 1 : 0);
+    // 条件基数类神器：看本步主动阶段清到了什么，追加到对应颜色的基数
+    const bonus = result.hadActiveColorClear ? artifactBaseBonus(result, state.artifacts) : emptyClears();
+    log.artifactBaseBonus = bonus;
     const s = settle(
       {
-        activeClearsByType: result.activeClearsByType,
+        activeClearsByType: Object.fromEntries(COLORS.map((c) => [c, result.activeClearsByType[c] + bonus[c]])) as ClearsByType,
         passiveClearCount: P,
         hadActiveColorClear: result.hadActiveColorClear,
         chargesBefore: state.player.catalystCharges,

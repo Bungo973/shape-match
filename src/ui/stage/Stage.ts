@@ -900,6 +900,28 @@ export class Stage {
         tl.to(beam, { alpha: 0, duration: 0.25 }, Math.max(0.12, reach));
         tl.call(() => beam.destroy(), [], Math.max(0.12, reach) + 0.26);
       }
+    } else if (e.shape === 'lightning') {
+      // 雷鸣引线：从锚点劈向每个落点的折线闪电，比五连的电弧更亮、更粗
+      for (const p of e.cells) {
+        const t = center(p);
+        const bolt = new Graphics().moveTo(o.x, o.y);
+        const steps = 4;
+        for (let i = 1; i < steps; i++) {
+          const k = i / steps;
+          bolt.lineTo(o.x + (t.x - o.x) * k + (Math.random() - 0.5) * 36, o.y + (t.y - o.y) * k + (Math.random() - 0.5) * 36);
+        }
+        bolt.lineTo(t.x, t.y).stroke({ width: 5, color: 0xfff6b0, alpha: 1 });
+        bolt.alpha = 0;
+        this.fxLayer.addChild(bolt);
+        // 与方块碎裂的时刻一致（playWave 按锚点距离 × 扩散步长清除）
+        const d = chebyshev(e.origin, p) * RIPPLE_STEP;
+        tl.to(bolt, { alpha: 1, duration: 0.03 }, Math.max(0, d - 0.03));
+        tl.to(bolt, { alpha: 0, duration: 0.22 }, d + 0.1);
+        tl.call(() => bolt.destroy(), [], d + 0.35);
+        tl.call(() => this.flashCell(p, 0xfff6b0, 0.8), [], d);
+      }
+      outer.add(tl, offset);
+      return;
     } else if (e.shape === 'CB') {
       // 五连炸弹：从锚点向每个目标格发出电弧
       for (const p of e.cells) {

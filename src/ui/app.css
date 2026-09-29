@@ -157,6 +157,11 @@ button.primary { background: linear-gradient(#d48a34, #8a4d17); font-size: 22px;
 /* ---- 嵌片标志与符号 ---- */
 .symbol { display: inline-flex; flex: none; }
 .symbol svg { display: block; }
+.upgrade-icon { width: 72px; height: 72px; align-self: center; filter: drop-shadow(0 6px 12px rgba(0,0,0,.5)); }
+.cards.compact { flex-wrap: wrap; justify-content: center; gap: 12px; max-width: 900px; }
+.cards.compact .card { width: 200px; min-height: 0; padding: 12px; gap: 6px; }
+.cards.compact .upgrade-icon { width: 48px; height: 48px; }
+.levels-summary { display: inline-flex; gap: 8px; }
 .insert-emblem { width: 96px; height: 96px; align-self: center; filter: drop-shadow(0 6px 12px rgba(0,0,0,.5)); }
 .card.insert { min-height: 360px; }
 

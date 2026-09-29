@@ -14,7 +14,7 @@ import {
   type TileMove,
   type TileSpawn,
 } from './board';
-import type { ArtifactKey } from './artifacts';
+import { ARTIFACT_PARAMS, type ArtifactKey } from './artifacts';
 import type { EngineConfig } from './config';
 import { INSERT_DEFS, type InsertType, type InstalledInsert } from './inserts';
 import { findGroups, passiveBombCell } from './match';
@@ -50,7 +50,7 @@ export interface ResolveContext {
   levels?: UpgradeLevels;
 }
 
-export type ExplosionShape = BombKind | 'cross' | 'rows3' | 'cols3' | 'square5' | 'board' | 'card';
+export type ExplosionShape = BombKind | 'cross' | 'rows3' | 'cols3' | 'square5' | 'board' | 'card' | 'lightning';
 
 export interface Explosion {
   shape: ExplosionShape;
@@ -411,10 +411,13 @@ class Resolver {
             ? { ...base, shape: 'H', cells: rect(rows, cols, r - w, r + w, 0, cols - 1) }
             : { ...base, shape: 'V', cells: rect(rows, cols, 0, rows - 1, c - w, c + w) };
         if (w) line.byArtifact = 'overloadFuse';
+        const out: Explosion[] = [line];
+        // 雷鸣引线：直线两侧的闪电，属于“修改范围”，在同一波内与直线一并清除
+        if (this.has('thunderFuse')) out.push({ ...base, shape: 'lightning', cells: this.lightningCells(d.bomb, d.pos, w), byArtifact: 'thunderFuse' });
         const ember = this.insertOn(d.pos, 'emberClay');
-        if (!ember) return [line];
+        if (!ember) return out;
         this.trigger({ insertId: ember.id, type: ember.type, effect: 'ember', at: [d.pos] });
-        return [line, { ...base, shape: 'A', cells: rect(rows, cols, r - 1, r + 1, c - 1, c + 1), byInsert: ember.id }];
+        return [...out, { ...base, shape: 'A', cells: rect(rows, cols, r - 1, r + 1, c - 1, c + 1), byInsert: ember.id }];
       }
       case 'A': {
         const quake = this.insertOn(d.pos, 'quakeStone');
@@ -428,6 +431,39 @@ class Resolver {
         return [{ ...base, shape: 'CB', cells, targetColor: target }];
       }
     }
+  }
+
+  /**
+   * 雷鸣引线的闪电落点：在直线两侧、离直线不超过 thunderReach 行（列）的格中，按种子随机取 5–8 格。
+   * 先挑彼此不上下左右相邻的格让落点错落（斜向相邻可以），不够时再从其余格补足；候选不足时有几格取几格。
+   */
+  lightningCells(bomb: 'H' | 'V', at: Pos, halfWidth: number): Pos[] {
+    const rows = this.board.length;
+    const cols = this.board[0]!.length;
+    const reach = halfWidth + ARTIFACT_PARAMS.thunderReach;
+    const pool: Pos[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const off = bomb === 'H' ? Math.abs(r - at.r) : Math.abs(c - at.c);
+        if (off > halfWidth && off <= reach) pool.push({ r, c });
+      }
+    }
+    const rng = this.ctx.rng;
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = rng.int(i + 1);
+      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    }
+    const want = Math.min(pool.length, ARTIFACT_PARAMS.thunderMin + rng.int(ARTIFACT_PARAMS.thunderMax - ARTIFACT_PARAMS.thunderMin + 1));
+    const picked: Pos[] = [];
+    for (const p of pool) {
+      if (picked.length >= want) break;
+      if (picked.every((q) => Math.abs(q.r - p.r) + Math.abs(q.c - p.c) > 1)) picked.push(p);
+    }
+    for (const p of pool) {
+      if (picked.length >= want) break;
+      if (!picked.includes(p)) picked.push(p);
+    }
+    return picked.sort((a, b) => a.r - b.r || a.c - b.c);
   }
 
   /** 从棋盘现存的基础方块类型中随机抽一种；池为空时返回 null。 */

@@ -1,5 +1,5 @@
-// 界面通用组件：神器卡、嵌片卡、形状预览。
-import { ARTIFACTS, INSERT_DEFS, normalize, type ArtifactKey, type InsertType, type Pos } from '../engine';
+// 界面通用组件：神器卡、升级卡、嵌片卡（卡牌原型用）、形状预览。
+import { ARTIFACTS, DEFAULT_CONFIG, INSERT_DEFS, normalize, UPGRADE_NAMES, upgradeEffectText, type ArtifactKey, type InsertType, type Pos, type UpgradeKey } from '../engine';
 import { insertCss, insertEmblem, insertSymbolSvg, RARITY_TEXT } from './insertStyle';
 
 /** 嵌片的矢量符号（小尺寸使用） */
@@ -80,3 +80,46 @@ export function InsertCard({
     </button>
   );
 }
+
+const UPGRADE_ICON: Record<UpgradeKey, string> = {
+  attack: '/game/tile-attack.webp',
+  shield: '/game/tile-shield.webp',
+  poison: '/game/tile-poison.webp',
+  catalyst: '/game/tile-catalyst.webp',
+  line: '/game/bomb-line.webp',
+  area: '/game/bomb-area.webp',
+  color: '/game/bomb-color.webp',
+};
+
+/** 升级卡：展示当前等级与升级后的效果 */
+export function UpgradeCard({
+  upKey,
+  level,
+  gain = 1,
+  slot,
+  onPick,
+  selected,
+  disabled,
+}: {
+  upKey: UpgradeKey;
+  level: number;
+  gain?: number;
+  slot?: keyof typeof SLOT_TEXT;
+  onPick?: () => void;
+  selected?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button className={`card upgrade ${selected ? 'selected' : ''}`} onClick={onPick} disabled={disabled || !onPick}>
+      {slot && <div className={`slot slot-${slot}`}>{SLOT_TEXT[slot]}</div>}
+      <img className="upgrade-icon" src={UPGRADE_ICON[upKey]} alt="" />
+      <div className="card-title">{UPGRADE_NAMES[upKey]}</div>
+      <div className="dim">
+        {level} 级 → {level + gain} 级
+      </div>
+      <div className="card-text">{upgradeEffectText(upKey, level + gain, DEFAULT_CONFIG)}</div>
+      <div className="card-note">当前：{upgradeEffectText(upKey, level, DEFAULT_CONFIG)}</div>
+    </button>
+  );
+}
+
