@@ -1,4 +1,4 @@
-// 测试用棋盘构造。字符：a 攻击、s 护盾、p 毒气、c 催化剂、H/V/A 炸弹、B 五连炸弹 CB、. 填充。
+// 测试用棋盘构造。字符：a 攻击、s 护盾、p 毒气、c 催化剂、H/V/A 炸弹、B 五连炸弹 CB、X 石块、. 填充。
 // 填充格按棋盘格交替毒气／催化剂，相邻格颜色必不相同，因此不会自行成线。
 import { createIdGen, weightedSpawner, type IdGen, type Spawner } from './board';
 import { DEFAULT_CONFIG } from './config';
@@ -23,6 +23,7 @@ export function parseBoard(lines: string[], ids: IdGen = createIdGen()): Board {
         if (color) return { id: ids.next(), kind: 'normal', color };
         const bomb = BOMB_OF[ch];
         if (bomb) return { id: ids.next(), kind: 'bomb', bomb };
+        if (ch === 'X') return { id: ids.next(), kind: 'stone' };
         throw new Error(`未知字符 ${ch}`);
       }),
   );

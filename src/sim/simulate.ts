@@ -10,7 +10,7 @@ import {
   pickStarter,
   runAction,
   runEndTurn,
-  SEGMENT_1,
+  FULL_ROUTE,
   startNextBattle,
   UPGRADE_KEYS,
   type ArtifactKey,
@@ -74,7 +74,7 @@ function autoCamp(run: RunState, config: EngineConfig): RunState {
 export function simulateRun(seed: number, opts: SimOptions): RunReport {
   const config = opts.config ?? DEFAULT_CONFIG;
   const maxTurns = opts.maxTurns ?? 40;
-  let run = newRun(seed, config, opts.route ?? SEGMENT_1);
+  let run = newRun(seed, config, opts.route ?? FULL_ROUTE);
   if (opts.levels) run.levels = { ...run.levels, ...opts.levels };
   const starter = run.starterChoices[0] ?? null;
   run = ok(pickStarter(run, starter!));

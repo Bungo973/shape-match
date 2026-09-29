@@ -4,7 +4,7 @@ import { ARTIFACTS, offeredArtifacts, type ArtifactKey } from './artifacts';
 import { defaultLevels, UPGRADE_KEYS, type UpgradeKey, type UpgradeLevels } from './upgrades';
 import { endTurn, playerAction, startBattle, type ActionLog, type BattleState, type EnemyTurnLog, type PlayerState } from './battle';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
-import { SEGMENT_1, type RouteNode } from './content/enemies';
+import { FULL_ROUTE, type RouteNode } from './content/enemies';
 import { generateUpgradeChoices, mixSeed, type UpgradeCandidate } from './rewards';
 import { createRng } from './rng';
 import type { Action } from './types';
@@ -51,7 +51,7 @@ function sample<T>(items: T[], n: number, seed: number): T[] {
 
 const current = (run: RunState): RouteNode => run.route[run.battleIndex - 1]!;
 
-export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, route: RouteNode[] = SEGMENT_1): RunState {
+export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, route: RouteNode[] = FULL_ROUTE): RunState {
   const starters = offeredArtifacts().filter((k) => ARTIFACTS[k].starter);
   return {
     rulesVersion: RUN_RULES_VERSION,

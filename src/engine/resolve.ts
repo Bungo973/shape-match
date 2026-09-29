@@ -118,7 +118,7 @@ export type ResolutionEvent =
 export interface ActionResult {
   valid: boolean;
   /** 无效时的原因，供界面提示 */
-  reason?: 'outOfBounds' | 'notAdjacent' | 'sameColor' | 'notBomb' | 'emptyCell';
+  reason?: 'outOfBounds' | 'notAdjacent' | 'sameColor' | 'notBomb' | 'emptyCell' | 'stone';
   apSpent: 0 | 1;
   board: Board;
   events: ResolutionEvent[];
@@ -611,6 +611,8 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     const a = getTile(board, from);
     const b = getTile(board, to);
     if (!a || !b) return invalid('emptyCell');
+    // 石块不能交换，只能被爆炸清除
+    if (a.kind === 'stone' || b.kind === 'stone') return invalid('stone');
     if (a.kind === 'normal' && b.kind === 'normal' && a.color === b.color) return invalid('sameColor');
 
     // 交换后 a 位于 to，b 位于 from

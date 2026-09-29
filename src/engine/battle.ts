@@ -10,7 +10,7 @@ import type { InstalledInsert } from './inserts';
 import { resolveAction, type ActionResult } from './resolve';
 import { createRng } from './rng';
 import { settle, type Settlement } from './score';
-import { COLORS, emptyClears, type Action, type Board, type ClearsByType, type Gravity, type Pos } from './types';
+import { COLORS, emptyClears, type Action, type Board, type ClearsByType, type Color, type Gravity, type Pos } from './types';
 
 export const RULES_VERSION = 2;
 
@@ -29,7 +29,11 @@ export type IntentPart =
   /** 嵌片压制：目标在意图展示时固定 */
   | { kind: 'suppressInsert'; targetId?: string }
   /** 重力反转为向上 */
-  | { kind: 'gravityUp' };
+  | { kind: 'gravityUp' }
+  /** 色封：目标颜色在意图展示时固定（玩家等级最高的方块颜色），下一玩家回合该色方块等级视为 1 */
+  | { kind: 'sealColor'; color?: Color }
+  /** 石化：目标行在意图展示时固定，敌人行动时把该行 count 个普通方块变成石块 */
+  | { kind: 'petrify'; count: number; row?: number };
 
 export interface Intent {
   parts: IntentPart[];
@@ -87,9 +91,9 @@ export interface BattleState {
   /** 向上重力剩余的玩家回合数；0 表示未生效 */
   gravityTurnsLeft: number;
   /** 敌人本回合成功施加、从下一玩家回合起生效的状态 */
-  pending: { erosion: boolean; suppressId: string | null; gravity: boolean; apBonus: number };
+  pending: { erosion: boolean; suppressId: string | null; gravity: boolean; apBonus: number; sealColor: Color | null };
   /** 本玩家回合生效中的状态 */
-  current: { erosionArmed: boolean; suppressedId: string | null };
+  current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null };
   outcome: 'ongoing' | 'won' | 'lost';
   totalScore: number;
   /** 嵌片卡模式：抽牌堆、手牌、弃牌堆；交换模式下不存在 */
@@ -137,6 +141,8 @@ export interface EnemyTurnLog {
   counterDamage: number;
   /** 回响钟：下一玩家回合额外获得的 AP */
   apBonusNext: number;
+  /** 石化：本回合被变成石块的格 */
+  petrified: Pos[];
   nextIntent: Intent;
 }
 
@@ -170,8 +176,8 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     ap: config.apPerTurn,
     gravity: 'down',
     gravityTurnsLeft: 0,
-    pending: { erosion: false, suppressId: null, gravity: false, apBonus: 0 },
-    current: { erosionArmed: false, suppressedId: null },
+    pending: { erosion: false, suppressId: null, gravity: false, apBonus: 0, sealColor: null },
+    current: { erosionArmed: false, suppressedId: null, sealedColor: null },
     outcome: 'ongoing',
     totalScore: 0,
   };
@@ -182,7 +188,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     drawCards(state.cards, config.drawPerTurn, config.handLimit, cardRng);
     state.rngState = cardRng.state;
   }
-  revealNextIntent(state);
+  revealNextIntent(state, config);
   return state;
 }
 
@@ -228,7 +234,8 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     gravity: state.gravity,
     inserts,
     artifacts: state.artifacts,
-    levels: state.levels,
+    // 色封：本回合被封颜色的方块等级视为 1
+    levels: state.current.sealedColor ? { ...state.levels, [state.current.sealedColor]: 1 } : state.levels,
   });
   if (!result.valid) return { ok: false, state: prev, reason: result.reason! };
 
@@ -360,7 +367,7 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   const state = clone(prev);
 
   // 1. 玩家回合结束：本回合生效的状态到期；向上重力扣减一回合（提前结束也计）；手牌进弃牌堆
-  state.current = { erosionArmed: false, suppressedId: null };
+  state.current = { erosionArmed: false, suppressedId: null, sealedColor: null };
   if (state.cards) {
     state.cards.discard.push(...state.cards.hand);
     state.cards.hand = [];
@@ -381,6 +388,7 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
     poisonDecayed: 0,
     counterDamage: 0,
     apBonusNext: 0,
+    petrified: [],
     nextIntent: enemy.intent,
   };
 
@@ -403,7 +411,7 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
     if (state.artifacts.includes('echoBell')) state.pending.apBonus = ARTIFACT_PARAMS.echoBellAp;
   } else {
     for (const part of enemy.intent.parts) {
-      executePart(state, part, log);
+      executePart(state, part, log, config);
       if (state.outcome !== 'ongoing') return { state, log };
     }
   }
@@ -414,7 +422,7 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   log.poisonDecayed = decayed;
   // 主角护盾在敌人行动之后按比例保留（默认全部保留）
   state.player.shield = Math.floor(state.player.shield * config.playerShieldRetain);
-  revealNextIntent(state);
+  revealNextIntent(state, config);
   log.nextIntent = enemy.intent;
 
   // 4. 下一玩家回合开始：施加敌人上回合成功施加的状态，AP 恢复
@@ -429,15 +437,16 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   enemy.stunnedThisTurn = false;
   if (state.pending.erosion) state.current.erosionArmed = true;
   if (state.pending.suppressId) state.current.suppressedId = state.pending.suppressId;
+  if (state.pending.sealColor) state.current.sealedColor = state.pending.sealColor;
   if (state.pending.gravity) {
     state.gravity = 'up';
     state.gravityTurnsLeft = config.gravityTurns;
   }
-  state.pending = { erosion: false, suppressId: null, gravity: false, apBonus: 0 };
+  state.pending = { erosion: false, suppressId: null, gravity: false, apBonus: 0, sealColor: null };
   return { state, log };
 }
 
-function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog): void {
+function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog, config: EngineConfig): void {
   const enemy = state.enemy;
   log.executed.push(part);
   switch (part.kind) {
@@ -469,14 +478,35 @@ function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog): v
     case 'gravityUp':
       state.pending.gravity = true;
       return;
+    case 'sealColor':
+      if (part.color) state.pending.sealColor = part.color;
+      return;
+    case 'petrify':
+      if (part.row != null) log.petrified.push(...petrifyRow(state, part.row, part.count, config));
+      return;
   }
+}
+
+export const stoneCount = (board: Board) => board.flat().filter((t) => t?.kind === 'stone').length;
+
+/** 把指定行中按种子选出的普通方块变成石块，受棋盘石块上限约束；返回被石化的格 */
+function petrifyRow(state: BattleState, row: number, count: number, config: EngineConfig): Pos[] {
+  const room = Math.max(0, config.stoneCap - stoneCount(state.board));
+  const cols: number[] = [];
+  state.board[row]?.forEach((t, c) => t?.kind === 'normal' && cols.push(c));
+  const rng = createRng(state.rngState);
+  const picked: Pos[] = [];
+  while (picked.length < Math.min(count, room) && cols.length > 0) picked.push({ r: row, c: cols.splice(rng.int(cols.length), 1)[0]! });
+  state.rngState = rng.state;
+  for (const p of picked) state.board[p.r]![p.c] = { id: state.nextId++, kind: 'stone' };
+  return picked.sort((a, b) => a.c - b.c);
 }
 
 /**
  * 从脚本取下一次意图并在此刻固定所有目标。
- * 向上重力生效或已排定期间跳过重力反转意图；嵌片压制没有可选目标时改用防御。
+ * 向上重力生效或已排定期间跳过重力反转意图；嵌片压制、色封、石化没有可用目标时改用防御。
  */
-function revealNextIntent(state: BattleState): void {
+function revealNextIntent(state: BattleState, config: EngineConfig): void {
   const enemy = state.enemy;
   const script = enemy.def.script;
   const gravityBusy = state.gravityTurnsLeft > 0 || state.pending.gravity;
@@ -495,13 +525,20 @@ function revealNextIntent(state: BattleState): void {
   const rng = createRng(state.rngState);
   const targets = [...state.inserts].sort((a, b) => a.id.localeCompare(b.id));
   const parts: IntentPart[] = [];
+  const fallback: IntentPart = { kind: 'defend', amount: enemy.def.fallbackDefend };
   for (const part of chosen.parts) {
-    if (part.kind !== 'suppressInsert') {
-      parts.push({ ...part });
-    } else if (targets.length === 0) {
-      parts.push({ kind: 'defend', amount: enemy.def.fallbackDefend });
+    if (part.kind === 'suppressInsert') {
+      parts.push(targets.length === 0 ? fallback : { kind: 'suppressInsert', targetId: targets[rng.int(targets.length)]!.id });
+    } else if (part.kind === 'sealColor') {
+      // 封住玩家等级最高的方块颜色，同级按种子；都还是 1 级时色封无效，改用防御
+      const top = Math.max(...COLORS.map((c) => state.levels[c]));
+      const best = COLORS.filter((c) => state.levels[c] === top);
+      parts.push(top <= 1 ? fallback : { kind: 'sealColor', color: best[rng.int(best.length)]! });
+    } else if (part.kind === 'petrify') {
+      // 棋盘石块已达上限时改用防御，避免棋盘被堵死
+      parts.push(stoneCount(state.board) >= config.stoneCap ? fallback : { ...part, row: rng.int(state.board.length) });
     } else {
-      parts.push({ kind: 'suppressInsert', targetId: targets[rng.int(targets.length)]!.id });
+      parts.push({ ...part });
     }
   }
   state.rngState = rng.state;

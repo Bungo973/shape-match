@@ -12,7 +12,10 @@ export const REASON_TEXT: Record<string, string> = {
   badShape: '形状不符',
   noCard: '没有这张卡',
   cardMode: '卡牌模式下不能交换',
+  stone: '石块不能交换，只能用炸弹炸掉',
 };
+
+const COLOR_NAME = { attack: '攻击', shield: '护盾', poison: '毒气', catalyst: '催化剂' } as const;
 
 function intentText(intent: Intent, chargeBonus: number): string {
   return intent.parts
@@ -30,6 +33,10 @@ function intentText(intent: Intent, chargeBonus: number): string {
           return '压制嵌片';
         case 'gravityUp':
           return '重力反转';
+        case 'sealColor':
+          return p.color ? `色封：${COLOR_NAME[p.color]}方块` : '色封';
+        case 'petrify':
+          return p.row != null ? `石化第 ${p.row + 1} 行 ${p.count} 格` : `石化 ${p.count} 格`;
       }
     })
     .join(' · ');
@@ -72,6 +79,11 @@ export function PlayerPanel({ b, gold, apLabel = '行动力' }: { b: BattleState
         </span>
         <span className={`chip ${b.gravity === 'up' ? 'warn' : ''}`}>重力 {b.gravity === 'up' ? `↑ 剩 ${b.gravityTurnsLeft} 回合` : '↓'}</span>
         {b.current.erosionArmed && <span className="chip warn">倍率被侵蚀</span>}
+        {b.current.sealedColor && (
+          <span className="chip warn" title="本回合该色方块每块只计 1 基数">
+            {COLOR_NAME[b.current.sealedColor]}被色封
+          </span>
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 // 数值模拟：让自动玩家批量打第一段落，统计每场战斗的表现。
 // 用法：npm run sim -- [--runs 200] [--style skilled|novice|both] [--set 参数=值 ...] [--hp 倍数] [--atk 倍数]
 // 例：npm run sim -- --set chargeCap=3 --hp 1.5 --level attack=3 --level line=2
-import { ARTIFACTS, DEFAULT_CONFIG, SEGMENT_1, UPGRADE_KEYS, type ArtifactKey, type EngineConfig, type RouteNode } from '../src/engine';
+import { ARTIFACTS, DEFAULT_CONFIG, FULL_ROUTE, UPGRADE_KEYS, type ArtifactKey, type EngineConfig, type RouteNode } from '../src/engine';
 import type { BotStyle } from '../src/sim/bot';
 import { simulateRun, type BattleReport } from '../src/sim/simulate';
 
@@ -40,7 +40,7 @@ args.forEach((a, i) => {
   (config as unknown as Record<string, number>)[k!] = Number(v);
 });
 
-const route: RouteNode[] = SEGMENT_1.map((n) => ({
+const route: RouteNode[] = FULL_ROUTE.map((n) => ({
   ...n,
   enemy: {
     ...n.enemy,

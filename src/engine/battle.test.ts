@@ -256,3 +256,78 @@ describe('可复现', () => {
     expect(run()).toBe(run());
   });
 });
+
+describe('石块', () => {
+  it('不能交换；被主动爆炸清除时不计基数', () => {
+    const s = battle([attack(1)], { board: { '0,0': 'X', '4,0': 'H', '4,1': 'X', '4,2': 'a' } });
+    expect(playerAction(s, { type: 'swap', from: { r: 0, c: 0 }, to: { r: 0, c: 1 } })).toMatchObject({ ok: false, reason: 'stone' });
+    const out = act(s, ignite(4, 0));
+    const wave = out.log.result.events.find((e) => e.type === 'wave');
+    if (wave?.type !== 'wave') throw new Error('缺少波次');
+    expect(wave.cleared.some((c) => c.tile.kind === 'stone')).toBe(true);
+    // 第 4 行只有一个攻击方块，石块不增加任何基数
+    expect(out.log.result.activeClearsByType.attack).toBe(1);
+  });
+});
+
+describe('色封', () => {
+  const seal: Intent = { parts: [{ kind: 'sealColor' }, { kind: 'attack', amount: 3 }] };
+
+  it('展示时封住等级最高的颜色；四色都是 1 级时改为防御', () => {
+    const s = startBattle({ seed: 7, player: player(), enemy: enemy([seal]), levels: { attack: 1, shield: 3, poison: 2, catalyst: 1, line: 1, area: 1, color: 1 } });
+    expect(s.enemy.intent.parts[0]).toEqual({ kind: 'sealColor', color: 'shield' });
+    const plain = startBattle({ seed: 7, player: player(), enemy: enemy([seal]) });
+    expect(plain.enemy.intent.parts[0]).toEqual({ kind: 'defend', amount: 5 });
+  });
+
+  it('生效的回合里被封颜色每块只计 1；未被眩晕时才生效，回合后恢复', () => {
+    const s = startBattle({ seed: 7, player: player(), enemy: enemy([seal, attack(1)], 500), levels: { attack: 3, shield: 1, poison: 1, catalyst: 1, line: 1, area: 1, color: 1 } });
+    s.ap = 0;
+    const sealed = endTurn(s).state;
+    expect(sealed.current.sealedColor).toBe('attack');
+    sealed.board = boardWith({ '0,0': 'a', '0,1': 'a', '0,2': 's', '1,2': 'a' });
+    const hit = act(sealed, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } });
+    expect(hit.log.result.activeClearsByType.attack).toBe(3);
+    hit.state.ap = 0;
+    expect(endTurn(hit.state).state.current.sealedColor).toBeNull();
+  });
+});
+
+describe('石化', () => {
+  const petrify: Intent = { parts: [{ kind: 'petrify', count: 3 }] };
+
+  it('展示时固定目标行，敌人行动时把该行 3 个普通方块变成石块', () => {
+    // 不替换棋盘：目标行按开战时的棋盘选定
+    const s = startBattle({ seed: 7, player: player(), enemy: enemy([petrify, attack(1)]) });
+    const row = (s.enemy.intent.parts[0] as { row?: number }).row!;
+    expect(row).toBeGreaterThanOrEqual(0);
+    s.ap = 0;
+    const { state, log } = endTurn(s);
+    expect(log!.petrified).toHaveLength(3);
+    expect(log!.petrified.every((p) => p.r === row)).toBe(true);
+    expect(state.board[row]!.filter((t) => t?.kind === 'stone')).toHaveLength(3);
+  });
+
+  it('棋盘石块达到上限时，石化改为防御；执行时也不超过上限', () => {
+    const stones: Record<string, string> = {};
+    for (let c = 0; c < 8; c++) stones[`7,${c}`] = 'X';
+    stones['6,0'] = 'X';
+    const s = battle([petrify, petrify], { board: stones });
+    s.enemy.intent = { parts: [{ kind: 'petrify', count: 3, row: 6 }] };
+    s.ap = 0;
+    // 已有 9 块、上限 10：本次最多再石化 1 块
+    const first = endTurn(s);
+    expect(first.log!.petrified).toHaveLength(1);
+    expect(first.state.enemy.intent.parts[0]).toEqual({ kind: 'defend', amount: 5 });
+  });
+
+  it('被眩晕取消时不石化', () => {
+    const s = battle([petrify, attack(1)]);
+    s.enemy.stunPending = true;
+    s.ap = 0;
+    const { state, log } = endTurn(s);
+    expect(log!.petrified).toHaveLength(0);
+    expect(state.board.flat().some((t) => t?.kind === 'stone')).toBe(false);
+  });
+});
+

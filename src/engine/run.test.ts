@@ -144,16 +144,19 @@ describe('升级与神器池', () => {
   });
 });
 
-describe('完整段落', () => {
-  it('三战走完：精英战后多一次神器三选一，最后营地后段落胜利；可 JSON 往返存档', () => {
+describe('完整一局', () => {
+  it('九战走完：第 3、6 战（精英）后多一次神器三选一，首领战胜利直接结束；可 JSON 往返存档', () => {
     let run = newRun(9);
+    expect(run.route).toHaveLength(9);
+    expect(run.route.map((n) => n.layer)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3]);
     run = ok(pickStarter(run, run.starterChoices[0]!));
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 9; i++) {
       run = ok(startNextBattle(run));
       run = winBattle(run);
+      if (i === 9) break;
       expect(run.phase).toBe('reward');
       run = ok(chooseUpgrade(run, 0));
-      if (i === 3) {
+      if (i === 3 || i === 6) {
         expect(run.phase).toBe('artifact');
         expect(run.artifactChoices.some((k) => run.artifacts.includes(k) || ARTIFACTS[k].retired)).toBe(false);
         run = ok(chooseArtifact(run, run.artifactChoices[0]!));
@@ -163,9 +166,10 @@ describe('完整段落', () => {
     }
     expect(run.phase).toBe('over');
     expect(run.outcome).toBe('won');
-    expect(run.gold).toBe(8 + 8 + 16);
-    expect(run.artifacts).toHaveLength(2);
-    // 三次奖励各升一级
-    expect(UPGRADE_KEYS.reduce((sum, k) => sum + run.levels[k] - 1, 0)).toBe(3);
+    expect(run.reward).toBeNull();
+    expect(run.gold).toBe(8 * 6 + 16 * 2);
+    expect(run.artifacts).toHaveLength(3);
+    // 八次奖励各升一级
+    expect(UPGRADE_KEYS.reduce((sum, k) => sum + run.levels[k] - 1, 0)).toBe(8);
   });
 });

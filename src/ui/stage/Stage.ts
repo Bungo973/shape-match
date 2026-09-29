@@ -45,17 +45,21 @@ const SYMBOL_SIZE = 20;
 
 const COLOR_HEX: Record<Color, number> = { attack: 0xe6edf5, shield: 0x5aa8ff, poison: 0x5cff6a, catalyst: 0xff5ce1 };
 const BOMB_HEX = 0xff8a2a;
-type TextureKey = 'attack' | 'shield' | 'poison' | 'catalyst' | 'line' | 'area' | 'color' | 'alchemist' | 'bg' | 'frame';
+const STONE_HEX = 0x9a9aa0;
+type TextureKey = 'attack' | 'shield' | 'poison' | 'catalyst' | 'stone' | 'line' | 'area' | 'color' | 'alchemist' | 'bg' | 'bgRuins' | 'bgRelic' | 'frame';
 const TEXTURE_URLS: Record<TextureKey, string> = {
   attack: '/game/tile-attack.webp',
   shield: '/game/tile-shield.webp',
   poison: '/game/tile-poison.webp',
   catalyst: '/game/tile-catalyst.webp',
+  stone: '/game/tile-stone.webp',
   line: '/game/bomb-line.webp',
   area: '/game/bomb-area.webp',
   color: '/game/bomb-color.webp',
   alchemist: '/game/alchemist.webp',
   bg: '/game/bg-entrance.webp',
+  bgRuins: '/game/bg-sealed-ruins.webp',
+  bgRelic: '/game/bg-relic-hall.webp',
   frame: '/game/board-frame.webp',
 };
 
@@ -64,7 +68,18 @@ const ENEMY_LOOKS: Record<string, { width: number; bottom: number; x: number; fl
   'crystal-mole': { width: 470, bottom: 720, x: 1375 },
   'cave-bats': { width: 400, bottom: 600, x: 1390, flying: true },
   'rock-crab': { width: 440, bottom: 735, x: 1382 },
+  // 第二层 · 封印遗迹
+  'stone-guardian': { width: 440, bottom: 728, x: 1380 },
+  'spore-cluster': { width: 380, bottom: 728, x: 1385 },
+  'rune-spider': { width: 460, bottom: 735, x: 1395 },
+  // 第三层 · 悬浮遗物殿：漂浮碎石的敌人上下浮动
+  'mimic-chest': { width: 400, bottom: 728, x: 1385 },
+  'relic-raider': { width: 400, bottom: 728, x: 1385 },
+  'relic-colossus': { width: 500, bottom: 740, x: 1350, flying: true },
 };
+
+/** 各层的战斗背景 */
+const LAYER_BG: Record<1 | 2 | 3, TextureKey> = { 1: 'bg', 2: 'bgRuins', 3: 'bgRelic' };
 /** 主角站位 */
 const HERO = { x: 985, bottom: 720, height: 420 };
 
@@ -80,7 +95,7 @@ export interface StageHandlers {
 }
 
 /** 方块的外观签名：精灵只在签名一致时才能复用 */
-const tileSig = (t: Tile) => (t.kind === 'normal' ? t.color : `bomb-${t.bomb}`);
+const tileSig = (t: Tile) => (t.kind === 'normal' ? t.color : t.kind === 'stone' ? 'stone' : `bomb-${t.bomb}`);
 const center = (p: Pos) => ({ x: BOARD.x + p.c * CELL + CELL / 2, y: BOARD.y + p.r * CELL + CELL / 2 });
 const chebyshev = (a: Pos, b: Pos) => Math.max(Math.abs(a.r - b.r), Math.abs(a.c - b.c));
 
@@ -112,6 +127,8 @@ export class Stage {
   private alchemist!: Sprite;
   private enemy!: Sprite;
   private readonly enemyTex = new Map<string, Texture>();
+  private bgSprite!: Sprite;
+  private readonly intentMark = new Graphics();
   private enemyIdle: gsap.core.Tween[] = [];
   private enemyNote!: Text;
   /** 当前敌人的站位 x，动画以此为基准 */
@@ -182,6 +199,30 @@ export class Stage {
     this.enemyNote.position.set(look.x, look.bottom + 8);
   }
 
+  /** 切换到某一层的战斗背景 */
+  setLayer(layer: 1 | 2 | 3): void {
+    this.bgSprite.texture = this.tex[LAYER_BG[layer]];
+    this.bgSprite.width = STAGE_W;
+    this.bgSprite.height = STAGE_H;
+  }
+
+  /**
+   * 敌人意图对棋盘的预告：石化目标行用灰色虚线框标出。
+   * 只传达敌人威胁，不提供走法提示（ENEMY_DESIGN 通用规则）。
+   */
+  showIntentMarks(petrifyRow: number | null): void {
+    const g = this.intentMark.clear();
+    if (petrifyRow == null) return;
+    const y = BOARD.y + petrifyRow * CELL;
+    const dash = 14;
+    for (let x = BOARD.x; x < BOARD.x + BOARD.size; x += dash * 2) {
+      g.moveTo(x, y + 2).lineTo(Math.min(x + dash, BOARD.x + BOARD.size), y + 2);
+      g.moveTo(x, y + CELL - 2).lineTo(Math.min(x + dash, BOARD.x + BOARD.size), y + CELL - 2);
+    }
+    g.stroke({ width: 3, color: 0xc8c8d0, alpha: 0.9 });
+    g.rect(BOARD.x, y, BOARD.size, CELL).fill({ color: 0x9a9aa0, alpha: 0.12 });
+  }
+
   setSpeed(scale: number): void {
     gsap.globalTimeline.timeScale(scale);
   }
@@ -215,6 +256,7 @@ export class Stage {
     const bg = new Sprite(this.tex.bg);
     bg.width = STAGE_W;
     bg.height = STAGE_H;
+    this.bgSprite = bg;
     this.root.addChild(bg);
     // 左侧压暗，突出棋盘
     const shade = new Graphics().rect(0, 0, 820, STAGE_H).fill({ color: 0x000000, alpha: 0.35 });
@@ -251,7 +293,7 @@ export class Stage {
     this.insertGlow.blendMode = 'add';
     this.fxLayer.blendMode = 'add';
     this.root.addChild(this.insertLayer, this.insertGlow, mask, this.tileLayer, this.fxLayer, this.uiLayer);
-    this.uiLayer.addChild(this.ghost, this.selection, this.cursor, this.hint);
+    this.uiLayer.addChild(this.intentMark, this.ghost, this.selection, this.cursor, this.hint);
     this.chainText = new Text({
       text: '',
       style: { fontFamily: 'system-ui, sans-serif', fontSize: 44, fontWeight: '900', fill: 0xffe08a, stroke: { color: 0x2a1405, width: 8 } },
@@ -454,6 +496,9 @@ export class Stage {
     let rotation = 0;
     if (tile.kind === 'normal') {
       texture = this.tex[tile.color];
+    } else if (tile.kind === 'stone') {
+      texture = this.tex.stone;
+      size = CELL * 0.8;
     } else {
       size = CELL * 0.86;
       texture = tile.bomb === 'CB' ? this.tex.color : tile.bomb === 'A' ? this.tex.area : this.tex.line;
@@ -783,7 +828,7 @@ export class Stage {
   }
 
   private tileColor(tile: Tile): number {
-    return tile.kind === 'normal' ? COLOR_HEX[tile.color] : BOMB_HEX;
+    return tile.kind === 'normal' ? COLOR_HEX[tile.color] : tile.kind === 'stone' ? STONE_HEX : BOMB_HEX;
   }
 
   private playMatches(ev: Extract<ResolutionEvent, { type: 'matches' }>): gsap.core.Timeline {
@@ -1154,7 +1199,23 @@ export class Stage {
       } else {
         tl.to(this.enemy.scale, { x: this.enemy.scale.x * 1.05, duration: 0.15, yoyo: true, repeat: 1 }, t0);
       }
+      // 石化：被选中的方块闪成灰色、变成石块（石块本身由随后的棋盘同步画出）
+      if (log.petrified.length > 0) {
+        const at = t0 + 0.3;
+        tl.call(() => {
+          sfx.shield();
+          for (const p of log.petrified) {
+            this.flashCell(p, STONE_HEX, 0.95);
+            const s = this.spriteAt(p);
+            if (s) gsap.to(s, { alpha: 0.2, duration: 0.25 });
+          }
+          const mid = log.petrified[Math.floor(log.petrified.length / 2)]!;
+          this.floatText(center(mid).x, center(mid).y - 40, '石化！', 0xd8d8e0, 34);
+        }, [], at);
+        tl.to({}, { duration: 0.35 }, at);
+      }
     }
+    this.showIntentMarks(null);
     tl.to({}, { duration: 0.5 });
     await tl;
   }

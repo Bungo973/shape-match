@@ -33,6 +33,7 @@ export function candidateActions(board: Board): Action[] {
         const to = { r: r + dr, c: c + dc };
         if (to.r >= rows || to.c >= cols) continue;
         const b = getTile(board, to)!;
+        if (a.kind === 'stone' || b.kind === 'stone') continue;
         if (a.kind === 'normal' && b.kind === 'normal' && a.color === b.color) continue;
         const bothBombs = a.kind === 'bomb' && b.kind === 'bomb';
         const hasCB = (a.kind === 'bomb' && a.bomb === 'CB') || (b.kind === 'bomb' && b.bomb === 'CB');

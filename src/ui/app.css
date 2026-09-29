@@ -108,6 +108,13 @@ button.primary { background: linear-gradient(#d48a34, #8a4d17); font-size: 22px;
 
 /* ---- 路线页 ---- */
 .route { display: flex; gap: 20px; margin-top: 20px; }
+.route .layer { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid transparent; }
+.route .layer.current { border-color: #6b5334; background: rgba(255,200,120,.05); }
+.route .layer-name { font-size: 14px; color: var(--dim); text-align: center; letter-spacing: .1em; }
+.route .layer-2 .layer-name { color: #6fe0c8; }
+.route .layer-3 .layer-name { color: #c9a0ff; }
+.route .layer-nodes { display: flex; gap: 8px; }
+.route .layer .node { width: 132px; padding: 12px 8px; }
 .node { width: 220px; padding: 18px; border-radius: 12px; border: 2px solid #4b4032; background: #171b26; text-align: center; opacity: .7; }
 .node.next { border-color: #ffc76b; opacity: 1; box-shadow: 0 0 22px rgba(255,190,90,.25); }
 .node.done { opacity: .5; }

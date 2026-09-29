@@ -1,6 +1,6 @@
 // 非战斗阶段的各个画面：开局神器、路线页、战后奖励、精英神器、营地、结果页。
 import { useState } from 'react';
-import { campUpgradeAmount, DEFAULT_CONFIG, UPGRADE_KEYS, type ArtifactKey, type RunState, type UpgradeKey } from '../../engine';
+import { campUpgradeAmount, DEFAULT_CONFIG, LAYER_NAMES, UPGRADE_KEYS, type ArtifactKey, type Layer, type RunState, type UpgradeKey } from '../../engine';
 import { ArtifactCard, UpgradeCard } from '../components';
 
 const LEVEL_SHORT: Record<UpgradeKey, string> = { attack: '攻', shield: '盾', poison: '毒', catalyst: '催', line: '直线', area: '3×3', color: '五连' };
@@ -22,22 +22,32 @@ export function StarterScreen({ run, onPick }: { run: RunState; onPick: (k: Arti
 }
 
 export function MapScreen({ run, onStart }: { run: RunState; onStart: () => void }) {
+  const next = run.route[run.battleIndex];
+  const layers = [...new Set(run.route.map((n) => n.layer))] as Layer[];
   return (
     <div className="screen">
-      <h2>地下入口 · 第一段落</h2>
+      <h2>{next ? `第${'一二三'[next.layer - 1]}层 · ${LAYER_NAMES[next.layer]}` : '返回地面'}</h2>
       <div className="route">
-        {run.route.map((node, i) => {
-          const n = i + 1;
-          const state = n <= run.battleIndex ? 'done' : n === run.battleIndex + 1 ? 'next' : 'later';
-          return (
-            <div key={n} className={`node ${state} tier-${node.tier}`}>
-              <div className="node-idx">第 {n} 战</div>
-              <div className="node-name">{node.enemy.name}</div>
-              <div className="node-tier">{TIER_TEXT[node.tier]}</div>
-              {state === 'done' && <div className="node-mark">已击败</div>}
+        {layers.map((layer) => (
+          <div key={layer} className={`layer layer-${layer} ${next?.layer === layer ? 'current' : ''}`}>
+            <div className="layer-name">{LAYER_NAMES[layer]}</div>
+            <div className="layer-nodes">
+              {run.route.map((node, i) => {
+                if (node.layer !== layer) return null;
+                const n = i + 1;
+                const state = n <= run.battleIndex ? 'done' : n === run.battleIndex + 1 ? 'next' : 'later';
+                return (
+                  <div key={n} className={`node ${state} tier-${node.tier}`}>
+                    <div className="node-idx">第 {n} 战</div>
+                    <div className="node-name">{node.enemy.name}</div>
+                    <div className="node-tier">{TIER_TEXT[node.tier]}</div>
+                    {state === 'done' && <div className="node-mark">已击败</div>}
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
       <RunSummary run={run} />
       <div className="actions">
@@ -164,12 +174,12 @@ export function ResultScreen({ run, onRestart }: { run: RunState; onRestart: () 
   const won = run.outcome === 'won';
   return (
     <div className="screen result-screen">
-      <h1>{won ? '第一段落完成！' : '倒下了……'}</h1>
+      <h1>{won ? '取得遗物，返回地面！' : '倒下了……'}</h1>
       <p>
         击败 {won ? run.battleIndex : run.battleIndex - 1} 场 · 本局结算分 {run.totalScore} · 金币 {run.gold}
       </p>
       <RunSummary run={run} />
-      <p className="sub">事件、商店与后两个段落将在阶段 3 加入。</p>
+      <p className="sub">事件与商店将在之后加入。</p>
       <button className="primary" onClick={onRestart}>
         再来一局
       </button>

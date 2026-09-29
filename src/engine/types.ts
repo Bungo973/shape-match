@@ -22,7 +22,13 @@ export interface BombTile {
   bomb: BombKind;
 }
 
-export type Tile = NormalTile | BombTile;
+/** 石块：敌人“石化”留下的无属性障碍，不能交换、不能匹配，只能被爆炸清除；随重力移动 */
+export interface StoneTile {
+  id: number;
+  kind: 'stone';
+}
+
+export type Tile = NormalTile | BombTile | StoneTile;
 
 /** board[r][c]；null 只在结算过程中出现，稳定棋盘上没有空格。 */
 export type Board = (Tile | null)[][];

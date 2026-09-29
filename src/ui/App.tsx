@@ -92,7 +92,10 @@ export function App() {
     const stage = stageRef.current;
     if (!stage) return;
     stage.setEnemy(b.enemy.def.id);
+    const node = runRef.current.route[runRef.current.battleIndex - 1];
+    if (node) stage.setLayer(node.layer);
     stage.sync(b.board);
+    stage.showIntentMarks(b.enemy.intent.parts.find((p) => p.kind === 'petrify')?.row ?? null);
     stage.drawInserts(b.inserts, b.current.suppressedId);
   };
 

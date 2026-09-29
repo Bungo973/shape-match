@@ -6,6 +6,7 @@ import sharp from 'sharp';
 
 const BATCH1 = 'assets/candidates/first-batch';
 const BATCH2 = 'assets/candidates/second-batch';
+const BATCH3 = 'assets/candidates/third-batch';
 const OUT = 'public/game';
 
 // icon：裁掉透明边后放进正方形透明画布，保证不同图标视觉大小一致
@@ -47,6 +48,17 @@ const jobs = [
     kind: 'icon',
     size: 192,
   })),
+  // 第三批：第二、三层敌人、石块方块与分层背景（docs/ASSET_BATCH3.md）
+  ...['stone-guardian', 'spore-cluster', 'rune-spider', 'mimic-chest', 'relic-raider'].map((name) => ({
+    src: `${BATCH3}/enemy-${name}.png`,
+    out: `enemy-${name}`,
+    kind: 'sprite',
+    width: 1000,
+  })),
+  { src: `${BATCH3}/enemy-relic-colossus.png`, out: 'enemy-relic-colossus', kind: 'sprite', width: 1200 },
+  { src: `${BATCH3}/tile-stone.png`, out: 'tile-stone', kind: 'icon', size: 160 },
+  { src: `${BATCH3}/bg-sealed-ruins.png`, out: 'bg-sealed-ruins', kind: 'opaque', width: 1672 },
+  { src: `${BATCH3}/bg-relic-hall.png`, out: 'bg-relic-hall', kind: 'opaque', width: 1672 },
 ];
 
 const exists = (p) => access(p).then(() => true, () => false);
