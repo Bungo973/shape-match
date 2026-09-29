@@ -57,7 +57,7 @@ function RunSummary({ run }: { run: RunState }) {
       <span>
         生命 {run.player.hp} / {run.player.maxHp}
       </span>
-      <span>护盾 {run.player.shield}</span>
+      {DEFAULT_CONFIG.playerShieldCarryOver ? <span>护盾 {run.player.shield}</span> : null}
       <span>金币 {run.gold}</span>
       <span>
         已安装嵌片{' '}

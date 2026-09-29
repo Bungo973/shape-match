@@ -28,7 +28,7 @@ export interface EngineConfig {
   playerMaxHp: number;
   apPerTurn: number;
   playerShieldCap: number;
-  /** 每个敌人回合结束后，主角护盾保留的比例（1 = 全部保留，0 = 每回合清空）；向下取整 */
+  /** 每个敌人回合结束后，主角护盾保留的比例（1 = 全部保留，0 = 每回合清空）；向下取整。2026-09-29 定为 0 */
   playerShieldRetain: number;
   /** 护盾是否带进下一场战斗（1 = 带入，0 = 每场从 0 开始） */
   playerShieldCarryOver: number;
@@ -63,9 +63,9 @@ export const DEFAULT_CONFIG: EngineConfig = {
   maxPhases: 200,
   playerMaxHp: 40,
   apPerTurn: 3,
-  playerShieldCap: 20,
-  playerShieldRetain: 1,
-  playerShieldCarryOver: 1,
+  playerShieldCap: 40,
+  playerShieldRetain: 0,
+  playerShieldCarryOver: 0,
   poisonThresholdRatio: 0.25,
   poisonDecayRatio: 1 / 6,
   gravityTurns: 3,

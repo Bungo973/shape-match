@@ -102,6 +102,19 @@ describe('敌人回合', () => {
     expect(state.enemy.intent).toEqual(attack(7));
   });
 
+  it('护盾挡完攻击后，剩余部分在敌人回合结束时清空（playerShieldRetain = 0）', () => {
+    const s = battle([attack(5), attack(7)]);
+    s.player.shield = 12;
+    s.ap = 0;
+    const { state, log } = endTurn(s);
+    expect(log!.damageToPlayerShield).toBe(5);
+    expect(state.player.hp).toBe(40);
+    expect(state.player.shield).toBe(0);
+    // 保留比例为 1 时恢复旧规则：剩余护盾跨回合保留
+    const kept = endTurn({ ...s, player: { ...s.player, shield: 12 } }, { ...DEFAULT_CONFIG, playerShieldRetain: 1 });
+    expect(kept.state.player.shield).toBe(7);
+  });
+
   it('蓄力加到下一次攻击上；防御增加敌人护盾', () => {
     let s = battle([{ parts: [{ kind: 'charge', amount: 4 }] }, { parts: [{ kind: 'defend', amount: 6 }, { kind: 'attack', amount: 5 }] }]);
     s = endTurn(s).state;

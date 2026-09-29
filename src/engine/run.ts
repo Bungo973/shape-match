@@ -142,8 +142,8 @@ function settleBattle(run: RunState, config: EngineConfig): void {
     run.outcome = 'lost';
     return;
   }
-  // 战后保留生命、护盾、催化剂充能；毒气与眩晕随战斗清零
-  run.player = b.player;
+  // 战后保留生命与催化剂充能；毒气与眩晕随战斗清零；护盾按配置决定是否带入下一场
+  run.player = config.playerShieldCarryOver ? b.player : { ...b.player, shield: 0 };
   const node = current(run);
   if (node.tier === 'boss') {
     run.phase = 'over';

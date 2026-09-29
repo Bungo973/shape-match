@@ -67,13 +67,13 @@ describe('战后流程', () => {
     expect(camp.inventory[0]!.shape).toHaveLength(4);
   });
 
-  it('战后保留生命、护盾与催化剂充能', () => {
+  it('战后保留生命与催化剂充能；护盾不带入下一场', () => {
     const b = toFirstBattle();
     b.battle!.player = { hp: 31, maxHp: 40, shield: 7, catalystCharges: 2 };
     const won = winBattle(b);
     expect(won.player.hp).toBe(31);
     expect(won.player.catalystCharges).toBeGreaterThanOrEqual(0);
-    expect(won.player.shield).toBeGreaterThanOrEqual(7);
+    expect(won.player.shield).toBe(0);
   });
 
   it('重掷：扣 8 金币、候选变化；金币不足时不能重掷', () => {

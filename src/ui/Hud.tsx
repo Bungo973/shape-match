@@ -54,7 +54,10 @@ export function PlayerPanel({ b, gold, apLabel = '行动力' }: { b: BattleState
       </div>
       <Bar value={b.player.hp} max={b.player.maxHp} />
       <div className="row">
-        <span className="chip shield">护盾 {b.player.shield}</span>
+        <span className="chip shield" title={DEFAULT_CONFIG.playerShieldRetain < 1 ? '护盾只挡本回合的敌人行动，敌人行动后清空' : undefined}>
+          护盾 {b.player.shield}
+          {DEFAULT_CONFIG.playerShieldRetain < 1 && <small className="dim">本回合</small>}
+        </span>
         <span className="chip">
           {apLabel}
           {Array.from({ length: Math.max(DEFAULT_CONFIG.apPerTurn, b.ap) }, (_, i) => (

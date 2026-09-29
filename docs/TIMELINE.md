@@ -56,4 +56,5 @@
 | 文档 | 内容 | 状态 |
 | --- | --- | --- |
 | [BLOCK_BUILD](BLOCK_BUILD.md) | 方块构筑讨论稿：升级只有 4 种方块 + 4 类炸弹（含新增十字炸弹），等级 × 基础值；条件神器、闪电引线；传统道具 | 讨论稿（部分已定） |
-| [BOARD_SIZE_DECISION](BOARD_SIZE_DECISION.md) · [BALANCE_LOG](BALANCE_LOG.md) · [ENEMY_DESIGN](ENEMY_DESIGN.md) | 棋盘改为 10×10；敌人生命 ×2.1、攻击 ×1.1 | 现行 |
+| [BOARD_SIZE_DECISION](BOARD_SIZE_DECISION.md) · [BALANCE_LOG](BALANCE_LOG.md) · [ENEMY_DESIGN](ENEMY_DESIGN.md) | 棋盘改为 10×10；敌人生命 ×2.1 | 现行 |
+| [GAME_RULES](GAME_RULES.md) · [BALANCE_LOG](BALANCE_LOG.md) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) | 主角护盾改为每回合清空、不带入下一场，上限 40；敌人攻击校准 | 现行 |
