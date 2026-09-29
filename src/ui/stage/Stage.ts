@@ -27,6 +27,10 @@ const FRAME = { x: 36, y: 120, size: 720 };
 const BOARD = { x: FRAME.x + (FRAME.size - 640) / 2, y: FRAME.y + (FRAME.size - 640) / 2, size: 640 };
 /** 爆炸从锚点向外每扩散一格的延迟（秒） */
 const RIPPLE_STEP = 0.035;
+/** 方块被清除后淡出所需的时间；该列在此之后即可下落 */
+const CLEAR_FADE = 0.12;
+/** 炸弹被波及到自身爆炸的引信延迟 */
+const FUSE_DELAY = 0.05;
 /** 棋盘格角标符号的像素尺寸 */
 const SYMBOL_SIZE = 20;
 
@@ -516,34 +520,100 @@ export class Stage {
 
   // ---------- 播放结算事件 ----------
 
+  /**
+   * 把事件日志排进一条总时间线。结果完全来自日志，这里只决定“何时播放”：
+   * - 每一列独立下落：某列在日志中最后一次被清除后立即开始落，不等其他列；
+   * - 爆炸接力按因果衔接：下一波的每个爆炸在它的来源炸弹被波及时点燃，不等上一波整体播完；
+   * - 之后的匹配或爆炸要等它涉及的列落定。
+   * 下落只在本列内移动，因此日志顺序与各列的先后关系都得以保持。
+   */
   async play(events: ResolutionEvent[]): Promise<void> {
     this.chain = 0;
     this.passiveSoFar = 0;
     this.tier = 0;
     this.activeHits = [];
+    const cols = this.grid[0]?.length ?? 8;
+    const master = gsap.timeline();
+    /** 各列方块落定的时刻；在此之前该列不能开始新的匹配或爆炸 */
+    const settled = new Array<number>(cols).fill(0);
+    /** 各列最后一次清除播完的时刻；该列的下落从此开始 */
+    const clearEnd = new Array<number>(cols).fill(0);
+    /** 每格被清除或波及的时刻，用于让下一波爆炸在来源炸弹被波及时点燃 */
+    let hitAt = new Map<number, number>();
+    let cursor = 0;
+    const settledOf = (ps: Pos[]) => Math.max(0, ...ps.map((p) => settled[p.c]!));
+    const markCleared = (t: number, p: Pos) => {
+      clearEnd[p.c] = Math.max(clearEnd[p.c]!, t + CLEAR_FADE);
+      hitAt.set(posKey(p), t);
+    };
+
     for (const ev of events) {
       switch (ev.type) {
-        case 'swap':
-          await this.playSwap(ev.from, ev.to);
-          break;
-        case 'ignite': {
-          const s = this.spriteAt(ev.at);
-          if (s) await gsap.to(s.scale, { x: 1.3, y: 1.3, duration: 0.1, yoyo: true, repeat: 1 });
+        case 'swap': {
+          const tl = this.playSwap(ev.from, ev.to);
+          master.add(tl, cursor);
+          cursor += tl.duration();
+          settled.fill(cursor);
+          clearEnd.fill(cursor);
           break;
         }
-        case 'matches':
-          await this.playMatches(ev);
+        case 'ignite': {
+          const s = this.spriteAt(ev.at);
+          if (s) master.to(s.scale, { x: 1.3, y: 1.3, duration: 0.1, yoyo: true, repeat: 1 }, cursor);
+          cursor += 0.2;
+          settled.fill(cursor);
+          clearEnd.fill(cursor);
           break;
-        case 'wave':
-          await this.playWave(ev);
+        }
+        case 'matches': {
+          const cells = [...ev.cleared.map((c) => c.pos), ...ev.created.map((b) => b.at)];
+          const start = Math.max(cursor, settledOf(cells));
+          const tl = this.playMatches(ev);
+          master.add(tl, start);
+          hitAt = new Map();
+          for (const c of ev.cleared) markCleared(start, c.pos);
+          for (const b of ev.created) hitAt.set(posKey(b.at), start + 0.14);
+          cursor = start;
           break;
-        case 'gravity':
-          await this.playGravity(ev);
+        }
+        case 'wave': {
+          // 每个爆炸的点燃时刻：来源炸弹被波及的时刻（首波由玩家动作或匹配直接点燃）
+          const ignite = ev.explosions.map((e) => {
+            const t = hitAt.get(posKey(e.origin));
+            return Math.max(cursor, t === undefined ? cursor : t + FUSE_DELAY);
+          });
+          const touched = ev.explosions.flatMap((e) => e.cells);
+          const start = Math.max(ignite.length ? Math.min(...ignite) : cursor, settledOf(touched));
+          const offsets = ignite.map((t) => Math.max(0, t - start));
+          const { tl, at } = this.playWave(ev, offsets);
+          master.add(tl, start);
+          hitAt = new Map();
+          for (const c of [...ev.cleared, ...ev.consumed]) markCleared(start + at(c.pos), c.pos);
+          for (const q of ev.queued) hitAt.set(posKey(q.at), start + at(q.at));
+          for (const cv of ev.converted) if (cv.from) markCleared(start + at(cv.from.pos), cv.from.pos);
+          for (const cv of ev.converted) hitAt.set(posKey(cv.at), start + (cv.from ? at(cv.from.pos) : 0) + 0.05);
+          cursor = start;
           break;
+        }
+        case 'gravity': {
+          const byCol = this.playGravity(ev);
+          let first = Infinity;
+          for (const [c, tl] of byCol) {
+            // 不等其他列：本次下落之前、这一列的所有清除都已排好
+            const start = Math.max(clearEnd[c]!, settled[c]!);
+            master.add(tl, start);
+            settled[c] = start + tl.duration();
+            clearEnd[c] = settled[c]!;
+            first = Math.min(first, start);
+          }
+          if (Number.isFinite(first)) cursor = first;
+          break;
+        }
         case 'noMatch':
           break;
       }
     }
+    await master;
     if (this.chain > 0) gsap.to(this.chainText, { alpha: 0, duration: 0.4, delay: 0.5 });
   }
 
@@ -618,16 +688,16 @@ export class Stage {
     return id == null ? undefined : this.sprites.get(id);
   }
 
-  private async playSwap(from: Pos, to: Pos): Promise<void> {
+  private playSwap(from: Pos, to: Pos): gsap.core.Timeline {
     const a = this.grid[from.r]![from.c]!;
     const b = this.grid[to.r]![to.c]!;
     this.grid[from.r]![from.c] = b;
     this.grid[to.r]![to.c] = a;
-    sfx.swap();
     const tl = gsap.timeline();
+    tl.call(() => sfx.swap(), [], 0);
     tl.to(this.sprites.get(a)!, { ...center(to), duration: 0.16, ease: 'power2.inOut' }, 0);
     tl.to(this.sprites.get(b)!, { ...center(from), duration: 0.16, ease: 'power2.inOut' }, 0);
-    await tl;
+    return tl;
   }
 
   private removeTile(tl: gsap.core.Timeline, id: number, at: number, color: number, big = false): void {
@@ -656,15 +726,18 @@ export class Stage {
     return tile.kind === 'normal' ? COLOR_HEX[tile.color] : BOMB_HEX;
   }
 
-  private async playMatches(ev: Extract<ResolutionEvent, { type: 'matches' }>): Promise<void> {
+  private playMatches(ev: Extract<ResolutionEvent, { type: 'matches' }>): gsap.core.Timeline {
     const tl = gsap.timeline();
     if (ev.phase === 'passive') {
-      this.chain++;
-      this.showChain();
+      tl.call(() => {
+        this.chain++;
+        this.showChain();
+        sfx.pop(this.chain, ev.cleared.length);
+      }, [], 0);
     } else {
       this.recordActive(ev.cleared);
+      tl.call(() => sfx.pop(this.chain, ev.cleared.length), [], 0);
     }
-    sfx.pop(this.chain, ev.cleared.length);
     if (ev.created.length > 0) tl.call(() => sfx.bombCreate(), [], 0.14);
     // 亲手做出的特殊匹配：在产弹格旁标出基数翻倍
     for (const g of ev.groups) {
@@ -683,42 +756,46 @@ export class Stage {
       this.addTile(tl, { id: b.id, kind: 'bomb', bomb: b.bomb }, b.at, 0.14);
     }
     this.glowInserts(tl, ev.insertTriggers.map((t) => t.insertId), 0);
-    tl.to({}, { duration: 0.08 });
-    await tl;
-    if (ev.phase === 'passive') this.addPassive(ev.cleared.length);
+    if (ev.phase === 'passive') tl.call(() => this.addPassive(ev.cleared.length), [], CLEAR_FADE);
+    return tl;
   }
 
-  private async playWave(ev: Extract<ResolutionEvent, { type: 'wave' }>): Promise<void> {
+  /** offsets：每个爆炸相对本波开始的点燃时刻，让接力的爆炸各自在来源炸弹被波及时点燃 */
+  private playWave(ev: Extract<ResolutionEvent, { type: 'wave' }>, offsets: number[]): { tl: gsap.core.Timeline; at: (p: Pos) => number } {
     const tl = gsap.timeline();
-    // 每格的延迟 = 与最近一个爆炸锚点的距离 × 扩散步长
+    // 每格的延迟 = 所属爆炸的点燃时刻 + 与其锚点的距离 × 扩散步长，取最早者
     const delay = new Map<number, number>();
-    for (const e of ev.explosions) {
+    ev.explosions.forEach((e, i) => {
+      const o = offsets[i] ?? 0;
+      delay.set(posKey(e.origin), Math.min(delay.get(posKey(e.origin)) ?? Infinity, o));
       for (const p of e.cells) {
-        const d = chebyshev(e.origin, p) * RIPPLE_STEP;
         const k = posKey(p);
-        delay.set(k, Math.min(delay.get(k) ?? Infinity, d));
+        delay.set(k, Math.min(delay.get(k) ?? Infinity, o + chebyshev(e.origin, p) * RIPPLE_STEP));
       }
-    }
+    });
     const at = (p: Pos) => delay.get(posKey(p)) ?? 0;
 
     const combo = ev.explosions.some((e) => e.shape === 'cross' || e.shape === 'rows3' || e.shape === 'cols3' || e.shape === 'square5' || e.shape === 'board');
-    sfx.explosion(delay.size + (combo ? 20 : 0));
-    if (combo) {
-      this.flashBoard(0xffffff, ev.explosions.some((e) => e.shape === 'board' || e.shape === 'square5') ? 0.6 : 0.4);
-      this.hitStop(90);
-    }
+    const first = offsets.length ? Math.min(...offsets) : 0;
+    tl.call(() => {
+      sfx.explosion(delay.size + (combo ? 20 : 0));
+      if (combo) {
+        this.flashBoard(0xffffff, ev.explosions.some((e) => e.shape === 'board' || e.shape === 'square5') ? 0.6 : 0.4);
+        this.hitStop(90);
+      }
+    }, [], first);
     if (ev.phase === 'active') this.recordActive([...ev.cleared, ...ev.converted.flatMap((c) => (c.from ? [c.from] : []))]);
     for (const c of ev.consumed) {
-      this.removeTile(tl, c.id, 0, BOMB_HEX, true);
+      this.removeTile(tl, c.id, at(c.pos), BOMB_HEX, true);
       this.grid[c.pos.r]![c.pos.c] = null;
     }
-    for (const e of ev.explosions) this.explosionFx(tl, e);
+    ev.explosions.forEach((e, i) => this.explosionFx(tl, e, offsets[i] ?? 0));
     for (const c of ev.cleared) {
       this.removeTile(tl, c.id, at(c.pos), this.tileColor(c.tile));
       this.grid[c.pos.r]![c.pos.c] = null;
     }
     for (const cv of ev.converted) {
-      const t = cv.from ? at(cv.from.pos) : 0;
+      const t = cv.from ? at(cv.from.pos) : first;
       if (cv.from && this.sprites.has(cv.from.id)) this.removeTile(tl, cv.from.id, t, this.tileColor(cv.from.tile));
       this.addTile(tl, { id: cv.id, kind: 'bomb', bomb: cv.bomb }, cv.at, t + 0.05);
     }
@@ -728,16 +805,20 @@ export class Stage {
     }
     for (const trig of ev.insertTriggers) {
       const t = Math.min(...trig.at.map(at));
-      this.glowInserts(tl, [trig.insertId], Number.isFinite(t) ? t : 0);
+      this.glowInserts(tl, [trig.insertId], Number.isFinite(t) ? t : first);
     }
     const cleared = ev.cleared.length + ev.consumed.length;
-    if (cleared > 6) tl.call(() => this.shake(Math.min(14, 3 + cleared / 4)), [], 0);
-    tl.to({}, { duration: 0.1 });
-    await tl;
-    if (ev.phase === 'passive') this.addPassive(cleared + ev.converted.filter((c) => c.from).length);
+    if (cleared > 6) tl.call(() => this.shake(Math.min(14, 3 + cleared / 4)), [], first);
+    if (ev.phase === 'passive') {
+      const n = cleared + ev.converted.filter((c) => c.from).length;
+      tl.call(() => this.addPassive(n), [], Math.max(first, ...[...delay.values()]) + CLEAR_FADE);
+    }
+    return { tl, at };
   }
 
-  private explosionFx(tl: gsap.core.Timeline, e: Explosion): void {
+  /** 爆炸特效排在自己的子时间线上，整体放到点燃时刻 offset */
+  private explosionFx(outer: gsap.core.Timeline, e: Explosion, offset = 0): void {
+    const tl = gsap.timeline();
     const o = center(e.origin);
     const reach = Math.max(0, ...e.cells.map((p) => chebyshev(e.origin, p))) * RIPPLE_STEP;
     if (e.shape === 'H' || e.shape === 'V') {
@@ -784,6 +865,7 @@ export class Stage {
       tl.call(() => ring.destroy(), [], reach + 0.4);
     }
     for (const p of e.cells) tl.call(() => this.flashCell(p, 0xffc36b, 0.55), [], chebyshev(e.origin, p) * RIPPLE_STEP);
+    outer.add(tl, offset);
   }
 
   private flashCell(p: Pos, color: number, alpha: number): void {
@@ -822,14 +904,21 @@ export class Stage {
     }
   }
 
-  private async playGravity(ev: Extract<ResolutionEvent, { type: 'gravity' }>): Promise<void> {
-    const tl = gsap.timeline();
-    const fall = (rows: number) => 0.1 + Math.sqrt(rows) * 0.07;
+  /** 下落只在本列内移动，因此按列拆成独立的子时间线，由 play() 各自排期 */
+  private playGravity(ev: Extract<ResolutionEvent, { type: 'gravity' }>): Map<number, gsap.core.Timeline> {
+    const byCol = new Map<number, gsap.core.Timeline>();
+    const col = (c: number) => {
+      let tl = byCol.get(c);
+      if (!tl) byCol.set(c, (tl = gsap.timeline()));
+      return tl;
+    };
+    const fall = (rows: number) => 0.08 + Math.sqrt(rows) * 0.06;
     for (const m of ev.moves) this.grid[m.from.r]![m.from.c] = null;
     for (const m of ev.moves) {
       this.grid[m.to.r]![m.to.c] = m.id;
       const s = this.sprites.get(m.id);
       if (!s) continue;
+      const tl = col(m.to.c);
       const rows = Math.abs(m.to.r - m.from.r);
       tl.to(s, { y: center(m.to).y, duration: fall(rows), ease: 'power2.in' }, 0);
       tl.to(s.scale, { y: 0.88, x: 1.08, duration: 0.05, yoyo: true, repeat: 1 }, fall(rows));
@@ -838,14 +927,16 @@ export class Stage {
     for (const sp of ev.spawns) {
       const s = this.makeTile({ id: sp.id, kind: 'normal', color: sp.color });
       const target = center(sp.to);
+      // 棋盘外的等待位置被遮罩挡住，可以提前放好
       s.position.set(target.x, target.y + dir * sp.entryOffset * CELL);
       this.sprites.set(sp.id, s);
       this.grid[sp.to.r]![sp.to.c] = sp.id;
       this.tileLayer.addChild(s);
+      const tl = col(sp.to.c);
       tl.to(s, { y: target.y, duration: fall(sp.entryOffset + 1), ease: 'power2.in' }, 0);
       tl.to(s.scale, { y: 0.88, x: 1.08, duration: 0.05, yoyo: true, repeat: 1 }, fall(sp.entryOffset + 1));
     }
-    await tl;
+    return byCol;
   }
 
   private shake(strength: number): void {
