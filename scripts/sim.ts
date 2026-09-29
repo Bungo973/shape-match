@@ -49,7 +49,7 @@ function report(style: BotStyle) {
   const won = all.filter((r) => r.outcome === 'won').length;
   const stalled = all.filter((r) => r.outcome === 'stalled').length;
   console.log(`\n=== ${style === 'skilled' ? '熟练' : '新手'}玩家 · ${runs} 局 · 段落通关 ${pc(won / runs)}${stalled ? ` · 卡住 ${stalled}` : ''} ===`);
-  const header = ['战斗', '到达', '胜率', '回合', '受伤(含盾)', '掉血', '无伤率', '单步伤害 中位/p90', '平均倍率', '≥×3', '≥×4', '眩晕/场', '护盾/步', '开战护盾'];
+  const header = ['战斗', '到达', '胜率', '回合', '受伤(含盾)', '掉血', '无伤率', '单步伤害 中位/p90', '平均倍率', '≥×3', '≥×4', '眩晕/场', '护盾/步', '护盾浪费', '开战护盾'];
   console.log(header.join(' | '));
   for (let i = 0; i < route.length; i++) {
     const bs = all.map((r) => r.battles[i]).filter((b): b is BattleReport => !!b);
@@ -71,6 +71,7 @@ function report(style: BotStyle) {
         pc(mults.filter((m) => m >= 4).length / Math.max(1, mults.length)),
         f1(avg(bs.map((b) => b.stuns))),
         f1(avg(bs.flatMap((b) => b.shieldGains))),
+        pc(avg(bs.map((b) => b.shieldWasted)) / Math.max(1, avg(bs.map((b) => b.shieldWasted + b.shieldGains.reduce((x, y) => x + y, 0))))),
         f1(avg(bs.map((b) => b.shieldBefore))),
       ].join(' | '),
     );

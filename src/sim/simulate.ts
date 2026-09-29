@@ -40,6 +40,8 @@ export interface BattleReport {
   multipliers: number[];
   actionDamage: number[];
   shieldGains: number[];
+  /** 结算得到、却因护盾上限而浪费的护盾 */
+  shieldWasted: number;
   stuns: number;
 }
 
@@ -125,6 +127,7 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         multipliers: [],
         actionDamage: [],
         shieldGains: [],
+        shieldWasted: 0,
         stuns: 0,
       });
     } else if (run.phase === 'battle') {
@@ -140,6 +143,7 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
           report.multipliers.push(s.multiplier);
           report.actionDamage.push(r.log.damageToEnemyHp + r.log.damageToEnemyShield);
           report.shieldGains.push(r.log.shieldGained);
+          report.shieldWasted += s.finalEffects.shield - r.log.shieldGained;
           if (r.log.stunApplied) report.stuns++;
         }
         run = r.run;

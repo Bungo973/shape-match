@@ -99,7 +99,13 @@ export function startNextBattle(prev: RunState, config: EngineConfig = DEFAULT_C
   run.battleIndex++;
   const node = current(run);
   run.battle = startBattle(
-    { seed: mixSeed(run.seed, 0xb, run.battleIndex), player: run.player, enemy: node.enemy, inserts: run.installed, artifacts: run.artifacts },
+    {
+      seed: mixSeed(run.seed, 0xb, run.battleIndex),
+      player: config.playerShieldCarryOver ? run.player : { ...run.player, shield: 0 },
+      enemy: node.enemy,
+      inserts: run.installed,
+      artifacts: run.artifacts,
+    },
     config,
   );
   run.phase = 'battle';

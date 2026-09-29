@@ -400,6 +400,8 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   const decayed = Math.min(enemy.poison, poisonDecay(enemy.def.maxHp, config));
   enemy.poison -= decayed;
   log.poisonDecayed = decayed;
+  // 主角护盾在敌人行动之后按比例保留（默认全部保留）
+  state.player.shield = Math.floor(state.player.shield * config.playerShieldRetain);
   revealNextIntent(state);
   log.nextIntent = enemy.intent;
 

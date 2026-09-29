@@ -28,6 +28,10 @@ export interface EngineConfig {
   playerMaxHp: number;
   apPerTurn: number;
   playerShieldCap: number;
+  /** 每个敌人回合结束后，主角护盾保留的比例（1 = 全部保留，0 = 每回合清空）；向下取整 */
+  playerShieldRetain: number;
+  /** 护盾是否带进下一场战斗（1 = 带入，0 = 每场从 0 开始） */
+  playerShieldCarryOver: number;
   /** 毒气眩晕阈值 = 敌人最大生命 × 此比例（四舍五入，至少 1） */
   poisonThresholdRatio: number;
   /** 敌人回合末毒气进度衰减量 = 阈值 × 此比例（四舍五入，至少 1） */
@@ -60,6 +64,8 @@ export const DEFAULT_CONFIG: EngineConfig = {
   playerMaxHp: 40,
   apPerTurn: 3,
   playerShieldCap: 20,
+  playerShieldRetain: 1,
+  playerShieldCarryOver: 1,
   poisonThresholdRatio: 0.25,
   poisonDecayRatio: 1 / 6,
   gravityTurns: 3,
