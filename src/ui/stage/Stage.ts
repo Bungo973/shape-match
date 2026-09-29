@@ -23,10 +23,13 @@ import { INSERT_HEX, insertSymbolSvg } from '../insertStyle';
 
 export const STAGE_W = 1600;
 export const STAGE_H = 900;
-const CELL = 80;
 const FRAME = { x: 36, y: 120, size: 720 };
 /** 棋盘底图内框约占整图的 1115/1254 */
 const BOARD = { x: FRAME.x + (FRAME.size - 640) / 2, y: FRAME.y + (FRAME.size - 640) / 2, size: 640 };
+/** 棋盘行列数（原型可用 ?board= 改变）；显示区域固定，格子随之缩放 */
+const ROWS = DEFAULT_CONFIG.rows;
+const COLS = DEFAULT_CONFIG.cols;
+const CELL = BOARD.size / Math.max(ROWS, COLS);
 /** 爆炸从锚点向外每扩散一格的延迟（秒） */
 const RIPPLE_STEP = 0.035;
 /** 方块被清除后淡出所需的时间；该列在此之后即可下落 */
@@ -237,10 +240,8 @@ export class Stage {
     frame.width = frame.height = FRAME.size;
     this.root.addChild(frame);
     const lines = new Graphics();
-    for (let i = 1; i < 8; i++) {
-      lines.moveTo(BOARD.x + i * CELL, BOARD.y).lineTo(BOARD.x + i * CELL, BOARD.y + BOARD.size);
-      lines.moveTo(BOARD.x, BOARD.y + i * CELL).lineTo(BOARD.x + BOARD.size, BOARD.y + i * CELL);
-    }
+    for (let i = 1; i < COLS; i++) lines.moveTo(BOARD.x + i * CELL, BOARD.y).lineTo(BOARD.x + i * CELL, BOARD.y + BOARD.size);
+    for (let i = 1; i < ROWS; i++) lines.moveTo(BOARD.x, BOARD.y + i * CELL).lineTo(BOARD.x + BOARD.size, BOARD.y + i * CELL);
     lines.stroke({ width: 1, color: 0x8fb3d9, alpha: 0.12 });
     this.root.addChild(lines);
 
@@ -297,12 +298,12 @@ export class Stage {
       const p = this.root.toLocal(e.global);
       const dx = p.x - this.drag.x;
       const dy = p.y - this.drag.y;
-      if (Math.hypot(dx, dy) < 28) return;
+      if (Math.hypot(dx, dy) < CELL * 0.35) return;
       const from = this.drag.cell;
       const to = Math.abs(dx) > Math.abs(dy) ? { r: from.r, c: from.c + Math.sign(dx) } : { r: from.r + Math.sign(dy), c: from.c };
       this.drag = null;
       this.clearSelection();
-      if (to.r >= 0 && to.r < 8 && to.c >= 0 && to.c < 8) this.handlers.onSwap(from, to);
+      if (to.r >= 0 && to.r < ROWS && to.c >= 0 && to.c < COLS) this.handlers.onSwap(from, to);
     });
     app.stage.on('pointerup', () => {
       if (this.drag) this.click(this.drag.cell);
@@ -320,7 +321,7 @@ export class Stage {
     if (!cells) return;
     const tint = legal ? color : 0xff5a5a;
     for (const p of cells) {
-      if (p.r < 0 || p.r > 7 || p.c < 0 || p.c > 7) continue;
+      if (p.r < 0 || p.r >= ROWS || p.c < 0 || p.c >= COLS) continue;
       const x = BOARD.x + p.c * CELL;
       const y = BOARD.y + p.r * CELL;
       this.ghost.roundRect(x + 3, y + 3, CELL - 6, CELL - 6, 8).fill({ color: tint, alpha: 0.28 }).stroke({ width: 3, color: tint, alpha: 0.95 });
@@ -330,7 +331,7 @@ export class Stage {
   private cellAt(x: number, y: number): Pos | null {
     const c = Math.floor((x - BOARD.x) / CELL);
     const r = Math.floor((y - BOARD.y) / CELL);
-    return r >= 0 && r < 8 && c >= 0 && c < 8 ? { r, c } : null;
+    return r >= 0 && r < ROWS && c >= 0 && c < COLS ? { r, c } : null;
   }
 
   // ---------- 选择与键盘 ----------
@@ -376,7 +377,7 @@ export class Stage {
   handleKey(key: string): boolean {
     const d: Record<string, Pos> = { ArrowUp: { r: -1, c: 0 }, ArrowDown: { r: 1, c: 0 }, ArrowLeft: { r: 0, c: -1 }, ArrowRight: { r: 0, c: 1 } };
     if (d[key]) {
-      this.cursorPos = { r: Math.max(0, Math.min(7, this.cursorPos.r + d[key]!.r)), c: Math.max(0, Math.min(7, this.cursorPos.c + d[key]!.c)) };
+      this.cursorPos = { r: Math.max(0, Math.min(ROWS - 1, this.cursorPos.r + d[key]!.r)), c: Math.max(0, Math.min(COLS - 1, this.cursorPos.c + d[key]!.c)) };
     } else if (key === 'Enter' || key === ' ') {
       this.click(this.cursorPos);
     } else if (key === 'Escape') {
@@ -462,7 +463,7 @@ export class Stage {
       halo.anchor.set(0.5);
       halo.tint = BOMB_HEX;
       halo.alpha = 0.35;
-      halo.scale.set(3.2);
+      halo.scale.set((3.2 * CELL) / 80);
       halo.blendMode = 'add';
       gsap.to(halo, { alpha: 0.15, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' });
       box.addChild(halo);
@@ -545,7 +546,7 @@ export class Stage {
     this.tier = 1;
     this.activeHits = [];
     this.tweenMeter(1, 0.15);
-    const cols = this.grid[0]?.length ?? 8;
+    const cols = this.grid[0]?.length ?? COLS;
     const master = gsap.timeline();
     /** 各列方块落定的时刻；在此之前该列不能开始新的匹配或爆炸 */
     const settled = new Array<number>(cols).fill(0);

@@ -2,7 +2,7 @@
 
 按时间顺序列出各文档的产生与重要修订，并标注当前状态。想知道“为什么走到这里”，看 [DESIGN_JOURNAL](DESIGN_JOURNAL.md)；数值改动看 [BALANCE_LOG](BALANCE_LOG.md)；规则冲突时的权威顺序见 [HANDOFF_AUDIT](HANDOFF_AUDIT.md#文档权威顺序)。新增或大改文档时，在本页对应日期下追加一行。
 
-**状态标记**：现行 = 当前规则依据；待修订 = 内容仍按嵌片体系写，方块构筑定案后需改；记录 = 决策或过程记录；停用 = 不作为实现依据。
+**状态标记**：现行 = 当前规则依据；讨论稿 = 尚未定案；待修订 = 内容仍按嵌片体系写，方块构筑定案后需改；记录 = 决策或过程记录；停用 = 不作为实现依据。
 
 ## 2026-09-26 · 概念探索
 
@@ -46,5 +46,14 @@
 | 晚上 | [CARD_DESIGN](CARD_DESIGN.md) | 以嵌片卡取代交换的尝试 | 记录（已否决） |
 | 晚上 | [DESIGN_JOURNAL](DESIGN_JOURNAL.md) | 诊断“选择没有正反馈”；决定去掉嵌片、改做方块构筑；实现正反馈层 | 记录 |
 | 晚上 | [BALANCE_LOG](BALANCE_LOG.md) | 主动特殊匹配基数 ×2，敌人生命上调约 20% | 记录 |
+| 深夜 | [TIMELINE](TIMELINE.md) | 本页：文档时间线目录 | 现行 |
+| 深夜 | [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) · [GAME_RULES](GAME_RULES.md) | 消除流畅化（各列独立下落）；倍率改为连续倍率槽（6/10/14/18/22，封顶 ×6） | 现行 |
 
-代码：可玩灰盒、神器、第一段落流程与棋盘编辑器、第二批素材、模拟器、嵌片卡原型（`?mode=card`）、正反馈层。
+代码：可玩灰盒、神器、第一段落流程与棋盘编辑器、第二批素材、模拟器、嵌片卡原型（`?mode=card`）、正反馈层、各列独立下落、连续倍率槽。
+
+## 2026-09-29 · 方块构筑
+
+| 文档 | 内容 | 状态 |
+| --- | --- | --- |
+| [BLOCK_BUILD](BLOCK_BUILD.md) | 方块构筑讨论稿：升级只有 4 种方块 + 4 类炸弹（含新增十字炸弹），等级 × 基础值；条件神器、闪电引线；传统道具 | 讨论稿（部分已定） |
+| [BOARD_SIZE_DECISION](BOARD_SIZE_DECISION.md) · [BALANCE_LOG](BALANCE_LOG.md) · [ENEMY_DESIGN](ENEMY_DESIGN.md) | 棋盘改为 10×10；敌人生命 ×2.1、攻击 ×1.1 | 现行 |

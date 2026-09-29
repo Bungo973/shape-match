@@ -1,7 +1,10 @@
 // 本地自动保存当前一局；规则版本不符时放弃旧存档，开新局。
 import { RUN_RULES_VERSION, RULES_VERSION, type RunState } from '../engine';
 
-const KEY = 'dixia-micang/run';
+import { BOARD_N } from './boardSize';
+
+// 不同棋盘尺寸的原型各存各的档
+const KEY = BOARD_N === 8 ? 'dixia-micang/run' : `dixia-micang/run@${BOARD_N}`;
 
 export function loadRun(): RunState | null {
   try {

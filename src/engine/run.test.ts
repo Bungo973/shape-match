@@ -165,7 +165,7 @@ describe('嵌入棋盘', () => {
     const item = camp.inventory[0]!;
     item.shape = [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }, { r: 0, c: 3 }];
     expect(installInsert(camp, item.id, [{ r: 0, c: 0 }, { r: 1, c: 0 }, { r: 1, c: 1 }, { r: 0, c: 1 }]).ok).toBe(false);
-    expect(installInsert(camp, item.id, [0, 1, 2, 3].map((c) => ({ r: 0, c: c + 6 }))).ok).toBe(false);
+    expect(installInsert(camp, item.id, [0, 1, 2, 3].map((c) => ({ r: 0, c: c + DEFAULT_CONFIG.cols - 2 }))).ok).toBe(false);
     const battle = toFirstBattle();
     battle.inventory.push({ ...item });
     expect(installInsert(battle, item.id, [0, 1, 2, 3].map((c) => ({ r: 0, c }))).ok).toBe(false);

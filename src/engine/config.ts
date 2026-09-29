@@ -46,8 +46,8 @@ export interface EngineConfig {
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
-  rows: 8,
-  cols: 8,
+  rows: 10,
+  cols: 10,
   colorWeights: { attack: 30, shield: 25, poison: 25, catalyst: 20 },
   multiplierSegments: [6, 10, 14, 18, 22],
   activeSpecialMatchFactor: 2,

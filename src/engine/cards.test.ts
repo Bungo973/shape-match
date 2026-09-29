@@ -87,7 +87,7 @@ describe('嵌片卡：打出', () => {
     const s = cardBattle(starterDeck('blade'));
     expect(playerAction(s, { type: 'swap', from: { r: 0, c: 0 }, to: { r: 0, c: 1 } })).toMatchObject({ ok: false, reason: 'cardMode' });
     const broke = { ...s, ap: 0 };
-    expect(playerAction(broke, { type: 'playCard', index: 0, cells: row(0, 0, 4) })).toMatchObject({ ok: false, reason: 'noAp' });
+    expect(playerAction(broke, { type: 'playCard', index: handIndex(broke, 'basic-I'), cells: row(0, 0, 4) })).toMatchObject({ ok: false, reason: 'noAp' });
   });
 
   it('同种子、同样的出牌得到完全相同的状态', () => {

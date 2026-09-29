@@ -87,7 +87,7 @@ export function RewardScreen({ run, onPick, onReroll }: { run: RunState; onPick:
   const reward = run.reward!;
   const [keep, setKeep] = useState<number | null>(null);
   const goggles = run.artifacts.includes('scavengerGoggles');
-  const fits = (shape: keyof typeof SHAPES) => shapeFits(shape, { installed: run.installed, size: { rows: 8, cols: 8 }, maxInstalled: DEFAULT_CONFIG.maxInstalledInserts });
+  const fits = (shape: keyof typeof SHAPES) => shapeFits(shape, { installed: run.installed, size: { rows: DEFAULT_CONFIG.rows, cols: DEFAULT_CONFIG.cols }, maxInstalled: DEFAULT_CONFIG.maxInstalledInserts });
   return (
     <div className="screen">
       <h2>胜利！获得 {reward.goldGained} 金币</h2>
