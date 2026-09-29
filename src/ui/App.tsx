@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   campRest,
   campUpgrade,
+  debugLevelUp,
   chooseArtifact,
   chooseInsert,
   DEFAULT_CONFIG,
@@ -14,6 +15,9 @@ import {
   runAction,
   runEndTurn,
   startNextBattle,
+  UPGRADE_KEYS,
+  UPGRADE_NAMES,
+  type UpgradeKey,
   type Action,
   type ActionLog,
   type BattleState,
@@ -40,6 +44,8 @@ function initialRun(): RunState {
   if (seed) return newRun(seed);
   return loadRun() ?? newRun(newSeed());
 }
+
+const LEVEL_LABEL: Record<UpgradeKey, string> = { attack: '攻', shield: '盾', poison: '毒', catalyst: '催', line: '直线', area: '3×3', color: '五连' };
 
 export function App() {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -203,6 +209,9 @@ export function App() {
     setRun(newRun(newSeed()));
   };
 
+  // 原型：直接调整升级等级（左键 +1，右键 −1），正式接入奖励与营地前用来试手感
+  const debugLevel = (key: UpgradeKey, delta: number) => setRun(debugLevelUp(runRef.current, key, delta));
+
   const debugWeaken = () => {
     const r: RunState = JSON.parse(JSON.stringify(runRef.current));
     if (!r.battle) return;
@@ -274,6 +283,24 @@ export function App() {
               <button onClick={debugWeaken}>残血</button>
             </>
           )}
+        </div>
+
+        <div className="levels-debug" title="原型：左键 +1 级，右键 −1 级">
+          <div className="levels-title">升级（原型）</div>
+          {UPGRADE_KEYS.map((k) => (
+            <button
+              key={k}
+              className={run.levels[k] > 1 ? 'on' : ''}
+              title={`${UPGRADE_NAMES[k]} ${run.levels[k]} 级`}
+              onClick={() => debugLevel(k, 1)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                debugLevel(k, -1);
+              }}
+            >
+              {LEVEL_LABEL[k]} {run.levels[k]}
+            </button>
+          ))}
         </div>
 
         {toast && <div className="toast">{toast}</div>}

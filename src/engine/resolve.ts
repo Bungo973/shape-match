@@ -20,6 +20,7 @@ import { INSERT_DEFS, type InsertType, type InstalledInsert } from './inserts';
 import { findGroups, passiveBombCell } from './match';
 import type { Rng } from './rng';
 import type { EffectValues } from './score';
+import { blockValue, bombMakeBonus, type UpgradeLevels } from './upgrades';
 import {
   COLORS,
   emptyClears,
@@ -45,6 +46,8 @@ export interface ResolveContext {
   inserts?: readonly InstalledInsert[];
   /** 持有的神器；这里只处理作用于爆炸过程的几件 */
   artifacts?: readonly ArtifactKey[];
+  /** 方块与炸弹的升级等级；缺省全为 1 级 */
+  levels?: UpgradeLevels;
 }
 
 export type ExplosionShape = BombKind | 'cross' | 'rows3' | 'cols3' | 'square5' | 'board' | 'card';
@@ -91,7 +94,7 @@ export type ResolutionEvent =
   | {
       type: 'matches';
       phase: Phase;
-      /** bonus：主动产弹匹配额外计入的基数（奖励亲手做出的特殊匹配） */
+      /** bonus：亲手做出炸弹时追加给该组颜色的基数（炸弹等级 × 基础值） */
       groups: { color: Color; cells: Pos[]; product: BombKind | null; bombCell: Pos | null; bonus: number }[];
       cleared: ClearedEntry[];
       created: { id: number; bomb: BombKind; at: Pos }[];
@@ -213,7 +216,8 @@ class Resolver {
       return;
     }
     if (tile.kind !== 'normal') return;
-    this.activeClears[tile.color]++;
+    // 方块等级：主动清除一块计入“等级”份基数
+    this.activeClears[tile.color] += blockValue(this.ctx.levels, tile.color);
     // 主动阶段的覆盖格清除：基数嵌片认同色，催化盐认催化剂
     const ins = this.insertAt.get(posKey(pos));
     if (!ins) return;
@@ -267,19 +271,15 @@ class Resolver {
       return { g, product, bombCell };
     });
     for (const { g, product, bombCell } of plans) {
-      let clearedHere = 0;
       for (const p of g.cells) {
         if (bombCell && samePos(p, bombCell)) continue;
         const entry = this.clearAt(phase, p);
-        if (entry) {
-          cleared.push(entry);
-          if (entry.tile.kind === 'normal') clearedHere++;
-        }
+        if (entry) cleared.push(entry);
       }
-      // 亲手做出的特殊匹配：该组清除的方块按倍数计入基数（产弹格本身不计）
+      // 亲手做出炸弹：按炸弹等级给该组颜色追加基数；被动产弹没有这笔加成
       let bonus = 0;
       if (phase === 'active' && product) {
-        bonus = clearedHere * (this.ctx.config.activeSpecialMatchFactor - 1);
+        bonus = bombMakeBonus(this.ctx.levels, product, this.ctx.config);
         this.activeClears[g.color] += bonus;
       }
       if (bombCell && product) {

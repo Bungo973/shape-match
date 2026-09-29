@@ -803,7 +803,7 @@ export class Stage {
     for (const g of ev.groups) {
       if (g.bonus > 0 && g.bombCell) {
         const { x, y } = center(g.bombCell);
-        tl.call(() => this.floatText(x, y - 30, '基数 ×2', 0xffe08a, 22), [], 0.18);
+        tl.call(() => this.floatText(x, y - 30, `基数 +${g.bonus}`, 0xffe08a, 22), [], 0.18);
       }
     }
     for (const c of ev.cleared) {

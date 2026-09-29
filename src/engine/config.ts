@@ -11,8 +11,8 @@ export interface EngineConfig {
    * 数组依次为各段所需的被动清除数，段数即封顶（5 段封顶 ×6）。见 GAME_RULES §2 第 4 步。
    */
   multiplierSegments: number[];
-  /** 主动阶段亲手做出的产弹匹配（四连、五连、T/L），该组清除的方块按此倍数计入基数 */
-  activeSpecialMatchFactor: number;
+  /** 亲手做出炸弹时给该匹配组颜色追加的基数（1 级），每升一级再加一份；见 docs/BLOCK_BUILD.md */
+  bombMakeBonus: { line: number; area: number; color: number };
   /** 每满多少个主动催化剂获得 1 层充能 */
   catalystPerCharge: number;
   /** 每层旧充能给攻击、护盾、毒气基础值各加多少 */
@@ -54,7 +54,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   cols: 10,
   colorWeights: { attack: 30, shield: 25, poison: 25, catalyst: 20 },
   multiplierSegments: [6, 10, 14, 18, 22],
-  activeSpecialMatchFactor: 2,
+  bombMakeBonus: { line: 3, area: 4, color: 6 },
   catalystPerCharge: 3,
   chargeBonus: 1,
   chargeCap: 5,

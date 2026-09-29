@@ -6,6 +6,7 @@ import {
   chooseArtifact,
   chooseInsert,
   DEFAULT_CONFIG,
+  type UpgradeLevels,
   expansionCells,
   installInsert,
   mixSeed,
@@ -58,6 +59,8 @@ export interface SimOptions {
   route?: RouteNode[];
   /** 单场战斗的回合上限，超出记为卡住 */
   maxTurns?: number;
+  /** 开局即拥有的升级等级，用于衡量升级强度 */
+  levels?: Partial<UpgradeLevels>;
 }
 
 const ok = (r: RunResult): RunState => {
@@ -107,6 +110,7 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
   const config = opts.config ?? DEFAULT_CONFIG;
   const maxTurns = opts.maxTurns ?? 40;
   let run = newRun(seed, config, opts.route ?? SEGMENT_1);
+  if (opts.levels) run.levels = { ...run.levels, ...opts.levels };
   const starter = run.starterChoices[0] ?? null;
   run = ok(pickStarter(run, starter!));
   const battles: BattleReport[] = [];

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getTile, posKey } from './board';
 import { resolveAction, type ResolutionEvent } from './resolve';
+import { defaultLevels, type UpgradeLevels } from './upgrades';
 import { boardWith, randomCtx, testCtx } from './test-utils';
 import { COLORS, type Board, type Pos } from './types';
 
@@ -56,12 +57,12 @@ describe('主动匹配与产弹', () => {
       ['V', { r: 3, c: 2 }],
       ['V', { r: 3, c: 3 }],
     ]);
-    // 亲手做出的四连：每组清除 3 格，按 2 倍计入基数
+    // 亲手做出直线炸弹：每组清除 3 格，另加直线炸弹 1 级的 +3
     expect(res.activeClearsByType).toMatchObject({ attack: 6, shield: 6 });
     expect(m!.groups.map((g) => g.bonus)).toEqual([3, 3]);
   });
 
-  it('例 2：T 形含五连，只在交换落点产一枚 CB，其余 6 格主动清除并按 2 倍计入基数', () => {
+  it('例 2：T 形含五连，只在交换落点产一枚 CB，其余 6 格主动清除，另加五连炸弹的 +6', () => {
     const board = boardWith({
       '4,0': 'a', '4,1': 'a', '4,3': 'a', '4,4': 'a', '2,2': 'a', '3,2': 'a', '5,2': 'a', '4,2': 's',
     });
@@ -71,10 +72,46 @@ describe('主动匹配与产弹', () => {
     expect(res.activeClearsByType.attack).toBe(12);
   });
 
-  it('普通三连不享受特殊匹配加成', () => {
+  it('普通三连没有炸弹加成', () => {
     const board = boardWith({ '0,0': 'a', '0,1': 'a', '0,2': 's', '1,2': 'a' });
     const res = resolveAction(board, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } }, testCtx());
     expect(res.activeClearsByType.attack).toBe(3);
+  });
+});
+
+describe('升级表：等级 × 基础值', () => {
+  const withLevels = (levels: Partial<UpgradeLevels>) => ({ ...testCtx(), levels: { ...defaultLevels(), ...levels } });
+
+  it('方块等级：攻击 3 级时主动三连计 9，其他颜色不受影响', () => {
+    const board = boardWith({ '0,0': 'a', '0,1': 'a', '0,2': 's', '1,2': 'a' });
+    const res = resolveAction(board, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } }, withLevels({ attack: 3 }));
+    expect(res.activeClearsByType.attack).toBe(9);
+  });
+
+  it('炸弹等级：直线炸弹 2 级，亲手做出四连时该组 +6；方块等级同时生效', () => {
+    const board = boardWith({
+      '1,2': 's', '2,2': 's', '3,2': 'a', '4,2': 's',
+      '1,3': 'a', '2,3': 'a', '3,3': 's', '4,3': 'a',
+    });
+    const res = resolveAction(board, { type: 'swap', from: { r: 3, c: 2 }, to: { r: 3, c: 3 } }, withLevels({ line: 2, shield: 2 }));
+    // 攻击组：3 格 + 6；护盾组：3 格 × 2 级 + 6
+    expect(res.activeClearsByType).toMatchObject({ attack: 9, shield: 12 });
+  });
+
+  it('主动爆炸清除的方块按方块等级计入基数', () => {
+    const board = boardWith({ '0,0': 'H', '0,1': 'a', '0,2': 'a', '0,3': 's' });
+    const res = resolveAction(board, { type: 'ignite', at: { r: 0, c: 0 } }, withLevels({ attack: 2 }));
+    const clearedAttack = res.events
+      .flatMap((e) => (e.type === 'wave' && e.phase === 'active' ? e.cleared : []))
+      .filter((c) => c.tile.kind === 'normal' && c.tile.color === 'attack').length;
+    expect(res.activeClearsByType.attack).toBe(clearedAttack * 2);
+  });
+
+  it('被动阶段不受等级影响，只计入 P', () => {
+    const board = boardWith({ '2,0': 'a', '3,0': 'a', '4,0': 'H', '5,0': 'a' });
+    const base = resolveAction(board, { type: 'ignite', at: { r: 4, c: 0 } }, testCtx());
+    const leveled = resolveAction(board, { type: 'ignite', at: { r: 4, c: 0 } }, withLevels({ attack: 5, line: 5 }));
+    expect(leveled.passiveClearCount).toBe(base.passiveClearCount);
   });
 });
 

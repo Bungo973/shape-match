@@ -1,6 +1,7 @@
 // 一场战斗的状态与回合流程，规则见 docs/GAME_RULES.md §1、§3、§4 与 docs/ENEMY_DESIGN.md。
 // 所有函数都是纯函数：输入旧状态，返回新状态与日志；状态可直接序列化存档。
 import { ARTIFACT_PARAMS, type ArtifactKey } from './artifacts';
+import { defaultLevels, type UpgradeLevels } from './upgrades';
 import { createBoard, createIdGen, weightedSpawner } from './board';
 import { CARD_DEFS, cardBonus, drawCards, shuffle, type CardInstance, type CardPiles } from './cards';
 import { isRotationOf } from './inserts';
@@ -11,7 +12,7 @@ import { createRng } from './rng';
 import { settle, type Settlement } from './score';
 import type { Action, Board, Gravity, Pos } from './types';
 
-export const RULES_VERSION = 1;
+export const RULES_VERSION = 2;
 
 /** 状态必须可序列化存档；用 JSON 往返复制，也顺带保证了这一点 */
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
@@ -76,6 +77,8 @@ export interface BattleState {
   inserts: InstalledInsert[];
   /** 持有的神器，整局持续生效 */
   artifacts: ArtifactKey[];
+  /** 方块与炸弹的升级等级，战斗中不变 */
+  levels: UpgradeLevels;
   player: PlayerState;
   enemy: EnemyState;
   turn: number;
@@ -99,6 +102,7 @@ export interface StartBattleInput {
   enemy: EnemyDef;
   inserts?: InstalledInsert[];
   artifacts?: ArtifactKey[];
+  levels?: UpgradeLevels;
   /** 嵌片卡模式的牌组；提供时进入卡牌模式，不能再交换或点燃 */
   deck?: CardInstance[];
   /** 事件等给敌人的初始护盾 */
@@ -147,6 +151,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     board,
     inserts: clone(input.inserts ?? []),
     artifacts: [...(input.artifacts ?? [])],
+    levels: { ...defaultLevels(), ...input.levels },
     player: clone(input.player),
     enemy: {
       def: input.enemy,
@@ -221,6 +226,7 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     gravity: state.gravity,
     inserts,
     artifacts: state.artifacts,
+    levels: state.levels,
   });
   if (!result.valid) return { ok: false, state: prev, reason: result.reason! };
 

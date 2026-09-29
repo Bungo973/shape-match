@@ -1,6 +1,7 @@
 // 一局的状态与流程：开局神器 → 战斗 → 金币与嵌片三选一 →（精英）神器三选一 → 营地 → 路线页 → 下一战。
 // 规则见 docs/MAP.md 与 docs/GAME_RULES.md §7。当前实现第一段落（三战）；事件、商店与后两段落在阶段 3 加入。
 import { ARTIFACTS, type ArtifactKey } from './artifacts';
+import { defaultLevels, type UpgradeKey, type UpgradeLevels } from './upgrades';
 import { endTurn, playerAction, startBattle, type ActionLog, type BattleState, type EnemyTurnLog, type PlayerState } from './battle';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import { SEGMENT_1, type RouteNode } from './content/enemies';
@@ -9,7 +10,7 @@ import { generateInsertChoices, mixSeed, type InsertCandidate } from './rewards'
 import { createRng } from './rng';
 import type { Action, Pos } from './types';
 
-export const RUN_RULES_VERSION = 1;
+export const RUN_RULES_VERSION = 2;
 
 export type RunPhase = 'starter' | 'map' | 'battle' | 'reward' | 'artifact' | 'camp' | 'over';
 
@@ -30,6 +31,8 @@ export interface RunState {
   player: PlayerState;
   gold: number;
   artifacts: ArtifactKey[];
+  /** 方块与炸弹的升级等级，整局持续 */
+  levels: UpgradeLevels;
   installed: InstalledInsert[];
   inventory: InventoryInsert[];
   nextInsertId: number;
@@ -71,6 +74,7 @@ export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, rout
     player: { hp: config.playerMaxHp, maxHp: config.playerMaxHp, shield: 0, catalystCharges: 0 },
     gold: 0,
     artifacts: [],
+    levels: defaultLevels(),
     installed: [],
     inventory: [],
     nextInsertId: 1,
@@ -105,6 +109,7 @@ export function startNextBattle(prev: RunState, config: EngineConfig = DEFAULT_C
       enemy: node.enemy,
       inserts: run.installed,
       artifacts: run.artifacts,
+      levels: run.levels,
     },
     config,
   );
@@ -291,3 +296,12 @@ export function installInsert(prev: RunState, inventoryId: string, cells: Pos[],
   run.installed.push({ id: item.id, type: item.type, cells: cells.map((p) => ({ ...p })) });
   return { ok: true, run };
 }
+
+/** 调试／原型：直接把一项升级 +1 级（战斗中同步到当前战斗）。正式的奖励与营地接入见 docs/BLOCK_BUILD.md */
+export function debugLevelUp(prev: RunState, key: UpgradeKey, delta = 1): RunState {
+  const run = clone(prev);
+  run.levels[key] = Math.max(1, run.levels[key] + delta);
+  if (run.battle) run.battle.levels = { ...run.levels };
+  return run;
+}
+

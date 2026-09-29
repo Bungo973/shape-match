@@ -5,6 +5,7 @@ export * from './board';
 export * from './match';
 export * from './resolve';
 export * from './score';
+export * from './upgrades';
 export * from './inserts';
 export * from './battle';
 export * from './artifacts';

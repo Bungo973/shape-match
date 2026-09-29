@@ -123,7 +123,7 @@ export function SettlePanel({ b, lastLog, hint, className = '' }: { b: BattleSta
             <b className="c-sh">盾 {st.baseValues.shield}</b>
             <b className="c-po">毒 {st.baseValues.poison}</b>
             <span className="dim">
-              （清除 攻{A.attack} 盾{A.shield} 毒{A.poison} 催{A.catalyst}
+              （方块 攻{A.attack} 盾{A.shield} 毒{A.poison} 催{A.catalyst}
               {st.chargesUsed > 0 ? `，充能各 +${st.chargesUsed * DEFAULT_CONFIG.chargeBonus}` : ''}
               {lastLog.result.socketBonuses.attack + lastLog.result.socketBonuses.shield + lastLog.result.socketBonuses.poison > 0 ? '，含加成' : ''}）
             </span>
