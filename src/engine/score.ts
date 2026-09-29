@@ -16,9 +16,9 @@ export interface SettlementInput {
   chargesBefore: number;
   /** 主动消除触发的嵌片基础值 E */
   socketBonuses?: EffectValues;
-  /** 神器的倍率档位修正（连锁透镜、共振底座），结果先限制在封顶以内 */
+  /** 神器的倍率修正（连锁透镜、共振底座），每档 = 倍率 +1，结果先限制在封顶以内 */
   multiplierStepDelta?: number;
-  /** 敌方倍率侵蚀：在神器修正之后再降的档数，最低 ×1 */
+  /** 敌方倍率侵蚀：在神器修正之后再降的档数（每档 = 倍率 −1），最低 ×1 */
   erosionSteps?: number;
   /** 过载引线的代价：本步护盾效果为 0，结算分不变 */
   zeroShieldEffect?: boolean;
@@ -35,10 +35,35 @@ export interface Settlement {
   chargesAfter: number;
 }
 
+/** 倍率槽的上限 */
+export function multiplierCap(config: EngineConfig): number {
+  return 1 + config.multiplierSegments.length;
+}
+
+/**
+ * 只由被动清除数 P 决定的倍率，以 0.1 为单位（整数“十分位”），避免浮点误差。
+ * 段内线性：处在第 i 段、已填 x / cost 格时为 1 + i + x / cost，向下取到 0.1。
+ */
+function chainTenths(P: number, config: EngineConfig): number {
+  let tenths = 0;
+  let rest = Math.max(0, P);
+  for (const cost of config.multiplierSegments) {
+    if (rest < cost) return tenths + Math.floor((rest * 10) / cost);
+    tenths += 10;
+    rest -= cost;
+  }
+  return tenths;
+}
+
+/** 连锁倍率（不含神器与侵蚀），供倍率槽实时显示 */
+export function chainMultiplier(P: number, config: EngineConfig): number {
+  return 1 + chainTenths(P, config) / 10;
+}
+
 export function multiplierFor(passiveClearCount: number, config: EngineConfig, stepDelta = 0, erosionSteps = 0): number {
-  const base = Math.min(Math.floor(passiveClearCount / config.passivePerStep), config.maxMultiplierSteps);
-  const boosted = Math.max(0, Math.min(config.maxMultiplierSteps, base + stepDelta));
-  return 2 ** Math.max(0, boosted - erosionSteps);
+  const cap = (multiplierCap(config) - 1) * 10;
+  const boosted = Math.max(0, Math.min(cap, chainTenths(passiveClearCount, config) + 10 * stepDelta));
+  return 1 + Math.max(0, boosted - 10 * erosionSteps) / 10;
 }
 
 export function settle(input: SettlementInput, config: EngineConfig): Settlement {
@@ -53,7 +78,8 @@ export function settle(input: SettlementInput, config: EngineConfig): Settlement
     shield: A.shield + bonus + E.shield,
     poison: A.poison + bonus + E.poison,
   };
-  const settlementScore = (baseValues.attack + baseValues.shield + baseValues.poison + A.catalyst) * M;
+  // 倍率带小数，效果与结算分四舍五入到整数
+  const settlementScore = Math.round((baseValues.attack + baseValues.shield + baseValues.poison + A.catalyst) * M);
   const chargesGained = Math.floor(A.catalyst / config.catalystPerCharge);
   const kept = input.chargesBefore - C;
   return {
@@ -61,7 +87,11 @@ export function settle(input: SettlementInput, config: EngineConfig): Settlement
     chargesUsed: C,
     baseValues,
     settlementScore,
-    finalEffects: { attack: baseValues.attack * M, shield: input.zeroShieldEffect ? 0 : baseValues.shield * M, poison: baseValues.poison * M },
+    finalEffects: {
+      attack: Math.round(baseValues.attack * M),
+      shield: input.zeroShieldEffect ? 0 : Math.round(baseValues.shield * M),
+      poison: Math.round(baseValues.poison * M),
+    },
     chargesGained,
     chargesAfter: Math.min(config.chargeCap, kept + chargesGained),
   };

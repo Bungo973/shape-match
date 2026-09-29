@@ -4,6 +4,8 @@ import gsap from 'gsap';
 import { Application, Assets, Container, Graphics, GraphicsContext, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import {
   DEFAULT_CONFIG,
+  chainMultiplier,
+  multiplierCap,
   posKey,
   type ActionLog,
   type Board,
@@ -31,6 +33,10 @@ const RIPPLE_STEP = 0.035;
 const CLEAR_FADE = 0.12;
 /** 炸弹被波及到自身爆炸的引信延迟 */
 const FUSE_DELAY = 0.05;
+/** 倍率槽：嵌在棋盘框右侧的木边上，自下而上填充，每段 = 倍率 +1 */
+const METER = { x: FRAME.x + FRAME.size - 32, y: BOARD.y + 24, w: 24, h: BOARD.size - 48 };
+/** 倍率槽各段的颜色，越往上越热 */
+const METER_HEX = [0xffc05a, 0xff9a3c, 0xff6b3d, 0xff4a8a, 0xd65cff];
 /** 棋盘格角标符号的像素尺寸 */
 const SYMBOL_SIZE = 20;
 
@@ -90,7 +96,12 @@ export class Stage {
   /** 本次结算中的连锁层数、被动清除累计与倍率档位，用于实时反馈 */
   private chain = 0;
   private passiveSoFar = 0;
-  private tier = 0;
+  /** 本次行动已达到的整数倍率，用于升档爆点 */
+  private tier = 1;
+  private readonly meter = new Graphics();
+  private meterText!: Text;
+  /** 倍率槽当前显示的值（补间中） */
+  private readonly meterValue = { v: 1 };
   /** 本次行动主动清除的方块位置与颜色：结算后化作光点飞向目标 */
   private activeHits: { x: number; y: number; color: Color }[] = [];
   private chainText!: Text;
@@ -248,6 +259,7 @@ export class Stage {
     this.chainText.position.set(BOARD.x + BOARD.size / 2, BOARD.y + 36);
     this.chainText.alpha = 0;
     this.uiLayer.addChild(this.chainText);
+    this.buildMeter();
     this.cursor.visible = false;
 
     // 输入
@@ -530,8 +542,9 @@ export class Stage {
   async play(events: ResolutionEvent[]): Promise<void> {
     this.chain = 0;
     this.passiveSoFar = 0;
-    this.tier = 0;
+    this.tier = 1;
     this.activeHits = [];
+    this.tweenMeter(1, 0.15);
     const cols = this.grid[0]?.length ?? 8;
     const master = gsap.timeline();
     /** 各列方块落定的时刻；在此之前该列不能开始新的匹配或爆炸 */
@@ -629,17 +642,63 @@ export class Stage {
     gsap.fromTo(t.scale, { x: 1.7, y: 1.7 }, { x: 1, y: 1, duration: 0.25, ease: 'back.out(3)' });
   }
 
-  /** 被动清除累计到新的倍率档位时的爆点 */
+  /** 被动清除推高倍率槽；跨过整数倍率时爆点，填满时更大的爆点 */
   private addPassive(n: number): void {
     if (n <= 0) return;
     this.passiveSoFar += n;
-    const tier = Math.min(Math.floor(this.passiveSoFar / DEFAULT_CONFIG.passivePerStep), DEFAULT_CONFIG.maxMultiplierSteps);
+    const m = chainMultiplier(this.passiveSoFar, DEFAULT_CONFIG);
+    this.tweenMeter(m, 0.22);
+    const tier = Math.floor(m);
     if (tier <= this.tier) return;
     this.tier = tier;
-    sfx.multiplierUp(tier);
-    this.banner(`倍率 ×${2 ** tier}！`, 0xffb347, 76, BOARD.y + BOARD.size / 2);
-    this.flashBoard(0xffd27a, 0.35);
-    this.shake(6 + tier * 4);
+    const full = m >= multiplierCap(DEFAULT_CONFIG);
+    sfx.multiplierUp(tier - 1);
+    this.banner(full ? `满槽 ×${tier}！` : `倍率 ×${tier}！`, METER_HEX[Math.min(METER_HEX.length - 1, tier - 2)]!, full ? 92 : 76, BOARD.y + BOARD.size / 2);
+    this.flashBoard(0xffd27a, full ? 0.6 : 0.35);
+    this.shake(4 + tier * 3);
+  }
+
+  // ---------- 倍率槽 ----------
+
+  private buildMeter(): void {
+    this.uiLayer.addChild(this.meter);
+    const cap = multiplierCap(DEFAULT_CONFIG);
+    const segH = METER.h / (cap - 1);
+    // 刻度数字：写在每段顶端下方，段高相同，所需清除数越往上越多
+    for (let k = 2; k <= cap; k++) {
+      const t = new Text({ text: `${k}`, style: { fontFamily: 'system-ui, sans-serif', fontSize: 13, fontWeight: '800', fill: 0xfff3dc, stroke: { color: 0x1a0c02, width: 3 } } });
+      t.anchor.set(0.5, 0);
+      t.position.set(METER.x + METER.w / 2, METER.y + METER.h - (k - 1) * segH + 3);
+      t.alpha = 0.85;
+      this.uiLayer.addChild(t);
+    }
+    this.meterText = new Text({ text: '×1.0', style: { fontFamily: 'system-ui, sans-serif', fontSize: 22, fontWeight: '900', fill: 0xffe08a, stroke: { color: 0x1a0c02, width: 5 } } });
+    this.meterText.anchor.set(0.5, 1);
+    this.meterText.position.set(METER.x + METER.w / 2, METER.y - 4);
+    this.uiLayer.addChild(this.meterText);
+    this.drawMeter();
+  }
+
+  private drawMeter(): void {
+    const v = this.meterValue.v;
+    const cap = multiplierCap(DEFAULT_CONFIG);
+    const segH = METER.h / (cap - 1);
+    const bottom = METER.y + METER.h;
+    const g = this.meter.clear();
+    g.roundRect(METER.x - 3, METER.y - 3, METER.w + 6, METER.h + 6, 8).fill({ color: 0x140a04, alpha: 0.9 }).stroke({ width: 2, color: 0x000000, alpha: 0.6 });
+    for (let i = 0; i < cap - 1; i++) {
+      const fill = Math.max(0, Math.min(1, v - 1 - i));
+      if (fill <= 0) break;
+      g.rect(METER.x, bottom - (i + fill) * segH, METER.w, fill * segH).fill({ color: METER_HEX[i]!, alpha: 0.95 });
+    }
+    for (let i = 1; i < cap - 1; i++) g.rect(METER.x, bottom - i * segH - 1, METER.w, 2).fill({ color: 0xfff3dc, alpha: 0.55 });
+    this.meterText.text = `×${(Math.floor(v * 10 + 1e-6) / 10).toFixed(1)}`;
+    this.meterText.style.fill = v >= 2 ? METER_HEX[Math.min(METER_HEX.length - 1, Math.floor(v) - 2)]! : 0xffe08a;
+  }
+
+  private tweenMeter(target: number, duration: number): void {
+    gsap.killTweensOf(this.meterValue);
+    gsap.to(this.meterValue, { v: target, duration, ease: 'power2.out', onUpdate: () => this.drawMeter() });
   }
 
   private recordActive(entries: { pos: Pos; tile: Tile }[]): void {
@@ -984,6 +1043,8 @@ export class Stage {
 
   async playPlayerEffects(log: ActionLog): Promise<void> {
     if (!log.settlement) return;
+    // 倍率槽落到最终倍率（含神器修正与侵蚀），与结算面板一致
+    this.tweenMeter(log.settlement.multiplier, 0.2);
     const tl = gsap.timeline();
     const fx = log.settlement.finalEffects;
     const enemyAt = { x: this.enemyX, y: this.enemy.y - this.enemy.height * 0.5 };

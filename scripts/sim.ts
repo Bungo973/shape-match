@@ -1,6 +1,6 @@
 // 数值模拟：让自动玩家批量打第一段落，统计每场战斗的表现。
 // 用法：npm run sim -- [--runs 200] [--style skilled|novice|both] [--set 参数=值 ...] [--hp 倍数] [--atk 倍数]
-// 例：npm run sim -- --set passivePerStep=5 --hp 1.5
+// 例：npm run sim -- --set activeSpecialMatchFactor=1 --hp 1.5
 import { DEFAULT_CONFIG, SEGMENT_1, type EngineConfig, type RouteNode } from '../src/engine';
 import type { BotStyle } from '../src/sim/bot';
 import { simulateRun, type BattleReport } from '../src/sim/simulate';
@@ -15,7 +15,7 @@ const styleArg = opt('style', 'both');
 const hpScale = Number(opt('hp', '1'));
 const atkScale = Number(opt('atk', '1'));
 
-// --set 可重复：--set passivePerStep=5 --set playerShieldCap=20
+// --set 可重复：--set chargeCap=3 --set playerShieldCap=20（数组参数如 multiplierSegments 不支持）
 const config: EngineConfig = { ...DEFAULT_CONFIG };
 args.forEach((a, i) => {
   if (a !== '--set') return;
@@ -49,7 +49,7 @@ function report(style: BotStyle) {
   const won = all.filter((r) => r.outcome === 'won').length;
   const stalled = all.filter((r) => r.outcome === 'stalled').length;
   console.log(`\n=== ${style === 'skilled' ? '熟练' : '新手'}玩家 · ${runs} 局 · 段落通关 ${pc(won / runs)}${stalled ? ` · 卡住 ${stalled}` : ''} ===`);
-  const header = ['战斗', '到达', '胜率', '回合', '受伤(含盾)', '掉血', '无伤率', '单步伤害 中位/p90', '×8 占比', '眩晕/场', '护盾/步', '开战护盾'];
+  const header = ['战斗', '到达', '胜率', '回合', '受伤(含盾)', '掉血', '无伤率', '单步伤害 中位/p90', '平均倍率', '≥×3', '≥×4', '眩晕/场', '护盾/步', '开战护盾'];
   console.log(header.join(' | '));
   for (let i = 0; i < route.length; i++) {
     const bs = all.map((r) => r.battles[i]).filter((b): b is BattleReport => !!b);
@@ -66,7 +66,9 @@ function report(style: BotStyle) {
         f1(avg(bs.map((b) => b.hpLost))),
         pc(bs.filter((b) => b.hpLost === 0).length / bs.length),
         `${pct(dmg, 0.5)} / ${pct(dmg, 0.9)}`,
-        pc(mults.filter((m) => m === 8).length / Math.max(1, mults.length)),
+        f1(avg(mults)),
+        pc(mults.filter((m) => m >= 3).length / Math.max(1, mults.length)),
+        pc(mults.filter((m) => m >= 4).length / Math.max(1, mults.length)),
         f1(avg(bs.map((b) => b.stuns))),
         f1(avg(bs.flatMap((b) => b.shieldGains))),
         f1(avg(bs.map((b) => b.shieldBefore))),

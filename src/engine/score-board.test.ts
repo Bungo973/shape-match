@@ -9,34 +9,36 @@ import type { Board, Tile } from './types';
 const zero = { attack: 0, shield: 0, poison: 0, catalyst: 0 };
 
 describe('基数 × 倍率结算（GAME_RULES 例子）', () => {
-  it('主例：3 攻击 3 催化剂、P=6、旧充能 1、攻击嵌片 2 → 结算分 44，效果 24/4/4', () => {
+  it('主例：3 攻击 3 催化剂、P=16、旧充能 1、攻击嵌片 2 → ×3，结算分 33，效果 18/3/3', () => {
     const s = settle(
       {
         activeClearsByType: { ...zero, attack: 3, catalyst: 3 },
-        passiveClearCount: 6,
+        passiveClearCount: 16,
         hadActiveColorClear: true,
         chargesBefore: 1,
         socketBonuses: { attack: 2, shield: 0, poison: 0 },
       },
       DEFAULT_CONFIG,
     );
-    expect(s.multiplier).toBe(4);
+    expect(s.multiplier).toBe(3);
     expect(s.baseValues).toEqual({ attack: 6, shield: 1, poison: 1 });
-    expect(s.settlementScore).toBe(44);
-    expect(s.finalEffects).toEqual({ attack: 24, shield: 4, poison: 4 });
+    expect(s.settlementScore).toBe(33);
+    expect(s.finalEffects).toEqual({ attack: 18, shield: 3, poison: 3 });
     expect(s.chargesAfter).toBe(1);
   });
 
-  it('混合种类例：3 攻击 2 护盾、P=5 → ×2，6 伤害 4 护盾', () => {
+  it('混合种类例：3 攻击 2 护盾、P=5 → ×1.8，四舍五入为 5 伤害 4 护盾', () => {
     const s = settle(
       { activeClearsByType: { ...zero, attack: 3, shield: 2 }, passiveClearCount: 5, hadActiveColorClear: true, chargesBefore: 0 },
       DEFAULT_CONFIG,
     );
-    expect(s.finalEffects).toEqual({ attack: 6, shield: 4, poison: 0 });
+    expect(s.multiplier).toBe(1.8);
+    expect(s.finalEffects).toEqual({ attack: 5, shield: 4, poison: 0 });
   });
 
-  it('倍率封顶 ×4', () => {
-    expect([0, 2, 3, 6, 9, 100].map((p) => multiplierFor(p, DEFAULT_CONFIG))).toEqual([1, 1, 2, 4, 4, 4]);
+  it('连续倍率槽：每段 6/10/14/18/22 格，段内线性、取到 0.1，封顶 ×6', () => {
+    const P = [0, 3, 5, 6, 11, 16, 23, 30, 48, 69, 70, 200];
+    expect(P.map((p) => multiplierFor(p, DEFAULT_CONFIG))).toEqual([1, 1.5, 1.8, 2, 2.5, 3, 3.5, 4, 5, 5.9, 6, 6]);
   });
 
   it('没有主动清除有色方块时保留旧充能；新充能不超过上限', () => {

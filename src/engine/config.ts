@@ -6,9 +6,11 @@ export interface EngineConfig {
   cols: number;
   /** 基础方块生成权重 */
   colorWeights: Record<Color, number>;
-  /** 倍率 = 2 ^ min(floor(P / passivePerStep), maxMultiplierSteps) */
-  passivePerStep: number;
-  maxMultiplierSteps: number;
+  /**
+   * 连续倍率槽：从 ×1 起，每段填满倍率 +1，段内按被动清除数线性上涨；
+   * 数组依次为各段所需的被动清除数，段数即封顶（5 段封顶 ×6）。见 GAME_RULES §2 第 4 步。
+   */
+  multiplierSegments: number[];
   /** 主动阶段亲手做出的产弹匹配（四连、五连、T/L），该组清除的方块按此倍数计入基数 */
   activeSpecialMatchFactor: number;
   /** 每满多少个主动催化剂获得 1 层充能 */
@@ -47,8 +49,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   rows: 8,
   cols: 8,
   colorWeights: { attack: 30, shield: 25, poison: 25, catalyst: 20 },
-  passivePerStep: 3,
-  maxMultiplierSteps: 2,
+  multiplierSegments: [6, 10, 14, 18, 22],
   activeSpecialMatchFactor: 2,
   catalystPerCharge: 3,
   chargeBonus: 1,
