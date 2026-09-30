@@ -1,5 +1,5 @@
 // 战斗中的状态栏：玩家、敌人、神器条与结算明细。交换模式与嵌片卡模式共用。
-import { DEFAULT_CONFIG, playerShieldCap, poisonDecay, poisonThreshold, type ActionLog, type ArtifactKey, type BattleState, type Intent } from '../engine';
+import { BOMB_NAME, BOMB_UPGRADES, DEFAULT_CONFIG, playerShieldCap, poisonDecay, poisonThreshold, type ActionLog, type ArtifactKey, type BattleState, type Intent } from '../engine';
 import { ArtifactCard } from './components';
 
 export const REASON_TEXT: Record<string, string> = {
@@ -96,6 +96,31 @@ export function PlayerPanel({ b, gold, apLabel = '行动力' }: { b: BattleState
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+/** 本场爆破等级：等级与到下一级的进度；n 级时炸掉的每块多计 n−1 基数 */
+export function BombHeatPanel({ b }: { b: BattleState }) {
+  return (
+    <div className="bomb-heat" title="本场每引爆若干枚该类炸弹升一级；n 级时它炸掉的每块方块多计 n−1 基数。每场重置，起始等级来自炸弹升级。">
+      <div className="bomb-heat-title">爆破等级（本场）</div>
+      {BOMB_UPGRADES.map((k) => {
+        const h = b.bombHeat[k];
+        const every = DEFAULT_CONFIG.bombHeatEvery[k];
+        return (
+          <div key={k} className={`bomb-heat-row ${h.level > 1 ? 'hot' : ''}`}>
+            <span className="name">{BOMB_NAME[k]}</span>
+            <b>{h.level} 级</b>
+            <span className="meter">
+              <i style={{ width: `${(h.count / every) * 100}%` }} />
+            </span>
+            <span className="dim">
+              {h.count}/{every}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

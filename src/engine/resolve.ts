@@ -21,7 +21,7 @@ import { findGroups, passiveBombCell } from './match';
 import { hasLegalMove, reshuffle } from './shuffle';
 import type { Rng } from './rng';
 import type { EffectValues } from './score';
-import { blockValue, bombMakeBonus, type UpgradeLevels } from './upgrades';
+import { blockValue, bombBlockBonus, bombUpgradeOf, type BombUpgrade, type UpgradeLevels } from './upgrades';
 import {
   COLORS,
   emptyClears,
@@ -47,8 +47,10 @@ export interface ResolveContext {
   inserts?: readonly InstalledInsert[];
   /** 持有的神器；这里只处理作用于爆炸过程的几件 */
   artifacts?: readonly ArtifactKey[];
-  /** 方块与炸弹的升级等级；缺省全为 1 级 */
+  /** 方块的升级等级；缺省全为 1 级 */
   levels?: UpgradeLevels;
+  /** 本场三类炸弹的爆破等级；缺省全为 1 级 */
+  bombLevels?: Record<BombUpgrade, number>;
 }
 
 export type ExplosionShape = BombKind | 'cross' | 'rows3' | 'cols3' | 'square5' | 'board' | 'card' | 'lightning';
@@ -65,6 +67,8 @@ export interface Explosion {
   byInsert?: string;
   /** 由神器改变范围时，记录该神器 */
   byArtifact?: ArtifactKey;
+  /** 爆破等级带来的每块额外基数（等级 − 1）；同一格被多个爆炸覆盖时取最大 */
+  blockBonus?: number;
 }
 
 export interface ClearedEntry {
@@ -84,8 +88,6 @@ export interface InsertTrigger {
   effect: 'base' | 'catalyst' | 'produce' | 'ignite' | 'ember' | 'quake' | 'powder';
   at: Pos[];
   amount?: number;
-  /** 经锁位共鸣器传递而被视为波及 */
-  via?: 'lockResonator';
 }
 
 export type ResolutionEvent =
@@ -94,8 +96,7 @@ export type ResolutionEvent =
   | {
       type: 'matches';
       phase: Phase;
-      /** bonus：亲手做出炸弹时追加给该组颜色的基数（炸弹等级 × 基础值） */
-      groups: { color: Color; cells: Pos[]; product: BombKind | null; bombCell: Pos | null; bonus: number }[];
+      groups: { color: Color; cells: Pos[]; product: BombKind | null; bombCell: Pos | null }[];
       cleared: ClearedEntry[];
       created: { id: number; bomb: BombKind; at: Pos }[];
       insertTriggers: InsertTrigger[];
@@ -132,8 +133,10 @@ export interface ActionResult {
   socketBonuses: EffectValues;
   /** 本次行动中发生过有效触发的嵌片，按 ID 排序 */
   triggeredInsertIds: string[];
-  /** 主动阶段作为来源被引爆或消耗的炸弹数（不稳定引信） */
+  /** 主动阶段作为来源被引爆或消耗的炸弹数 */
   activeBombsDetonated: number;
+  /** 本次行动按类别被引爆或消耗的炸弹数（含接力、组合技的两枚与改造出的炸弹），用于爆破等级 */
+  detonatedByType: Record<BombUpgrade, number>;
   /** 是否有过载直线炸弹引爆（过载引线的代价） */
   overloadFired: boolean;
 }
@@ -174,6 +177,7 @@ class Resolver {
   readonly triggeredIds = new Set<string>();
   passiveCount = 0;
   activeBombsDetonated = 0;
+  readonly detonatedByType: Record<BombUpgrade, number> = { line: 0, area: 0, color: 0 };
   overloadFired = false;
   /** 本次行动中已引爆或已消耗的炸弹，保证每枚只引爆一次；也用于保留本步亲手做出的炸弹 */
   readonly spent = new Set<number>();
@@ -212,14 +216,14 @@ class Resolver {
     return out;
   }
 
-  private count(phase: Phase, tile: Tile, pos: Pos): void {
+  private count(phase: Phase, tile: Tile, pos: Pos, extra = 0): void {
     if (phase === 'passive') {
       this.passiveCount++;
       return;
     }
     if (tile.kind !== 'normal') return;
-    // 方块等级：主动清除一块计入“等级”份基数
-    this.activeClears[tile.color] += blockValue(this.ctx.levels, tile.color);
+    // 方块等级：主动清除一块计入“等级”份基数；被炸弹炸掉时再加爆破等级的额外基数
+    this.activeClears[tile.color] += blockValue(this.ctx.levels, tile.color) + extra;
     // 主动阶段的覆盖格清除：基数嵌片认同色，催化盐认催化剂
     const ins = this.insertAt.get(posKey(pos));
     if (!ins) return;
@@ -233,11 +237,11 @@ class Resolver {
     }
   }
 
-  private clearAt(phase: Phase, pos: Pos): ClearedEntry | null {
+  private clearAt(phase: Phase, pos: Pos, extra = 0): ClearedEntry | null {
     const tile = getTile(this.board, pos);
     if (!tile) return null;
     setTile(this.board, pos, null);
-    this.count(phase, tile, pos);
+    this.count(phase, tile, pos, extra);
     return { id: tile.id, pos, tile };
   }
 
@@ -278,19 +282,13 @@ class Resolver {
         const entry = this.clearAt(phase, p);
         if (entry) cleared.push(entry);
       }
-      // 亲手做出炸弹：按炸弹等级给该组颜色追加基数；被动产弹没有这笔加成
-      let bonus = 0;
-      if (phase === 'active' && product) {
-        bonus = bombMakeBonus(this.ctx.levels, product, this.ctx.config);
-        this.activeClears[g.color] += bonus;
-      }
       if (bombCell && product) {
         // 产弹格原方块不计清除，直接替换为无属性炸弹
         const b = makeBomb(this.ctx.ids, product);
         setTile(this.board, bombCell, b);
         created.push({ id: b.id, bomb: product, at: bombCell });
       }
-      summary.push({ color: g.color, cells: g.cells, product, bombCell, bonus });
+      summary.push({ color: g.color, cells: g.cells, product, bombCell });
     }
     this.events.push({ type: 'matches', phase, groups: summary, cleared, created, insertTriggers: this.takeTriggers() });
     return { matched: true, created };
@@ -325,6 +323,7 @@ class Resolver {
       for (const d of detonations) explosions.push(...this.explosionsOf(d, snapshot));
       for (const d of [...detonations, ...input.consume]) {
         this.spent.add(d.id);
+        this.detonatedByType[bombUpgradeOf(d.bomb)]++;
         if (phase === 'active') this.activeBombsDetonated++;
         const entry = this.clearAt(phase, d.pos);
         if (entry) consumed.push(entry);
@@ -332,20 +331,23 @@ class Resolver {
 
       // b. 清除：所有范围的并集，加上火药嵌片的连带清除；范围内尚未引爆的炸弹进入下一波
       const hit = new Map<number, Pos>();
-      for (const e of explosions) for (const p of e.cells) hit.set(posKey(p), p);
+      const bonusAt = new Map<number, number>();
+      for (const e of explosions) {
+        for (const p of e.cells) {
+          const k = posKey(p);
+          hit.set(k, p);
+          if (e.blockBonus) bonusAt.set(k, Math.max(bonusAt.get(k) ?? 0, e.blockBonus));
+        }
+      }
       const targets = new Map(hit);
       const direct = this.activeInserts.filter((ins) => ins.cells.some((p) => hit.has(posKey(p))));
-      // 锁位共鸣器：与被直接波及的嵌片有边相接的嵌片也视为被波及，只传一层
-      const resonated = this.has('lockResonator')
-        ? this.activeInserts.filter((ins) => !direct.includes(ins) && direct.some((d) => edgeAdjacent(d, ins)))
-        : [];
-      for (const ins of [...direct, ...resonated]) {
+      for (const ins of direct) {
         if (ins.type !== 'blastPowder') continue;
         // 只有覆盖格上仍有方块、且未被爆炸本身覆盖时才算有效触发
         const extra = ins.cells.filter((p) => !hit.has(posKey(p)) && getTile(this.board, p));
         if (extra.length === 0) continue;
         for (const p of extra) targets.set(posKey(p), p);
-        this.trigger({ insertId: ins.id, type: ins.type, effect: 'powder', at: extra, ...(resonated.includes(ins) ? { via: 'lockResonator' as const } : {}) });
+        this.trigger({ insertId: ins.id, type: ins.type, effect: 'powder', at: extra });
       }
       for (const [, p] of [...targets].sort((x, y) => x[0] - y[0])) {
         const tile = getTile(this.board, p);
@@ -354,7 +356,7 @@ class Resolver {
           if (!this.spent.has(tile.id)) queued.set(tile.id, p);
           continue;
         }
-        const entry = this.clearAt(phase, p);
+        const entry = this.clearAt(phase, p, bonusAt.get(posKey(p)) ?? 0);
         if (entry) cleared.push(entry);
       }
 
@@ -397,11 +399,17 @@ class Resolver {
     }
   }
 
+  /** 该类炸弹当前爆破等级带来的每块额外基数 */
+  blockBonusOf(bomb: BombKind): number {
+    return bombBlockBonus(this.ctx.bombLevels?.[bombUpgradeOf(bomb)] ?? 1);
+  }
+
   private explosionsOf(d: Detonation, snapshot: Board): Explosion[] {
     const rows = this.board.length;
     const cols = this.board[0]!.length;
     const { r, c } = d.pos;
-    const base = { origin: d.pos, sourceId: d.id };
+    const bonus = this.blockBonusOf(d.bomb);
+    const base = { origin: d.pos, sourceId: d.id, ...(bonus ? { blockBonus: bonus } : {}) };
     switch (d.bomb) {
       case 'H':
       case 'V': {
@@ -500,10 +508,6 @@ class Resolver {
   }
 }
 
-function edgeAdjacent(a: InstalledInsert, b: InstalledInsert): boolean {
-  return a.cells.some((p) => b.cells.some((q) => Math.abs(p.r - q.r) + Math.abs(p.c - q.c) === 1));
-}
-
 function rect(rows: number, cols: number, r0: number, r1: number, c0: number, c1: number): Pos[] {
   const out: Pos[] = [];
   for (let r = Math.max(0, r0); r <= Math.min(rows - 1, r1); r++) {
@@ -528,9 +532,11 @@ function comboWave(first: Detonation, second: Detonation, to: Pos, rows: number,
   const has = (k: BombKind) => kinds.includes(k);
   const isLine = (k: BombKind) => k === 'H' || k === 'V';
   const base: WaveInput = { detonations: [], explosions: [], consume: [first, second], conversions: [] };
+  // 组合技取两枚炸弹中较高的爆破等级
+  const bonus = Math.max(resolver.blockBonusOf(first.bomb), resolver.blockBonusOf(second.bomb));
   const explosion = (shape: ExplosionShape, cells: Pos[]): WaveInput => ({
     ...base,
-    explosions: [{ shape, origin: to, sourceId: first.id, cells }],
+    explosions: [{ shape, origin: to, sourceId: first.id, cells, ...(bonus ? { blockBonus: bonus } : {}) }],
   });
 
   if (isLine(first.bomb) && isLine(second.bomb)) {
@@ -572,6 +578,7 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     socketBonuses: { attack: 0, shield: 0, poison: 0 },
     triggeredInsertIds: [],
     activeBombsDetonated: 0,
+    detonatedByType: { line: 0, area: 0, color: 0 },
     overloadFired: false,
   });
 
@@ -664,6 +671,7 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     socketBonuses: res.socket,
     triggeredInsertIds: [...res.triggeredIds].sort(),
     activeBombsDetonated: res.activeBombsDetonated,
+    detonatedByType: res.detonatedByType,
     overloadFired: res.overloadFired,
   };
 }

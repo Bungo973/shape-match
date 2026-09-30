@@ -878,13 +878,6 @@ export class Stage {
       tl.call(() => sfx.pop(this.chain, ev.cleared.length), [], 0);
     }
     if (ev.created.length > 0) tl.call(() => sfx.bombCreate(), [], 0.14);
-    // 亲手做出的特殊匹配：在产弹格旁标出基数翻倍
-    for (const g of ev.groups) {
-      if (g.bonus > 0 && g.bombCell) {
-        const { x, y } = center(g.bombCell);
-        tl.call(() => this.floatText(x, y - 30, `基数 +${g.bonus}`, 0xffe08a, 22), [], 0.18);
-      }
-    }
     for (const c of ev.cleared) {
       this.removeTile(tl, c.id, 0, this.tileColor(c.tile));
       this.grid[c.pos.r]![c.pos.c] = null;
@@ -1143,6 +1136,21 @@ export class Stage {
     return last;
   }
 
+  /** 爆破等级提升：棋盘中央弹出提示并震屏 */
+  async showBombLevelUps(ups: { name: string; level: number }[]): Promise<void> {
+    if (ups.length === 0) return;
+    const tl = gsap.timeline();
+    ups.forEach((u, i) => {
+      tl.call(() => {
+        this.floatText(BOARD.x + BOARD.size / 2, BOARD.y + BOARD.size / 2 - 40 + i * 46, `${u.name} 升到 ${u.level} 级！`, 0xffb347, 40);
+        this.shake(6);
+        sfx.bombCreate();
+      }, [], i * 0.18);
+    });
+    tl.to({}, { duration: 0.5 });
+    await tl;
+  }
+
   async playPlayerEffects(log: ActionLog): Promise<void> {
     if (!log.settlement) return;
     // 倍率槽落到最终倍率（含神器修正与侵蚀），与结算面板一致
@@ -1204,14 +1212,8 @@ export class Stage {
 
   async playEnemyTurn(log: EnemyTurnLog): Promise<void> {
     const tl = gsap.timeline();
-    const fuse = log.fuseDamageToShield + log.fuseDamageToHp;
-    if (fuse > 0) {
-      tl.call(() => this.floatText(HERO.x, 360, `引信 -${fuse}`, 0xff8a2a, 34), [], 0);
-      tl.to({}, { duration: 0.5 });
-    }
-    const t0 = fuse > 0 ? 0.5 : 0;
+    const t0 = 0;
     if (log.counterDamage > 0) tl.call(() => this.floatText(this.enemyX, 440, `反击 -${log.counterDamage}`, 0x9fe0ff, 36), [], t0 + 0.35);
-    if (log.apBonusNext > 0) tl.call(() => this.floatText(HERO.x, 250, `下回合 +${log.apBonusNext} 行动力`, 0xffd76a, 28), [], t0 + 0.4);
     if (log.cancelledByStun) {
       tl.to(this.enemy, { rotation: -0.08, duration: 0.1, yoyo: true, repeat: 3 }, t0);
       tl.call(() => {

@@ -137,10 +137,8 @@ describe('升级与神器池', () => {
     expect(run.battle!.levels).toEqual(run.levels);
   });
 
-  it('依赖嵌片的神器不再出现在开局与精英候选中', () => {
-    expect(offeredArtifacts()).not.toContain('resonanceBase');
-    expect(offeredArtifacts()).not.toContain('lockResonator');
-    for (let seed = 1; seed <= 20; seed++) expect(newRun(seed).starterChoices.every((k) => !ARTIFACTS[k].retired)).toBe(true);
+  it('开局三选一只从开局池中抽取', () => {
+    for (let seed = 1; seed <= 20; seed++) expect(newRun(seed).starterChoices.every((k) => ARTIFACTS[k].starter && offeredArtifacts().includes(k))).toBe(true);
   });
 });
 
@@ -158,7 +156,7 @@ describe('完整一局', () => {
       run = ok(chooseUpgrade(run, 0));
       if (i === 3 || i === 6) {
         expect(run.phase).toBe('artifact');
-        expect(run.artifactChoices.some((k) => run.artifacts.includes(k) || ARTIFACTS[k].retired)).toBe(false);
+        expect(run.artifactChoices.some((k) => run.artifacts.includes(k))).toBe(false);
         run = ok(chooseArtifact(run, run.artifactChoices[0]!));
       }
       run = ok(campRest(run));

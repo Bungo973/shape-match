@@ -11,8 +11,11 @@ export interface EngineConfig {
    * 数组依次为各段所需的被动清除数，段数即封顶（5 段封顶 ×6）。见 GAME_RULES §2 第 4 步。
    */
   multiplierSegments: number[];
-  /** 亲手做出炸弹时给该匹配组颜色追加的基数（1 级），每升一级再加一份；见 docs/BLOCK_BUILD.md */
-  bombMakeBonus: { line: number; area: number; color: number };
+  /**
+   * 爆破等级（2026-09-30）：本场每引爆这么多枚该类炸弹（含接力），该类升一级；每场重置。
+   * n 级时，该类炸弹炸掉的每块方块多计 n − 1 基数。见 docs/BLOCK_BUILD.md。
+   */
+  bombHeatEvery: { line: number; area: number; color: number };
   /** 每满多少个主动催化剂获得 1 层充能 */
   catalystPerCharge: number;
   /** 每层旧充能给攻击、护盾、毒气基础值各加多少 */
@@ -60,7 +63,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   cols: 10,
   colorWeights: { attack: 30, shield: 25, poison: 25, catalyst: 20 },
   multiplierSegments: [6, 10, 14, 18, 22],
-  bombMakeBonus: { line: 3, area: 4, color: 6 },
+  bombHeatEvery: { line: 12, area: 9, color: 3 },
   catalystPerCharge: 3,
   chargeBonus: 1,
   chargeCap: 5,

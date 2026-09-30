@@ -14,6 +14,7 @@ import {
   runAction,
   runEndTurn,
   startNextBattle,
+  BOMB_NAME,
   UPGRADE_KEYS,
   UPGRADE_NAMES,
   type UpgradeKey,
@@ -26,7 +27,7 @@ import {
   type RunResult,
   type RunState,
 } from '../engine';
-import { ArtifactStrip, EnemyPanel, PlayerPanel, REASON_TEXT, SettlePanel } from './Hud';
+import { ArtifactStrip, BombHeatPanel, EnemyPanel, PlayerPanel, REASON_TEXT, SettlePanel } from './Hud';
 import { isMuted, setMuted } from './audio';
 import { rateMove } from './rating';
 import { clearRun, loadRun, saveRun } from './save';
@@ -119,6 +120,12 @@ export function App() {
     const rating = rateMove(out.log);
     if (rating) stage.showRating(rating);
     await stage.playPlayerEffects(out.log);
+    const heat = out.run.battle?.bombHeat;
+    if (heat) {
+      // 同一类一步升多级时只报最终等级
+      const kinds = [...new Set(out.log.bombLevelUps)];
+      await stage.showBombLevelUps(kinds.map((k) => ({ name: BOMB_NAME[k], level: heat[k].level })));
+    }
     setRun(out.run);
     setBusyBoth(false);
   }, []);
@@ -241,6 +248,7 @@ export function App() {
           <>
             <PlayerPanel b={b} gold={run.gold} />
             <ArtifactStrip artifacts={run.artifacts} />
+            <BombHeatPanel b={b} />
             <EnemyPanel b={b} battleIndex={run.battleIndex} />
             <SettlePanel b={b} lastLog={lastLog} hint="交换相邻方块或点燃炸弹。第一次下落前的清除给基数，之后的连锁提高倍率。" />
             <button className="end-turn" disabled={busy || b.outcome !== 'ongoing'} onClick={() => void doEndTurn()}>

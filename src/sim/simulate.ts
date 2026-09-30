@@ -151,8 +151,8 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
             report.attackTurns++;
             if (r.log.damageToPlayerHp === 0) report.blockedTurns++;
           }
-          report.damageTaken += r.log.damageToPlayerHp + r.log.damageToPlayerShield + r.log.fuseDamageToHp + r.log.fuseDamageToShield;
-          report.hpLost += r.log.damageToPlayerHp + r.log.fuseDamageToHp;
+          report.damageTaken += r.log.damageToPlayerHp + r.log.damageToPlayerShield;
+          report.hpLost += r.log.damageToPlayerHp;
         }
         run = r.run;
         if (run.battle) report.turns = run.battle.turn;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { endTurn, playerAction, playerShieldCap, poisonDecay, poisonThreshold, startBattle, type BattleState, type EnemyDef, type Intent } from './battle';
 import { DEFAULT_CONFIG } from './config';
+import { defaultLevels } from './upgrades';
 import { findLines } from './match';
 import { multiplierFor } from './score';
 import { boardWith, ins } from './test-utils';
@@ -358,5 +359,23 @@ describe('碎甲、穿刺、强化', () => {
     const { state, log } = endTurn(s);
     expect(log!.damageToPlayerHp).toBe(14);
     expect(state.enemy.strength).toBe(4);
+  });
+});
+
+describe('爆破等级', () => {
+  it('每场从炸弹升级等级开始；引爆数达标后升一级，从下一次行动起生效', () => {
+    const s0 = startBattle({ seed: 7, player: player(), enemy: enemy([attack(1)]), levels: { ...defaultLevels(), line: 2 } });
+    expect(s0.bombHeat.line).toEqual({ level: 2, count: 0 });
+    let s = battle([attack(1)], { board: { '4,0': 'H' } });
+    s.bombHeat.line.count = DEFAULT_CONFIG.bombHeatEvery.line - 1;
+    const out = act(s, ignite(4, 0));
+    expect(out.log.bombLevelUps).toEqual(['line']);
+    expect(out.state.bombHeat.line).toEqual({ level: 2, count: 0 });
+    // 升级那一步本身仍按旧等级结算：第 4 行的方块没有额外基数
+    expect(out.log.result.events.find((e) => e.type === 'wave' && e.explosions[0]!.blockBonus)).toBeUndefined();
+    s = out.state;
+    s.board = boardWith({ '4,0': 'H' });
+    const next = act(s, ignite(4, 0));
+    expect(next.log.result.events.find((e) => e.type === 'wave')).toMatchObject({ explosions: [expect.objectContaining({ blockBonus: 1 })] });
   });
 });

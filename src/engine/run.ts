@@ -9,7 +9,7 @@ import { generateUpgradeChoices, mixSeed, type UpgradeCandidate } from './reward
 import { createRng } from './rng';
 import type { Action } from './types';
 
-export const RUN_RULES_VERSION = 3;
+export const RUN_RULES_VERSION = 4;
 
 export type RunPhase = 'starter' | 'map' | 'battle' | 'reward' | 'artifact' | 'camp' | 'over';
 
@@ -233,7 +233,11 @@ export function campUpgrade(prev: RunState, key: UpgradeKey, config: EngineConfi
 export function debugLevelUp(prev: RunState, key: UpgradeKey, delta = 1): RunState {
   const run = clone(prev);
   run.levels[key] = Math.max(1, run.levels[key] + delta);
-  if (run.battle) run.battle.levels = { ...run.levels };
+  if (run.battle) {
+    run.battle.levels = { ...run.levels };
+    // 调试：炸弹等级同时改动本场的爆破等级
+    if (key === 'line' || key === 'area' || key === 'color') run.battle.bombHeat[key].level = Math.max(1, run.battle.bombHeat[key].level + delta);
+  }
   return run;
 }
 

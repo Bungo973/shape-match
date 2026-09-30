@@ -1,7 +1,7 @@
 // 一场战斗的状态与回合流程，规则见 docs/GAME_RULES.md §1、§3、§4 与 docs/ENEMY_DESIGN.md。
 // 所有函数都是纯函数：输入旧状态，返回新状态与日志；状态可直接序列化存档。
 import { ARTIFACT_PARAMS, artifactBaseBonus, type ArtifactKey } from './artifacts';
-import { defaultLevels, type UpgradeLevels } from './upgrades';
+import { addDetonations, BOMB_UPGRADES, defaultLevels, initialBombHeat, type BombHeat, type BombUpgrade, type UpgradeLevels } from './upgrades';
 import { createBoard, createIdGen, weightedSpawner } from './board';
 import { CARD_DEFS, cardBonus, drawCards, shuffle, type CardInstance, type CardPiles } from './cards';
 import { isRotationOf } from './inserts';
@@ -91,6 +91,8 @@ export interface BattleState {
   artifacts: ArtifactKey[];
   /** 方块与炸弹的升级等级，战斗中不变 */
   levels: UpgradeLevels;
+  /** 本场的爆破等级：从炸弹升级等级开始，越炸越高，每场重置 */
+  bombHeat: BombHeat;
   player: PlayerState;
   enemy: EnemyState;
   turn: number;
@@ -99,7 +101,7 @@ export interface BattleState {
   /** 向上重力剩余的玩家回合数；0 表示未生效 */
   gravityTurnsLeft: number;
   /** 敌人本回合成功施加、从下一玩家回合起生效的状态 */
-  pending: { erosion: boolean; suppressId: string | null; gravity: boolean; apBonus: number; sealColor: Color | null; shatter?: boolean };
+  pending: { erosion: boolean; suppressId: string | null; gravity: boolean; sealColor: Color | null; shatter?: boolean };
   /** 本玩家回合生效中的状态；shattered 为碎甲（护盾上限降低） */
   current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null; shattered?: boolean };
   outcome: 'ongoing' | 'won' | 'lost';
@@ -134,12 +136,11 @@ export interface ActionLog {
   erosionConsumed: boolean;
   /** 条件基数类神器本步追加的基数（已计入结算） */
   artifactBaseBonus: ClearsByType;
+  /** 本步结算后升级的爆破等级类别（每升一级记一次）；新等级从下一次行动起生效 */
+  bombLevelUps: BombUpgrade[];
 }
 
 export interface EnemyTurnLog {
-  /** 不稳定引信：回合末留存炸弹对自己造成的伤害 */
-  fuseDamageToShield: number;
-  fuseDamageToHp: number;
   cancelledByStun: boolean;
   executed: IntentPart[];
   damageToPlayerShield: number;
@@ -147,8 +148,6 @@ export interface EnemyTurnLog {
   poisonDecayed: number;
   /** 反应线圈的反击伤害 */
   counterDamage: number;
-  /** 回响钟：下一玩家回合额外获得的 AP */
-  apBonusNext: number;
   /** 石化：本回合被变成石块的格 */
   petrified: Pos[];
   /** 石化后无步可走而自动重排了棋盘 */
@@ -171,6 +170,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     inserts: clone(input.inserts ?? []),
     artifacts: [...(input.artifacts ?? [])],
     levels: { ...defaultLevels(), ...input.levels },
+    bombHeat: initialBombHeat({ ...defaultLevels(), ...input.levels }),
     player: clone(input.player),
     enemy: {
       def: input.enemy,
@@ -188,7 +188,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     ap: config.apPerTurn,
     gravity: 'down',
     gravityTurnsLeft: 0,
-    pending: { erosion: false, suppressId: null, gravity: false, apBonus: 0, sealColor: null },
+    pending: { erosion: false, suppressId: null, gravity: false, sealColor: null },
     current: { erosionArmed: false, suppressedId: null, sealedColor: null },
     outcome: 'ongoing',
     totalScore: 0,
@@ -248,6 +248,7 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     artifacts: state.artifacts,
     // 色封：本回合被封颜色的方块等级视为 1
     levels: state.current.sealedColor ? { ...state.levels, [state.current.sealedColor]: 1 } : state.levels,
+    bombLevels: Object.fromEntries(BOMB_UPGRADES.map((k) => [k, state.bombHeat[k].level])) as Record<BombUpgrade, number>,
   });
   if (!result.valid) return { ok: false, state: prev, reason: result.reason! };
 
@@ -270,7 +271,13 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     stunApplied: false,
     erosionConsumed: false,
     artifactBaseBonus: emptyClears(),
+    bombLevelUps: [],
   };
+
+  // 爆破等级：本步的引爆在结算完之后计入，新等级从下一次行动起生效
+  const heat = addDetonations(state.bombHeat, result.detonatedByType, config);
+  state.bombHeat = heat.heat;
+  log.bombLevelUps = heat.levelUps;
 
   // 没有任何清除（未消除交换）时不结算
   const anyClear = result.hadActiveColorClear || result.passiveClearCount > 0 || result.events.some((e) => e.type === 'wave');
@@ -280,8 +287,8 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     if (erode) state.current.erosionArmed = false;
     // 倍率修正顺序：不稳定引信修正 P → 基础倍率 → 连锁透镜 → 共振底座 → 敌方倍率侵蚀（GAME_RULES §6）
     const has = (k: ArtifactKey) => state.artifacts.includes(k);
-    const P = result.passiveClearCount + (has('unstableFuse') ? result.activeBombsDetonated : 0);
-    const stepDelta = (has('chainLens') && P >= 3 ? 1 : 0) + (has('resonanceBase') && result.triggeredInsertIds.length >= 2 ? 1 : 0);
+    const P = result.passiveClearCount;
+    const stepDelta = has('chainLens') && P >= 3 ? 1 : 0;
     // 条件基数类神器：看本步主动阶段清到了什么，追加到对应颜色的基数
     const bonus = result.hadActiveColorClear ? artifactBaseBonus(result, state.artifacts) : emptyClears();
     log.artifactBaseBonus = bonus;
@@ -327,7 +334,7 @@ function applyPlayerEffects(state: BattleState, s: Settlement, log: ActionLog, c
       state.enemy.stunPending = true;
       state.enemy.stunnedThisTurn = true;
       // 密封毒瓶：眩晕后保留一部分进度，仍低于阈值
-      state.enemy.poison = state.artifacts.includes('sealedVial') ? Math.min(Math.floor(threshold * ARTIFACT_PARAMS.sealedVialRetainRatio), threshold - 1) : 0;
+      state.enemy.poison = 0;
       log.stunApplied = true;
     }
   }
@@ -358,21 +365,12 @@ export function poisonDecay(enemyMaxHp: number, config: EngineConfig = DEFAULT_C
   return Math.max(1, Math.round(poisonThreshold(enemyMaxHp, config) * config.poisonDecayRatio));
 }
 
-/** 对敌人造成伤害：先扣护盾再扣生命；穿甲针使每点攻击削减 2 点护盾。击杀时结束战斗。 */
+/** 对敌人造成伤害：先扣护盾再扣生命。击杀时结束战斗。 */
 function damageEnemy(state: BattleState, amount: number): { toShield: number; toHp: number } {
   const enemy = state.enemy;
-  const factor = state.artifacts.includes('piercingNeedle') ? ARTIFACT_PARAMS.piercingShieldFactor : 1;
-  let toShield: number;
-  let rest: number;
-  if (amount * factor <= enemy.shield) {
-    toShield = amount * factor;
-    rest = 0;
-  } else {
-    toShield = enemy.shield;
-    rest = amount - Math.ceil(enemy.shield / factor);
-  }
+  const toShield = Math.min(enemy.shield, amount);
   enemy.shield -= toShield;
-  const toHp = Math.min(enemy.hp, rest);
+  const toHp = Math.min(enemy.hp, amount - toShield);
   enemy.hp -= toHp;
   if (enemy.hp <= 0) state.outcome = 'won';
   return { toShield, toHp };
@@ -393,6 +391,8 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   if (prev.outcome !== 'ongoing') return { state: prev, log: null };
   const state = clone(prev);
 
+  // 碎甲回合的护盾挡住的攻击不触发反应线圈；回合状态马上到期，先记下
+  const shatteredTurn = !!state.current.shattered;
   // 1. 玩家回合结束：本回合生效的状态到期；向上重力扣减一回合（提前结束也计）；手牌进弃牌堆
   state.current = { erosionArmed: false, suppressedId: null, sealedColor: null, shattered: false };
   if (state.cards) {
@@ -406,28 +406,16 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
 
   const enemy = state.enemy;
   const log: EnemyTurnLog = {
-    fuseDamageToShield: 0,
-    fuseDamageToHp: 0,
     cancelledByStun: false,
     executed: [],
     damageToPlayerShield: 0,
     damageToPlayerHp: 0,
     poisonDecayed: 0,
     counterDamage: 0,
-    apBonusNext: 0,
     petrified: [],
     reshuffled: false,
     nextIntent: enemy.intent,
   };
-
-  // 不稳定引信的代价：回合结束时每枚留存炸弹伤害自己，在敌人行动前结算
-  if (state.artifacts.includes('unstableFuse')) {
-    const bombs = state.board.flat().filter((t) => t?.kind === 'bomb').length;
-    const hurt = damagePlayer(state, bombs * ARTIFACT_PARAMS.unstableFuseDamage);
-    log.fuseDamageToShield = hurt.toShield;
-    log.fuseDamageToHp = hurt.toHp;
-    if (state.outcome === 'lost') return { state, log };
-  }
 
   // 2. 敌人回合：眩晕取消整次意图，否则按部件顺序执行
   if (enemy.stunPending) {
@@ -435,11 +423,9 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
     log.cancelledByStun = true;
     // 被取消的攻击连带作废已累积的蓄力加成
     if (enemy.intent.parts.some((p) => p.kind === 'attack')) enemy.chargeBonus = 0;
-    // 回响钟：眩晕成功取消意图后，下回合多 1 AP
-    if (state.artifacts.includes('echoBell')) state.pending.apBonus = ARTIFACT_PARAMS.echoBellAp;
   } else {
     for (const part of enemy.intent.parts) {
-      executePart(state, part, log, config);
+      executePart(state, part, log, config, shatteredTurn);
       if (state.outcome !== 'ongoing') return { state, log };
     }
   }
@@ -463,13 +449,12 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
 
   // 4. 下一玩家回合开始：施加敌人上回合成功施加的状态，AP 恢复
   state.turn++;
-  state.ap = config.apPerTurn + state.pending.apBonus;
+  state.ap = config.apPerTurn;
   if (state.cards) {
     const cardRng = createRng(state.rngState);
     drawCards(state.cards, config.drawPerTurn, config.handLimit, cardRng);
     state.rngState = cardRng.state;
   }
-  log.apBonusNext = state.pending.apBonus;
   enemy.stunnedThisTurn = false;
   if (state.pending.erosion) state.current.erosionArmed = true;
   if (state.pending.suppressId) state.current.suppressedId = state.pending.suppressId;
@@ -479,11 +464,11 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
     state.gravity = 'up';
     state.gravityTurnsLeft = config.gravityTurns;
   }
-  state.pending = { erosion: false, suppressId: null, gravity: false, apBonus: 0, sealColor: null, shatter: false };
+  state.pending = { erosion: false, suppressId: null, gravity: false, sealColor: null, shatter: false };
   return { state, log };
 }
 
-function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog, config: EngineConfig): void {
+function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog, config: EngineConfig, shatteredTurn: boolean): void {
   const enemy = state.enemy;
   log.executed.push(part);
   switch (part.kind) {
@@ -494,8 +479,9 @@ function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog, co
       log.damageToPlayerShield += hurt.toShield;
       log.damageToPlayerHp += hurt.toHp;
       // 反应线圈：一次攻击被护盾完全挡下时反击
-      if (dmg > 0 && hurt.toHp === 0 && state.outcome === 'ongoing' && state.artifacts.includes('reactionCoil')) {
-        const back = damageEnemy(state, ARTIFACT_PARAMS.reactionCoilDamage);
+      // 反应线圈：护盾完全挡下这次攻击时，反击其一半；碎甲回合不触发
+      if (dmg > 0 && hurt.toHp === 0 && !shatteredTurn && state.outcome === 'ongoing' && state.artifacts.includes('reactionCoil')) {
+        const back = damageEnemy(state, Math.floor(dmg * ARTIFACT_PARAMS.reactionCoilRatio));
         log.counterDamage += back.toHp + back.toShield;
       }
       return;
