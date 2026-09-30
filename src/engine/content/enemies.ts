@@ -15,7 +15,7 @@ export const CRYSTAL_MOLE: EnemyDef = {
   name: '晶背鼹鼠',
   maxHp: 314,
   fallbackDefend: 8,
-  targetScore: 1500,
+  targetScore: 1100,
   script: [atk(12), atk(16), atk(12), atk(20)],
 };
 
@@ -25,7 +25,7 @@ export const CAVE_BATS: EnemyDef = {
   name: '洞蝠群',
   maxHp: 375,
   fallbackDefend: 8,
-  targetScore: 1800,
+  targetScore: 1500,
   // 每拍都攻击：蓄力拍也会啄一下；俯冲 22 + 蓄力 13 = 35
   script: [intent(hit(5), { kind: 'charge', amount: 8 }), atk(13), atk(11)],
 };
@@ -36,7 +36,7 @@ export const ROCK_CRAB: EnemyDef = {
   name: '吞光岩蟹',
   maxHp: 604,
   fallbackDefend: 12,
-  targetScore: 2400,
+  targetScore: 1800,
   script: [atk(14), intent({ kind: 'erodeMultiplier' }, hit(11)), atk(27), intent(defend(7), hit(8))],
 };
 
@@ -48,7 +48,7 @@ export const STONE_GUARDIAN: EnemyDef = {
   name: '苔甲守卫',
   maxHp: 598,
   fallbackDefend: 10,
-  targetScore: 2800,
+  targetScore: 2700,
   script: [intent(defend(10), { kind: 'petrify', count: 3 }, hit(10)), intent(shatter, hit(14)), atk(31)],
 };
 
@@ -58,7 +58,7 @@ export const SPORE_CLUSTER: EnemyDef = {
   name: '毒孢菇群',
   maxHp: 713,
   fallbackDefend: 10,
-  targetScore: 3300,
+  targetScore: 3500,
   script: [atk(20), intent(shatter, hit(13)), atk(34), intent(defend(8), hit(11))],
 };
 
@@ -80,7 +80,7 @@ export const MIMIC_CHEST: EnemyDef = {
   name: '拟宝匣兽',
   maxHp: 1012,
   fallbackDefend: 12,
-  targetScore: 4800,
+  targetScore: 5000,
   script: [
     intent({ kind: 'erodeMultiplier' }, hit(18)),
     intent(shatter, hit(14)),
@@ -95,7 +95,7 @@ export const RELIC_RAIDER: EnemyDef = {
   name: '夺宝客',
   maxHp: 1058,
   fallbackDefend: 12,
-  targetScore: 5500,
+  targetScore: 5600,
   // 攻击在前、蓄力在后：蓄力留给下一次攻击（穿刺重击 30 + 20 = 50，一半无视护盾）
   script: [
     intent({ kind: 'attack', amount: 13, pierce: true }),
@@ -111,7 +111,7 @@ export const RELIC_COLOSSUS: EnemyDef = {
   name: '遗物巨像',
   maxHp: 2530,
   fallbackDefend: 16,
-  targetScore: 7000,
+  targetScore: 6200,
   // 两轮三拍，每拍都攻击：重力反转 + 强化 → 碎甲 + 色封 → 重击；侵蚀 + 强化 + 防御 → 石化 + 蓄力 → 重击
   script: [
     atk(21),

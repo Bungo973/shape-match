@@ -30,9 +30,9 @@ function act(s: BattleState, action: Action) {
 const igniteRow4: Action = { type: 'ignite', at: { r: 4, c: 0 } };
 
 describe('神器池', () => {
-  it('共 12 件，开局池 4 件，带代价的 1 件，累加触发的 3 件', () => {
+  it('共 14 件，开局池 4 件，带代价的 1 件，累加触发的 3 件', () => {
     const all = Object.values(ARTIFACTS);
-    expect(all).toHaveLength(12);
+    expect(all).toHaveLength(14);
     expect(all.filter((a) => a.every).map((a) => a.name)).toEqual(['引信匣', '溢流护符', '余震核心']);
     expect(all.filter((a) => a.starter).map((a) => a.name)).toEqual(['反应线圈', '连锁透镜', '藏宝图残页', '纯粹结晶']);
     expect(all.filter((a) => a.cost).map((a) => a.name)).toEqual(['过载引线']);
@@ -188,5 +188,16 @@ describe('累加触发类神器', () => {
     const at = trig.key === 'aftershockCore' ? trig.at! : null;
     expect(state.board[at!.r]![at!.c]).toMatchObject({ kind: 'bomb', bomb: 'A' });
     expect(state.player.counters!.aftershockCore).toBe(199 + log.result.passiveClearCount - 200);
+  });
+});
+
+describe('回合开始类神器', () => {
+  it('火药桶：开战与每个新回合开始时，随机一个普通方块变成 3×3 炸弹', () => {
+    const s = startBattle({ seed: 7, player: { hp: 40, maxHp: 40, shield: 0, catalystCharges: 0 }, enemy: { id: 'dummy', name: '木桩', maxHp: 500, script: [attack(1)], fallbackDefend: 3 }, artifacts: ['powderKeg'] });
+    expect(s.board.flat().filter((t) => t?.kind === 'bomb')).toEqual([expect.objectContaining({ bomb: 'A' })]);
+    const { state, log } = endTurn(s);
+    expect(log!.turnStartBombs).toHaveLength(1);
+    const at = log!.turnStartBombs![0]!;
+    expect(state.board[at.r]![at.c]).toMatchObject({ kind: 'bomb', bomb: 'A' });
   });
 });

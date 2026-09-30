@@ -141,6 +141,7 @@ export function App() {
       setRun(out.run);
       if (out.run.battle) showBattle(out.run.battle);
       if (out.log?.reshuffled) flash('无步可走，已重新洗牌');
+      if (out.log?.turnStartBombs?.length) await stageRef.current!.showTurnStartBombs(out.log.turnStartBombs);
     }
     setBusyBoth(false);
   }, []);
@@ -271,7 +272,7 @@ export function App() {
               </div>
             </div>
             <EnemyPanel b={b} battleIndex={run.battleIndex} />
-            <SettlePanel b={b} lastLog={lastLog} hint={DEFAULT_CONFIG.scoreMode ? '交换相邻方块或点燃炸弹，在 4 个回合内凑够目标分。第一次下落前的清除给基数，之后的连锁提高倍率。' : '交换相邻方块或点燃炸弹。第一次下落前的清除给基数，之后的连锁提高倍率。'} />
+            <SettlePanel b={b} lastLog={lastLog} hint={DEFAULT_CONFIG.scoreMode ? '交换相邻方块或点燃炸弹，在 5 个回合内凑够目标分。第一次下落前的清除给基数，之后的连锁提高倍率。' : '交换相邻方块或点燃炸弹。第一次下落前的清除给基数，之后的连锁提高倍率。'} />
             <button className="end-turn" disabled={busy || b.outcome !== 'ongoing'} onClick={() => void doEndTurn()}>
               结束回合 <small>E</small>
             </button>

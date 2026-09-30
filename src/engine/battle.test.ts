@@ -390,7 +390,7 @@ describe('冲分模式', () => {
 
   it('累计结算分达到目标立即过关；攻击、护盾不生效', () => {
     const s = start(1);
-    expect(s.goal).toEqual({ target: 1, turns: 4 });
+    expect(s.goal).toEqual({ target: 1, turns: scoreConfig.scoreTurns });
     const out = playerAction(s, ignite(4, 0), scoreConfig);
     if (!out.ok) throw new Error(out.reason);
     expect(out.state.outcome).toBe('won');
@@ -400,7 +400,7 @@ describe('冲分模式', () => {
 
   it('敌人不行动；最后一回合结束仍未达标，按差距比例扣生命后过关', () => {
     let s = start(1000);
-    for (let t = 1; t < 4; t++) {
+    for (let t = 1; t < scoreConfig.scoreTurns; t++) {
       const { state, log } = endTurn(s, scoreConfig);
       expect(log!.damageToPlayerHp).toBe(0);
       expect(state.turn).toBe(t + 1);

@@ -167,6 +167,8 @@ export interface EnemyTurnLog {
   reshuffled: boolean;
   /** 冲分模式：回合用完仍未达标时扣的生命（已计入 damageToPlayerHp） */
   scorePenalty?: number;
+  /** 下一玩家回合开始时，神器放到棋盘上的炸弹 */
+  turnStartBombs?: Pos[];
   nextIntent: Intent;
 }
 
@@ -209,6 +211,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     totalScore: 0,
   };
   if (config.scoreMode && input.enemy.targetScore) state.goal = { target: input.enemy.targetScore, turns: config.scoreTurns };
+  applyTurnStartArtifacts(state);
   if (input.deck) {
     // 洗牌与抽牌沿用同一个种子随机数，保证复现
     const cardRng = createRng(state.rngState);
@@ -537,6 +540,7 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
     state.gravity = 'up';
     state.gravityTurnsLeft = config.gravityTurns;
   }
+  log.turnStartBombs = applyTurnStartArtifacts(state);
   state.pending = { erosion: false, suppressId: null, gravity: false, sealColor: null, shatter: false };
   return { state, log };
 }
@@ -567,7 +571,20 @@ function endScoreTurn(state: BattleState, config: EngineConfig): { state: Battle
   }
   state.turn++;
   state.ap = config.apPerTurn;
+  log.turnStartBombs = applyTurnStartArtifacts(state);
   return { state, log };
+}
+
+/** 玩家回合开始时生效的神器（开战的第一回合也算）；按 ID 顺序，返回放下炸弹的格 */
+function applyTurnStartArtifacts(state: BattleState): Pos[] {
+  const placed: Pos[] = [];
+  const put = (bomb: BombKind) => {
+    const at = placeBombOnRandomTile(state, bomb);
+    if (at) placed.push(at);
+  };
+  if (state.artifacts.includes('powderKeg')) put('A');
+  if (state.artifacts.includes('prismOre')) put('CB');
+  return placed;
 }
 
 function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog, config: EngineConfig, shatteredTurn: boolean): void {

@@ -77,7 +77,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   maxInstalledInserts: 6,
   maxPhases: 200,
   scoreMode: false,
-  scoreTurns: 4,
+  scoreTurns: 5,
   playerMaxHp: 40,
   apPerTurn: 3,
   playerShieldCap: 40,

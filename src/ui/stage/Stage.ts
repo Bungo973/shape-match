@@ -1165,6 +1165,22 @@ export class Stage {
     await tl;
   }
 
+  /** 回合开始时神器放下的炸弹：落点炸出火花（炸弹本身由棋盘同步画出） */
+  async showTurnStartBombs(at: Pos[]): Promise<void> {
+    if (at.length === 0) return;
+    const tl = gsap.timeline();
+    at.forEach((p, i) => {
+      const { x, y } = center(p);
+      tl.call(() => {
+        this.burst(x, y, 0xffb347, 14);
+        this.flashCell(p, 0xffb347, 0.8);
+        sfx.bombCreate();
+      }, [], i * 0.15);
+    });
+    tl.to({}, { duration: 0.35 });
+    await tl;
+  }
+
   /** 爆破等级提升：棋盘中央弹出提示并震屏 */
   async showBombLevelUps(ups: { name: string; level: number }[]): Promise<void> {
     if (ups.length === 0) return;
