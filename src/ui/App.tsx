@@ -103,6 +103,13 @@ export function App() {
   const doAction = useCallback(async (action: Action) => {
     if (busyRef.current) return;
     const out = runAction(runRef.current, action);
+    if (!out.ok && out.reason === 'noMatch' && action.type === 'swap') {
+      // 不能消除的交换：弹回原位，不提示文字
+      setBusyBoth(true);
+      await stageRef.current?.playRejectedSwap(action.from, action.to);
+      setBusyBoth(false);
+      return;
+    }
     if (!out.ok || !out.log) return void flash(out.ok ? '无效操作' : (REASON_TEXT[out.reason] ?? out.reason));
     const stage = stageRef.current!;
     setBusyBoth(true);
@@ -125,6 +132,7 @@ export function App() {
       if (out.log) await stageRef.current!.playEnemyTurn(out.log);
       setRun(out.run);
       if (out.run.battle) showBattle(out.run.battle);
+      if (out.log?.reshuffled) flash('无步可走，已重新洗牌');
     }
     setBusyBoth(false);
   }, []);

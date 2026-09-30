@@ -23,7 +23,7 @@ function act(s: BattleState, action: Action) {
 }
 
 const ignite = (r: number, c: number): Action => ({ type: 'ignite', at: { r, c } });
-/** 填充棋盘上交换 (0,0)(0,1)：不形成匹配 */
+/** 填充棋盘上交换 (0,0)(0,1)：不形成匹配，是无效行动 */
 const idleSwap: Action = { type: 'swap', from: { r: 0, c: 0 }, to: { r: 0, c: 1 } };
 
 describe('战斗开始', () => {
@@ -59,15 +59,11 @@ describe('玩家行动', () => {
     expect(state.enemy.hp).toBe(50);
   });
 
-  it('未消除交换耗 AP 但不结算；AP 用完后不能再行动', () => {
-    let s = battle([attack(5)]);
-    for (let i = 0; i < 3; i++) {
-      const out = act(s, idleSwap);
-      expect(out.log.settlement).toBeNull();
-      s = out.state;
-    }
-    expect(s.ap).toBe(0);
-    expect(playerAction(s, idleSwap)).toMatchObject({ ok: false, reason: 'noAp' });
+  it('不能消除的交换无效、不耗 AP；AP 用完后不能再行动', () => {
+    const s = battle([attack(5)]);
+    expect(playerAction(s, idleSwap)).toMatchObject({ ok: false, reason: 'noMatch', state: { ap: 3 } });
+    s.ap = 0;
+    expect(playerAction(s, ignite(0, 0))).toMatchObject({ ok: false, reason: 'noAp' });
   });
 
   it('击杀立即结束战斗，敌人不再行动', () => {
@@ -78,10 +74,10 @@ describe('玩家行动', () => {
     expect(endTurn(state).log).toBeNull();
   });
 
-  it('催化剂充能跨行动保留，被下一次主动清除有色方块的行动消耗', () => {
+  it('催化剂充能跨回合保留，被下一次主动清除有色方块的行动消耗', () => {
     let s = battle([attack(5)], { board: { '4,0': 'H' } });
     s.player.catalystCharges = 1;
-    s = act(s, idleSwap).state;
+    s = endTurn(s).state;
     expect(s.player.catalystCharges).toBe(1);
     const { log } = act(s, ignite(4, 0));
     expect(log.settlement!.chargesUsed).toBe(1);
@@ -188,7 +184,6 @@ describe('特殊意图', () => {
   it('倍率侵蚀：整回合没有主动消除时，在回合结束时消失', () => {
     let s = battle([{ parts: [{ kind: 'erodeMultiplier' }] }, attack(1)]);
     s = endTurn(s).state;
-    s = act(s, idleSwap).state;
     expect(s.current.erosionArmed).toBe(true);
     expect(endTurn(s).state.current.erosionArmed).toBe(false);
   });

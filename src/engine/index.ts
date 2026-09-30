@@ -13,3 +13,4 @@ export * from './rewards';
 export * from './content/enemies';
 export * from './run';
 export * from './cards';
+export * from './shuffle';

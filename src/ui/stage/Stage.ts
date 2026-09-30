@@ -405,7 +405,7 @@ export class Stage {
     const { x, y } = center(cell);
     this.selection.clear().roundRect(x - CELL / 2 + 3, y - CELL / 2 + 3, CELL - 6, CELL - 6, 10).stroke({ width: 3, color: 0xffe08a });
     const tile = this.board[cell.r]?.[cell.c];
-    this.hint.text = tile?.kind === 'bomb' ? '再点一次：点燃（1 AP）' : '';
+    this.hint.text = tile?.kind === 'bomb' ? '再点一次原地点燃，或换向相邻格在落点引爆' : '';
     this.hint.position.set(Math.min(x - 70, BOARD.x + BOARD.size - 200), y - CELL / 2 - 30);
   }
 
@@ -668,8 +668,13 @@ export class Stage {
           if (Number.isFinite(first)) cursor = first;
           break;
         }
-        case 'noMatch':
+        case 'shuffle': {
+          // 死局自动重排：等全部下落结束后，所有方块同时滑向新位置
+          const start = Math.max(cursor, ...settled);
+          master.add(this.playShuffle(ev), start);
+          cursor = start + 0.6;
           break;
+        }
       }
     }
     await master;
@@ -802,6 +807,35 @@ export class Stage {
     tl.call(() => sfx.swap(), [], 0);
     tl.to(this.sprites.get(a)!, { ...center(to), duration: 0.16, ease: 'power2.inOut' }, 0);
     tl.to(this.sprites.get(b)!, { ...center(from), duration: 0.16, ease: 'power2.inOut' }, 0);
+    return tl;
+  }
+
+  /** 不能消除的交换：两枚方块互换半程后弹回，棋盘不变 */
+  async playRejectedSwap(from: Pos, to: Pos): Promise<void> {
+    const a = this.sprites.get(this.grid[from.r]?.[from.c] ?? -1);
+    const b = this.sprites.get(this.grid[to.r]?.[to.c] ?? -1);
+    if (!a || !b) return;
+    const pa = center(from);
+    const pb = center(to);
+    const mid = (p: { x: number; y: number }, q: { x: number; y: number }) => ({ x: p.x + (q.x - p.x) * 0.45, y: p.y + (q.y - p.y) * 0.45 });
+    const tl = gsap.timeline();
+    tl.call(() => sfx.swap(), [], 0);
+    tl.to(a, { ...mid(pa, pb), duration: 0.1, ease: 'power2.out' }, 0);
+    tl.to(b, { ...mid(pb, pa), duration: 0.1, ease: 'power2.out' }, 0);
+    tl.to(a, { ...pa, duration: 0.14, ease: 'back.out(3)' }, 0.1);
+    tl.to(b, { ...pb, duration: 0.14, ease: 'back.out(3)' }, 0.1);
+    await tl;
+  }
+
+  private playShuffle(ev: Extract<ResolutionEvent, { type: 'shuffle' }>): gsap.core.Timeline {
+    const tl = gsap.timeline();
+    tl.call(() => this.floatText(BOARD.x + BOARD.size / 2, BOARD.y + BOARD.size / 2, '无步可走，重新洗牌', 0xffe08a, 34), [], 0);
+    for (const m of ev.moves) this.grid[m.from.r]![m.from.c] = null;
+    for (const m of ev.moves) {
+      this.grid[m.to.r]![m.to.c] = m.id;
+      const s = this.sprites.get(m.id);
+      if (s) tl.to(s, { ...center(m.to), duration: 0.45, ease: 'power2.inOut' }, 0.1);
+    }
     return tl;
   }
 

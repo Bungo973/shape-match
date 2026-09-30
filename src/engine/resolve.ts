@@ -18,6 +18,7 @@ import { ARTIFACT_PARAMS, type ArtifactKey } from './artifacts';
 import type { EngineConfig } from './config';
 import { INSERT_DEFS, type InsertType, type InstalledInsert } from './inserts';
 import { findGroups, passiveBombCell } from './match';
+import { hasLegalMove, reshuffle } from './shuffle';
 import type { Rng } from './rng';
 import type { EffectValues } from './score';
 import { blockValue, bombMakeBonus, type UpgradeLevels } from './upgrades';
@@ -90,7 +91,6 @@ export interface InsertTrigger {
 export type ResolutionEvent =
   | { type: 'swap'; from: Pos; to: Pos }
   | { type: 'ignite'; at: Pos; bomb: BombKind }
-  | { type: 'noMatch' }
   | {
       type: 'matches';
       phase: Phase;
@@ -113,12 +113,14 @@ export type ResolutionEvent =
       queued: { id: number; at: Pos }[];
       insertTriggers: InsertTrigger[];
     }
-  | { type: 'gravity'; gravity: Gravity; moves: TileMove[]; spawns: TileSpawn[] };
+  | { type: 'gravity'; gravity: Gravity; moves: TileMove[]; spawns: TileSpawn[] }
+  /** 死局自动重排；moves 为空表示重新上色，界面直接同步棋盘 */
+  | { type: 'shuffle'; moves: TileMove[] };
 
 export interface ActionResult {
   valid: boolean;
   /** 无效时的原因，供界面提示 */
-  reason?: 'outOfBounds' | 'notAdjacent' | 'sameColor' | 'notBomb' | 'emptyCell' | 'stone';
+  reason?: 'outOfBounds' | 'notAdjacent' | 'sameColor' | 'notBomb' | 'emptyCell' | 'stone' | 'noMatch';
   apSpent: 0 | 1;
   board: Board;
   events: ResolutionEvent[];
@@ -173,8 +175,8 @@ class Resolver {
   passiveCount = 0;
   activeBombsDetonated = 0;
   overloadFired = false;
-  /** 本次行动中已引爆或已消耗的炸弹，保证每枚只引爆一次 */
-  private readonly spent = new Set<number>();
+  /** 本次行动中已引爆或已消耗的炸弹，保证每枚只引爆一次；也用于保留本步亲手做出的炸弹 */
+  readonly spent = new Set<number>();
   private readonly insertAt = new Map<number, InstalledInsert>();
   private readonly activeInserts: InstalledInsert[];
   /** 尚未写入事件的嵌片触发，随下一条 matches／wave 事件输出 */
@@ -625,23 +627,36 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
       const second: Detonation = { id: b.id, pos: from, bomb: b.bomb };
       res.runWaves('active', comboWave(first, second, to, rows, cols, res, cloneBoard(res.board)));
       res.runPassive();
-    } else if ((a.kind === 'bomb' && a.bomb === 'CB') || (b.kind === 'bomb' && b.bomb === 'CB')) {
-      // CB 与普通方块交换：按对方类型清除
-      const [cb, cbPos, other] = a.kind === 'bomb' && a.bomb === 'CB' ? [a, to, b] : [b as BombTile, from, a];
-      res.runWaves('active', waveOf([{ id: cb.id, pos: cbPos, bomb: 'CB', forcedColor: (other as { color: Color }).color }]));
+    } else if (a.kind === 'bomb' || b.kind === 'bomb') {
+      // 炸弹与普通方块交换：炸弹在落点引爆（CB 按对方颜色清除）；普通方块在它的落点若成匹配，
+      // 同一主动阶段一并结算。先结算匹配，再引爆；本步做出的炸弹保留在落点，不被这次爆炸波及。
+      const [bombTile, bombPos, other, otherPos] = a.kind === 'bomb' ? [a, to, b, from] : [b as BombTile, from, a, to];
+      const { created } = res.resolveMatches('active', [otherPos]);
+      for (const c of created) res.spent.add(c.id);
+      const forced = bombTile.bomb === 'CB' && other.kind === 'normal' ? { forcedColor: other.color } : {};
+      res.runWaves('active', waveOf([{ id: bombTile.id, pos: bombPos, bomb: bombTile.bomb, ...forced }]));
       res.runPassive();
     } else if (res.matchesThenWaves('active', [to, from])) {
       res.runPassive();
     } else {
-      res.events.push({ type: 'noMatch' });
+      // 只允许形成匹配的交换
+      return invalid('noMatch');
     }
+  }
+
+  // 死局：没有炸弹可点燃、也没有可匹配的交换时自动重排
+  let finalBoard = res.board;
+  if (!hasLegalMove(finalBoard)) {
+    const shuffled = reshuffle(finalBoard, ctx.rng, ctx.config);
+    finalBoard = shuffled.board;
+    res.events.push({ type: 'shuffle', moves: shuffled.moves });
   }
 
   const colorClears = COLORS.reduce((sum, col) => sum + res.activeClears[col], 0);
   return {
     valid: true,
     apSpent: 1,
-    board: res.board,
+    board: finalBoard,
     events: res.events,
     activeClearsByType: res.activeClears,
     passiveClearCount: res.passiveCount,

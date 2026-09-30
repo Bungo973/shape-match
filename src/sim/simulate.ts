@@ -38,6 +38,13 @@ export interface BattleReport {
   /** 结算得到、却因护盾上限而浪费的护盾 */
   shieldWasted: number;
   stuns: number;
+  /** 每次行动：被动阶段产出的炸弹、亲手做出的炸弹、被动匹配的层数（连锁深度）、是否用了炸弹 */
+  passiveBombs: number[];
+  activeBombs: number[];
+  chainDepth: number[];
+  usedBomb: number[];
+  /** 死局自动重排次数（行动后与石化后） */
+  shuffles: number;
 }
 
 export interface RunReport {
@@ -99,6 +106,11 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         shieldGains: [],
         shieldWasted: 0,
         stuns: 0,
+        passiveBombs: [],
+        activeBombs: [],
+        chainDepth: [],
+        usedBomb: [],
+        shuffles: 0,
       });
     } else if (run.phase === 'battle') {
       const report = battles[battles.length - 1]!;
@@ -108,6 +120,14 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
       if (action) {
         const r = runAction(run, action, config);
         if (!r.ok || !r.log) throw new Error(r.ok ? '缺少日志' : r.reason);
+        const ev = r.log.result.events;
+        const made = (phase: 'active' | 'passive') =>
+          ev.reduce((n, e) => n + (e.type === 'matches' && e.phase === phase ? e.created.length : 0), 0);
+        report.passiveBombs.push(made('passive'));
+        report.activeBombs.push(made('active'));
+        report.chainDepth.push(ev.filter((e) => e.type === 'matches' && e.phase === 'passive').length);
+        report.usedBomb.push(r.log.result.activeBombsDetonated > 0 ? 1 : 0);
+        report.shuffles += ev.filter((e) => e.type === 'shuffle').length;
         const s = r.log.settlement;
         if (s) {
           report.multipliers.push(s.multiplier);
@@ -121,6 +141,7 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         const r = runEndTurn(run, config);
         if (!r.ok) throw new Error(r.reason);
         if (r.log) {
+          if (r.log.reshuffled) report.shuffles++;
           report.damageTaken += r.log.damageToPlayerHp + r.log.damageToPlayerShield + r.log.fuseDamageToHp + r.log.fuseDamageToShield;
           report.hpLost += r.log.damageToPlayerHp + r.log.fuseDamageToHp;
         }

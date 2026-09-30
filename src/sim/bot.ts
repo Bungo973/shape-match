@@ -17,7 +17,7 @@ import {
 
 export type BotStyle = 'skilled' | 'novice';
 
-/** 值得考虑的行动：立刻形成匹配的交换、与炸弹有关的交换、点燃任一炸弹 */
+/** 可走的行动：形成匹配的交换、炸弹与相邻方块的交换（在落点引爆）、点燃任一炸弹 */
 export function candidateActions(board: Board): Action[] {
   const out: Action[] = [];
   const rows = board.length;
@@ -35,9 +35,7 @@ export function candidateActions(board: Board): Action[] {
         const b = getTile(board, to)!;
         if (a.kind === 'stone' || b.kind === 'stone') continue;
         if (a.kind === 'normal' && b.kind === 'normal' && a.color === b.color) continue;
-        const bothBombs = a.kind === 'bomb' && b.kind === 'bomb';
-        const hasCB = (a.kind === 'bomb' && a.bomb === 'CB') || (b.kind === 'bomb' && b.bomb === 'CB');
-        if (bothBombs || hasCB) {
+        if (a.kind === 'bomb' || b.kind === 'bomb') {
           out.push({ type: 'swap', from: { r, c }, to });
           continue;
         }

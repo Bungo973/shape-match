@@ -92,6 +92,15 @@ function report(style: BotStyle) {
       ].join(' | '),
     );
   }
+  // 炸弹与连锁：整局所有行动汇总
+  const bs = all.flatMap((r) => r.battles);
+  const actions = bs.reduce((n, b) => n + b.usedBomb.length, 0);
+  const depth = bs.flatMap((b) => b.chainDepth);
+  console.log(
+    `炸弹与连锁 · ${actions} 次行动：每步被动产弹 ${avg(bs.flatMap((b) => b.passiveBombs)).toFixed(2)}，亲手做出 ${avg(bs.flatMap((b) => b.activeBombs)).toFixed(2)}，` +
+      `用了炸弹的行动 ${pc(avg(bs.flatMap((b) => b.usedBomb)))}，连锁层数 平均 ${avg(depth).toFixed(1)} / p90 ${pct(depth, 0.9)}，` +
+      `重排 ${bs.reduce((n, b) => n + b.shuffles, 0)} 次`,
+  );
 }
 
 const changed = Object.entries(config).filter(([k, v]) => (DEFAULT_CONFIG as unknown as Record<string, unknown>)[k] !== v);

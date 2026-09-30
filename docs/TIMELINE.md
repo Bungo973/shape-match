@@ -63,3 +63,11 @@
 | [ARTIFACT_DESIGN](ARTIFACT_DESIGN.md) · [GAME_RULES](GAME_RULES.md) · [BALANCE_LOG](BALANCE_LOG.md) | 5 件方块构筑神器（A18–A22）；共振底座、锁位共鸣器下架 | 现行 |
 | [ENEMY_DESIGN](ENEMY_DESIGN.md) · [ASSET_BATCH3](ASSET_BATCH3.md) · [THEME_STORY](THEME_STORY.md) | 九战敌人阵容（三层三家族），色封与石化，第三批素材 | 现行 |
 | [BALANCE_LOG](BALANCE_LOG.md) | 九战接通：第二、三层敌人上线，素材接入，整局校准（熟练 89% / 新手 66% 通关） | 记录 |
+
+## 2026-09-30 · 炸弹与连锁
+
+| 文档 | 内容 | 状态 |
+| --- | --- | --- |
+| [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) · [GAME_RULES](GAME_RULES.md) | 方向改为“多出炸弹与连锁”；交换规则原型：只允许可匹配交换、炸弹换位即引爆、死局自动重排 | 记录 |
+| [GAME_RULES](GAME_RULES.md) · [SPECIAL_TILES](SPECIAL_TILES.md) · [CONVENTIONS](CONVENTIONS.md) | 新交换规则定案，旧规则移除 | 现行 |
+| [ENEMY_DESIGN](ENEMY_DESIGN.md) · [BALANCE_LOG](BALANCE_LOG.md) | 敌人生命 ×1.15 | 现行 |

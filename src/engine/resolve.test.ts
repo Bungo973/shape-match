@@ -26,22 +26,6 @@ describe('行动合法性', () => {
     expect(resolveAction(board, { type: 'ignite', at: { r: 0, c: 0 } }, testCtx()).reason).toBe('notBomb');
   });
 
-  it('未形成匹配的交换保留新排列并消耗 1 AP，无任何清除', () => {
-    const board = boardWith({ '0,0': 'a', '0,1': 's' });
-    const res = resolveAction(board, { type: 'swap', from: { r: 0, c: 0 }, to: { r: 0, c: 1 } }, testCtx());
-    expect(res.apSpent).toBe(1);
-    expect(res.events.map((e) => e.type)).toEqual(['swap', 'noMatch']);
-    expect(getTile(res.board, { r: 0, c: 1 })).toMatchObject({ color: 'attack' });
-    expect(res.hadActiveColorClear).toBe(false);
-    expect(board[0]![0]).toMatchObject({ color: 'attack' }); // 原棋盘未被修改
-  });
-
-  it('炸弹与普通方块交换而未成匹配时只移动，不引爆', () => {
-    const board = boardWith({ '3,3': 'H', '3,4': 'a' });
-    const res = resolveAction(board, { type: 'swap', from: { r: 3, c: 3 }, to: { r: 3, c: 4 } }, testCtx());
-    expect(res.events.map((e) => e.type)).toEqual(['swap', 'noMatch']);
-    expect(getTile(res.board, { r: 3, c: 4 })).toMatchObject({ kind: 'bomb', bomb: 'H' });
-  });
 });
 
 describe('主动匹配与产弹', () => {

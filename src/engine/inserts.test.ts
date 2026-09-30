@@ -86,12 +86,6 @@ describe('易燃物质', () => {
     expect(w!.insertTriggers[0]!.effect).toBe('ignite');
   });
 
-  it('炸弹因交换移动到覆盖格不算生成，不引爆', () => {
-    const board = boardWith({ '3,3': 'H', '3,4': 's' });
-    const res = run(board, { type: 'swap', from: { r: 3, c: 3 }, to: { r: 3, c: 4 } }, [ins('i1', 'flammable', [3, 4], [2, 4], [1, 4], [0, 4])]);
-    expect(res.events.map((e) => e.type)).toEqual(['swap', 'noMatch']);
-    expect(getTile(res.board, { r: 3, c: 4 })).toMatchObject({ bomb: 'H' });
-  });
 });
 
 describe('火星陶与震裂石', () => {

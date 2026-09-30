@@ -8,6 +8,7 @@ import { isRotationOf } from './inserts';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import type { InstalledInsert } from './inserts';
 import { resolveAction, type ActionResult } from './resolve';
+import { hasLegalMove, reshuffle } from './shuffle';
 import { createRng } from './rng';
 import { settle, type Settlement } from './score';
 import { COLORS, emptyClears, type Action, type Board, type ClearsByType, type Color, type Gravity, type Pos } from './types';
@@ -143,6 +144,8 @@ export interface EnemyTurnLog {
   apBonusNext: number;
   /** 石化：本回合被变成石块的格 */
   petrified: Pos[];
+  /** 石化后无步可走而自动重排了棋盘 */
+  reshuffled: boolean;
   nextIntent: Intent;
 }
 
@@ -151,7 +154,8 @@ export interface EnemyTurnLog {
 export function startBattle(input: StartBattleInput, config: EngineConfig = DEFAULT_CONFIG): BattleState {
   const rng = createRng(input.seed);
   const ids = createIdGen();
-  const board = createBoard(rng, ids, config);
+  let board = createBoard(rng, ids, config);
+  if (!hasLegalMove(board)) board = reshuffle(board, rng, config).board;
   const state: BattleState = {
     rulesVersion: RULES_VERSION,
     rngState: rng.state,
@@ -389,6 +393,7 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
     counterDamage: 0,
     apBonusNext: 0,
     petrified: [],
+    reshuffled: false,
     nextIntent: enemy.intent,
   };
 
@@ -414,6 +419,14 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
       executePart(state, part, log, config);
       if (state.outcome !== 'ongoing') return { state, log };
     }
+  }
+
+  // 石化可能让棋盘无步可走
+  if (!hasLegalMove(state.board)) {
+    const rng = createRng(state.rngState);
+    state.board = reshuffle(state.board, rng, config).board;
+    state.rngState = rng.state;
+    log.reshuffled = true;
   }
 
   // 3. 回合末毒气衰减（被眩晕跳过意图的回合也衰减），再展示下一次意图

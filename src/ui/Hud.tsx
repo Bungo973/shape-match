@@ -4,6 +4,7 @@ import { ArtifactCard } from './components';
 
 export const REASON_TEXT: Record<string, string> = {
   sameColor: '同色方块不能交换',
+  noMatch: '这样交换不能消除',
   notAdjacent: '只能交换相邻的格子',
   noAp: '行动力不足',
   notBomb: '只能点燃炸弹',
