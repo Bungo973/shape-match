@@ -71,3 +71,4 @@
 | [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) · [GAME_RULES](GAME_RULES.md) | 方向改为“多出炸弹与连锁”；交换规则原型：只允许可匹配交换、炸弹换位即引爆、死局自动重排 | 记录 |
 | [GAME_RULES](GAME_RULES.md) · [SPECIAL_TILES](SPECIAL_TILES.md) · [CONVENTIONS](CONVENTIONS.md) | 新交换规则定案，旧规则移除 | 现行 |
 | [ENEMY_DESIGN](ENEMY_DESIGN.md) · [BALANCE_LOG](BALANCE_LOG.md) | 敌人生命 ×1.15 | 现行 |
+| [ENEMY_DESIGN](ENEMY_DESIGN.md) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 三拍循环兜底模板；碎甲、穿刺（夺宝客）、强化；第二、三层重排与校准 | 现行 |

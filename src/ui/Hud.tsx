@@ -1,5 +1,5 @@
 // 战斗中的状态栏：玩家、敌人、神器条与结算明细。交换模式与嵌片卡模式共用。
-import { DEFAULT_CONFIG, poisonDecay, poisonThreshold, type ActionLog, type ArtifactKey, type BattleState, type Intent } from '../engine';
+import { DEFAULT_CONFIG, playerShieldCap, poisonDecay, poisonThreshold, type ActionLog, type ArtifactKey, type BattleState, type Intent } from '../engine';
 import { ArtifactCard } from './components';
 
 export const REASON_TEXT: Record<string, string> = {
@@ -18,12 +18,13 @@ export const REASON_TEXT: Record<string, string> = {
 
 const COLOR_NAME = { attack: '攻击', shield: '护盾', poison: '毒气', catalyst: '催化剂' } as const;
 
-function intentText(intent: Intent, chargeBonus: number): string {
+/** bonus：蓄力与强化带来的攻击加成 */
+function intentText(intent: Intent, bonus: number): string {
   return intent.parts
     .map((p) => {
       switch (p.kind) {
         case 'attack':
-          return `攻击 ${p.amount + chargeBonus}`;
+          return p.pierce ? `穿刺攻击 ${p.amount + bonus}（一半无视护盾）` : `攻击 ${p.amount + bonus}`;
         case 'defend':
           return `防御 ${p.amount}`;
         case 'charge':
@@ -38,6 +39,10 @@ function intentText(intent: Intent, chargeBonus: number): string {
           return p.color ? `色封：${COLOR_NAME[p.color]}方块` : '色封';
         case 'petrify':
           return p.row != null ? `石化第 ${p.row + 1} 行 ${p.count} 格` : `石化 ${p.count} 格`;
+        case 'shatter':
+          return `碎甲（下回合护盾上限 ${Math.floor(DEFAULT_CONFIG.playerShieldCap * DEFAULT_CONFIG.shatterCapRatio)}）`;
+        case 'empower':
+          return `强化 +${p.amount}`;
       }
     })
     .join(' · ');
@@ -80,6 +85,11 @@ export function PlayerPanel({ b, gold, apLabel = '行动力' }: { b: BattleState
         </span>
         <span className={`chip ${b.gravity === 'up' ? 'warn' : ''}`}>重力 {b.gravity === 'up' ? `↑ 剩 ${b.gravityTurnsLeft} 回合` : '↓'}</span>
         {b.current.erosionArmed && <span className="chip warn">倍率被侵蚀</span>}
+        {b.current.shattered && (
+          <span className="chip warn" title="碎甲：本回合护盾上限降低">
+            碎甲：护盾上限 {playerShieldCap(b)}
+          </span>
+        )}
         {b.current.sealedColor && (
           <span className="chip warn" title="本回合该色方块每块只计 1 基数">
             {COLOR_NAME[b.current.sealedColor]}被色封
@@ -112,7 +122,12 @@ export function EnemyPanel({ b, battleIndex }: { b: BattleState; battleIndex: nu
       <Bar value={b.enemy.hp} max={b.enemy.def.maxHp} />
       <div className="row">
         <span className="chip shield">护盾 {b.enemy.shield}</span>
-        <span className="chip intent">意图：{b.enemy.stunPending ? '（将被眩晕取消）' : intentText(b.enemy.intent, b.enemy.chargeBonus)}</span>
+        <span className="chip intent">意图：{b.enemy.stunPending ? '（将被眩晕取消）' : intentText(b.enemy.intent, b.enemy.chargeBonus + (b.enemy.strength ?? 0))}</span>
+        {(b.enemy.strength ?? 0) > 0 && (
+          <span className="chip warn" title="强化：此后每次攻击都加上这个数">
+            强化 +{b.enemy.strength}
+          </span>
+        )}
       </div>
       <div className="row">
         <span className="label">毒气</span>

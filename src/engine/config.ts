@@ -28,6 +28,10 @@ export interface EngineConfig {
   playerMaxHp: number;
   apPerTurn: number;
   playerShieldCap: number;
+  /** 碎甲：下一玩家回合护盾上限 = playerShieldCap × 此比例（向下取整） */
+  shatterCapRatio: number;
+  /** 穿刺：攻击中无视护盾的比例（向上取整） */
+  pierceRatio: number;
   /** 棋盘上石块的数量上限；达到后石化意图改为防御 */
   stoneCap: number;
   /** 每个敌人回合结束后，主角护盾保留的比例（1 = 全部保留，0 = 每回合清空）；向下取整。2026-09-29 定为 0 */
@@ -66,6 +70,8 @@ export const DEFAULT_CONFIG: EngineConfig = {
   playerMaxHp: 40,
   apPerTurn: 3,
   playerShieldCap: 40,
+  shatterCapRatio: 0.5,
+  pierceRatio: 0.5,
   stoneCap: 10,
   playerShieldRetain: 0,
   playerShieldCarryOver: 0,

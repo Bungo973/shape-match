@@ -101,6 +101,8 @@ function report(style: BotStyle) {
       `用了炸弹的行动 ${pc(avg(bs.flatMap((b) => b.usedBomb)))}，连锁层数 平均 ${avg(depth).toFixed(1)} / p90 ${pct(depth, 0.9)}，` +
       `重排 ${bs.reduce((n, b) => n + b.shuffles, 0)} 次`,
   );
+  const sum = (f: (b: BattleReport) => number) => bs.reduce((n, b) => n + f(b), 0);
+  console.log(`敌人攻击被护盾完全挡住：${pc(sum((b) => b.blockedTurns) / Math.max(1, sum((b) => b.attackTurns)))}（${sum((b) => b.attackTurns)} 次攻击）`);
 }
 
 const changed = Object.entries(config).filter(([k, v]) => (DEFAULT_CONFIG as unknown as Record<string, unknown>)[k] !== v);

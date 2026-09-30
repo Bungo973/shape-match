@@ -21,7 +21,8 @@ const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 // ---- 敌人意图 ----
 
 export type IntentPart =
-  | { kind: 'attack'; amount: number }
+  /** pierce：穿刺，其中一部分（pierceRatio）无视护盾直接扣生命 */
+  | { kind: 'attack'; amount: number; pierce?: boolean }
   | { kind: 'defend'; amount: number }
   /** 蓄力：下次攻击 +amount */
   | { kind: 'charge'; amount: number }
@@ -34,7 +35,11 @@ export type IntentPart =
   /** 色封：目标颜色在意图展示时固定（玩家等级最高的方块颜色），下一玩家回合该色方块等级视为 1 */
   | { kind: 'sealColor'; color?: Color }
   /** 石化：目标行在意图展示时固定，敌人行动时把该行 count 个普通方块变成石块 */
-  | { kind: 'petrify'; count: number; row?: number };
+  | { kind: 'petrify'; count: number; row?: number }
+  /** 碎甲：下一玩家回合主角护盾上限降为 playerShieldCap × shatterCapRatio */
+  | { kind: 'shatter' }
+  /** 强化：此后每次攻击永久 +amount，可叠加（被眩晕取消的回合不强化） */
+  | { kind: 'empower'; amount: number };
 
 export interface Intent {
   parts: IntentPart[];
@@ -69,6 +74,8 @@ export interface EnemyState {
   stunnedThisTurn: boolean;
   /** 蓄力累积的下次攻击加成 */
   chargeBonus: number;
+  /** 强化累积的永久攻击加成；旧存档没有此字段，按 0 处理 */
+  strength: number;
   scriptIndex: number;
   intent: Intent;
 }
@@ -92,9 +99,9 @@ export interface BattleState {
   /** 向上重力剩余的玩家回合数；0 表示未生效 */
   gravityTurnsLeft: number;
   /** 敌人本回合成功施加、从下一玩家回合起生效的状态 */
-  pending: { erosion: boolean; suppressId: string | null; gravity: boolean; apBonus: number; sealColor: Color | null };
-  /** 本玩家回合生效中的状态 */
-  current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null };
+  pending: { erosion: boolean; suppressId: string | null; gravity: boolean; apBonus: number; sealColor: Color | null; shatter?: boolean };
+  /** 本玩家回合生效中的状态；shattered 为碎甲（护盾上限降低） */
+  current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null; shattered?: boolean };
   outcome: 'ongoing' | 'won' | 'lost';
   totalScore: number;
   /** 嵌片卡模式：抽牌堆、手牌、弃牌堆；交换模式下不存在 */
@@ -173,6 +180,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
       stunPending: false,
       stunnedThisTurn: false,
       chargeBonus: 0,
+      strength: 0,
       scriptIndex: 0,
       intent: { parts: [] },
     },
@@ -301,9 +309,9 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
 
 function applyPlayerEffects(state: BattleState, s: Settlement, log: ActionLog, config: EngineConfig): void {
   const { attack, shield, poison } = s.finalEffects;
-  // 护盾增加至上限
+  // 护盾增加至上限（碎甲时上限降低）
   const before = state.player.shield;
-  state.player.shield = Math.min(config.playerShieldCap, before + shield);
+  state.player.shield = Math.max(before, Math.min(playerShieldCap(state, config), before + shield));
   log.shieldGained = state.player.shield - before;
   // 攻击先扣敌人护盾再扣生命
   const hit = damageEnemy(state, attack);
@@ -323,6 +331,21 @@ function applyPlayerEffects(state: BattleState, s: Settlement, log: ActionLog, c
       log.stunApplied = true;
     }
   }
+}
+
+/** 本玩家回合的护盾上限：碎甲生效时按比例降低 */
+export function playerShieldCap(state: BattleState, config: EngineConfig = DEFAULT_CONFIG): number {
+  return state.current.shattered ? Math.floor(config.playerShieldCap * config.shatterCapRatio) : config.playerShieldCap;
+}
+
+/** 敌人一次攻击的实际数值：基础 + 蓄力 + 强化 */
+export function attackAmount(enemy: EnemyState, base: number): number {
+  return base + enemy.chargeBonus + (enemy.strength ?? 0);
+}
+
+/** 穿刺攻击中无视护盾的部分 */
+export function piercedPart(amount: number, config: EngineConfig = DEFAULT_CONFIG): number {
+  return Math.ceil(amount * config.pierceRatio);
 }
 
 /** 眩晕阈值随敌人最大生命变化 */
@@ -355,9 +378,9 @@ function damageEnemy(state: BattleState, amount: number): { toShield: number; to
   return { toShield, toHp };
 }
 
-/** 对主角造成伤害：先扣护盾再扣生命。生命归零时失败。 */
-function damagePlayer(state: BattleState, amount: number): { toShield: number; toHp: number } {
-  const toShield = Math.min(state.player.shield, amount);
+/** 对主角造成伤害：先扣护盾再扣生命；pierced 部分无视护盾直接扣生命。生命归零时失败。 */
+function damagePlayer(state: BattleState, amount: number, pierced = 0): { toShield: number; toHp: number } {
+  const toShield = Math.min(state.player.shield, amount - pierced);
   state.player.shield -= toShield;
   const toHp = Math.min(state.player.hp, amount - toShield);
   state.player.hp -= toHp;
@@ -371,7 +394,7 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   const state = clone(prev);
 
   // 1. 玩家回合结束：本回合生效的状态到期；向上重力扣减一回合（提前结束也计）；手牌进弃牌堆
-  state.current = { erosionArmed: false, suppressedId: null, sealedColor: null };
+  state.current = { erosionArmed: false, suppressedId: null, sealedColor: null, shattered: false };
   if (state.cards) {
     state.cards.discard.push(...state.cards.hand);
     state.cards.hand = [];
@@ -451,11 +474,12 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   if (state.pending.erosion) state.current.erosionArmed = true;
   if (state.pending.suppressId) state.current.suppressedId = state.pending.suppressId;
   if (state.pending.sealColor) state.current.sealedColor = state.pending.sealColor;
+  if (state.pending.shatter) state.current.shattered = true;
   if (state.pending.gravity) {
     state.gravity = 'up';
     state.gravityTurnsLeft = config.gravityTurns;
   }
-  state.pending = { erosion: false, suppressId: null, gravity: false, apBonus: 0, sealColor: null };
+  state.pending = { erosion: false, suppressId: null, gravity: false, apBonus: 0, sealColor: null, shatter: false };
   return { state, log };
 }
 
@@ -464,9 +488,9 @@ function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog, co
   log.executed.push(part);
   switch (part.kind) {
     case 'attack': {
-      const dmg = part.amount + enemy.chargeBonus;
+      const dmg = attackAmount(enemy, part.amount);
       enemy.chargeBonus = 0;
-      const hurt = damagePlayer(state, dmg);
+      const hurt = damagePlayer(state, dmg, part.pierce ? piercedPart(dmg, config) : 0);
       log.damageToPlayerShield += hurt.toShield;
       log.damageToPlayerHp += hurt.toHp;
       // 反应线圈：一次攻击被护盾完全挡下时反击
@@ -496,6 +520,12 @@ function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog, co
       return;
     case 'petrify':
       if (part.row != null) log.petrified.push(...petrifyRow(state, part.row, part.count, config));
+      return;
+    case 'shatter':
+      state.pending.shatter = true;
+      return;
+    case 'empower':
+      enemy.strength = (enemy.strength ?? 0) + part.amount;
       return;
   }
 }

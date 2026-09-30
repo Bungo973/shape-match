@@ -1,7 +1,13 @@
 // 九战敌人的内容数据。行为设计见 docs/ENEMY_DESIGN.md；生命与伤害为占位值，待模拟器与试玩校准。
-import type { EnemyDef, Intent } from '../battle';
+// 出招循环的兜底模板是“三拍”：预备（挂 debuff／buff + 小攻击）→ 重拍（大攻击）→ 喘息（防御或强化）。
+import type { EnemyDef, Intent, IntentPart } from '../battle';
 
 const atk = (amount: number): Intent => ({ parts: [{ kind: 'attack', amount }] });
+const intent = (...parts: IntentPart[]): Intent => ({ parts });
+const hit = (amount: number): IntentPart => ({ kind: 'attack', amount });
+const defend = (amount: number): IntentPart => ({ kind: 'defend', amount });
+const shatter: IntentPart = { kind: 'shatter' };
+const empower = (amount: number): IntentPart => ({ kind: 'empower', amount });
 
 /** 第 1 战：直接攻击，教玩家看意图、在攻击与护盾之间取舍 */
 export const CRYSTAL_MOLE: EnemyDef = {
@@ -38,18 +44,13 @@ export const ROCK_CRAB: EnemyDef = {
 
 // ---- 第二层 · 封印遗迹 ----
 
-/** 第 4 战：防御后重击，并把方块石化；石块只能用炸弹清掉 */
+/** 第 4 战：引入碎甲。喘息（防御 + 石化）→ 预备（碎甲 + 小攻击）→ 重拍（重击，正落在护盾上限减半的回合） */
 export const STONE_GUARDIAN: EnemyDef = {
   id: 'stone-guardian',
   name: '苔甲守卫',
   maxHp: 598,
   fallbackDefend: 10,
-  script: [
-    { parts: [{ kind: 'defend', amount: 14 }] },
-    { parts: [{ kind: 'petrify', count: 3 }, { kind: 'attack', amount: 18 }] },
-    { parts: [{ kind: 'defend', amount: 14 }] },
-    atk(32),
-  ],
+  script: [intent(defend(14), { kind: 'petrify', count: 3 }), intent(shatter, hit(12)), atk(26)],
 };
 
 /** 第 5 战：攻击与防御交替，考验三步内的分配 */
@@ -58,7 +59,7 @@ export const SPORE_CLUSTER: EnemyDef = {
   name: '毒孢菇群',
   maxHp: 713,
   fallbackDefend: 10,
-  script: [atk(20), { parts: [{ kind: 'defend', amount: 12 }, { kind: 'attack', amount: 14 }] }, atk(28)],
+  script: [atk(20), intent(shatter, hit(14)), atk(26), intent(defend(12))],
 };
 
 /** 第 6 战（精英）：色封，构筑不能只靠一种颜色 */
@@ -67,41 +68,37 @@ export const RUNE_SPIDER: EnemyDef = {
   name: '符链石蛛',
   maxHp: 1323,
   fallbackDefend: 12,
-  script: [
-    atk(20),
-    { parts: [{ kind: 'sealColor' }, { kind: 'attack', amount: 16 }] },
-    atk(30),
-    { parts: [{ kind: 'defend', amount: 14 }, { kind: 'attack', amount: 12 }] },
-  ],
+  script: [intent(shatter, hit(12)), atk(24), intent({ kind: 'sealColor' }, hit(14)), intent(defend(14), hit(12))],
 };
 
 // ---- 第三层 · 悬浮遗物殿 ----
 
-/** 第 7 战：伪装成宝匣，混合已学的侵蚀、石化与蓄力 */
+/** 第 7 战：引入强化。混合已学的侵蚀、石化、碎甲；每轮喘息时强化，拖得越久越危险 */
 export const MIMIC_CHEST: EnemyDef = {
   id: 'mimic-chest',
   name: '拟宝匣兽',
   maxHp: 1012,
   fallbackDefend: 12,
   script: [
-    { parts: [{ kind: 'erodeMultiplier' }, { kind: 'attack', amount: 18 }] },
-    { parts: [{ kind: 'petrify', count: 3 }] },
-    { parts: [{ kind: 'charge', amount: 16 }] },
-    atk(20),
+    intent({ kind: 'erodeMultiplier' }, hit(18)),
+    intent(shatter, hit(12)),
+    atk(26),
+    intent({ kind: 'petrify', count: 3 }, empower(3)),
   ],
 };
 
-/** 第 8 战：三回合蓄力倒计时；眩晕打断攻击时蓄力全部作废 */
+/** 第 8 战：穿刺是夺宝客独有的技能（一半伤害无视护盾）。穿刺刺击 → 蓄力倒计时 → 穿刺重击；眩晕打断时蓄力作废 */
 export const RELIC_RAIDER: EnemyDef = {
   id: 'relic-raider',
   name: '夺宝客',
   maxHp: 1058,
   fallbackDefend: 12,
   script: [
-    { parts: [{ kind: 'charge', amount: 15 }] },
-    { parts: [{ kind: 'charge', amount: 15 }] },
-    { parts: [{ kind: 'charge', amount: 15 }] },
-    atk(20),
+    intent({ kind: 'attack', amount: 10, pierce: true }),
+    intent({ kind: 'charge', amount: 10 }),
+    intent({ kind: 'charge', amount: 10 }),
+    intent({ kind: 'attack', amount: 10, pierce: true }),
+    intent(defend(12)),
   ],
 };
 
@@ -111,12 +108,14 @@ export const RELIC_COLOSSUS: EnemyDef = {
   name: '遗物巨像',
   maxHp: 2530,
   fallbackDefend: 16,
+  // 两轮三拍：重力反转 + 强化 → 碎甲 + 色封 → 重击；侵蚀 + 强化 + 防御 → 石化 + 蓄力 → 重击
   script: [
     atk(24),
-    { parts: [{ kind: 'gravityUp' }] },
-    { parts: [{ kind: 'sealColor' }, { kind: 'attack', amount: 20 }] },
-    { parts: [{ kind: 'erodeMultiplier' }, { kind: 'attack', amount: 22 }] },
-    { parts: [{ kind: 'petrify', count: 4 }, { kind: 'charge', amount: 20 }] },
+    intent({ kind: 'gravityUp' }, empower(2)),
+    intent(shatter, { kind: 'sealColor' }, hit(12)),
+    atk(24),
+    intent({ kind: 'erodeMultiplier' }, empower(2), defend(16)),
+    intent({ kind: 'petrify', count: 4 }, { kind: 'charge', amount: 20 }),
     atk(30),
   ],
 };

@@ -45,6 +45,9 @@ export interface BattleReport {
   usedBomb: number[];
   /** 死局自动重排次数（行动后与石化后） */
   shuffles: number;
+  /** 敌人真正出手攻击的回合数，以及其中被护盾完全挡住（没掉血）的回合数 */
+  attackTurns: number;
+  blockedTurns: number;
 }
 
 export interface RunReport {
@@ -111,6 +114,8 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         chainDepth: [],
         usedBomb: [],
         shuffles: 0,
+        attackTurns: 0,
+        blockedTurns: 0,
       });
     } else if (run.phase === 'battle') {
       const report = battles[battles.length - 1]!;
@@ -142,6 +147,10 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         if (!r.ok) throw new Error(r.reason);
         if (r.log) {
           if (r.log.reshuffled) report.shuffles++;
+          if (r.log.executed.some((p) => p.kind === 'attack')) {
+            report.attackTurns++;
+            if (r.log.damageToPlayerHp === 0) report.blockedTurns++;
+          }
           report.damageTaken += r.log.damageToPlayerHp + r.log.damageToPlayerShield + r.log.fuseDamageToHp + r.log.fuseDamageToShield;
           report.hpLost += r.log.damageToPlayerHp + r.log.fuseDamageToHp;
         }

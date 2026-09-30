@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endTurn, playerAction, poisonDecay, poisonThreshold, startBattle, type BattleState, type EnemyDef, type Intent } from './battle';
+import { endTurn, playerAction, playerShieldCap, poisonDecay, poisonThreshold, startBattle, type BattleState, type EnemyDef, type Intent } from './battle';
 import { DEFAULT_CONFIG } from './config';
 import { findLines } from './match';
 import { multiplierFor } from './score';
@@ -326,3 +326,37 @@ describe('石化', () => {
   });
 });
 
+
+describe('碎甲、穿刺、强化', () => {
+  it('碎甲：下一玩家回合护盾上限减半，回合结束后恢复', () => {
+    let s = battle([{ parts: [{ kind: 'shatter' }] }, attack(1)], { board: { '4,0': 'H', '4,2': 's', '4,4': 's', '4,6': 's' } });
+    s = endTurn(s).state;
+    expect(s.current.shattered).toBe(true);
+    expect(playerShieldCap(s)).toBe(20);
+    s.board = boardWith({ '4,0': 'H', '4,2': 's', '4,4': 's', '4,6': 's' });
+    s.player.shield = 19;
+    s = act(s, ignite(4, 0)).state;
+    expect(s.player.shield).toBe(20);
+    s = endTurn(s).state;
+    expect(s.current.shattered).toBe(false);
+    expect(playerShieldCap(s)).toBe(40);
+  });
+
+  it('穿刺：一半伤害无视护盾', () => {
+    const s = battle([{ parts: [{ kind: 'attack', amount: 20, pierce: true }] }]);
+    s.player.shield = 40;
+    const { state, log } = endTurn(s);
+    expect(log!.damageToPlayerHp).toBe(10);
+    expect(log!.damageToPlayerShield).toBe(10);
+    expect(state.player.hp).toBe(30);
+  });
+
+  it('强化：此后每次攻击永久加成并可叠加，眩晕不清除', () => {
+    let s = battle([{ parts: [{ kind: 'empower', amount: 4 }] }, attack(10)]);
+    s = endTurn(s).state;
+    expect(s.enemy.strength).toBe(4);
+    const { state, log } = endTurn(s);
+    expect(log!.damageToPlayerHp).toBe(14);
+    expect(state.enemy.strength).toBe(4);
+  });
+});

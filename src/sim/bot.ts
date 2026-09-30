@@ -1,7 +1,9 @@
 // 数值模拟用的自动玩家。它和真人一样看不到结果预览：评估走法时用一个“想象中的”随机补位，
 // 而不是真实的后续补位，因此它的判断接近“看得懂局面的玩家”，但不会作弊预知连锁。
 import {
+  attackAmount,
   cloneBoard,
+  piercedPart,
   DEFAULT_CONFIG,
   findLines,
   getTile,
@@ -49,18 +51,27 @@ export function candidateActions(board: Board): Action[] {
   return out;
 }
 
-/** 敌人下一次意图的攻击总量（已被眩晕则为 0） */
+/** 敌人下一次意图的攻击总量（含蓄力与强化；已被眩晕则为 0） */
 export function incomingDamage(s: BattleState): number {
   if (s.enemy.stunPending) return 0;
-  const atk = s.enemy.intent.parts.filter((p) => p.kind === 'attack').reduce((sum, p) => sum + (p.kind === 'attack' ? p.amount : 0), 0);
-  return atk > 0 ? atk + s.enemy.chargeBonus : 0;
+  return s.enemy.intent.parts.reduce((sum, p) => sum + (p.kind === 'attack' ? attackAmount(s.enemy, p.amount) : 0), 0);
+}
+
+/** 来袭攻击中护盾能挡的部分（扣掉穿刺） */
+function blockableDamage(s: BattleState): number {
+  if (s.enemy.stunPending) return 0;
+  return s.enemy.intent.parts.reduce((sum, p) => {
+    if (p.kind !== 'attack') return sum;
+    const dmg = attackAmount(s.enemy, p.amount);
+    return sum + dmg - (p.pierce ? piercedPart(dmg) : 0);
+  }, 0);
 }
 
 /** 熟练玩家的估值：伤害 + 恰好够用的护盾 + 眩晕价值 + 充能 */
 function value(before: BattleState, log: ActionLog, after: BattleState): number {
   if (after.outcome === 'won') return 1e6;
   const incoming = incomingDamage(before);
-  const need = Math.max(0, incoming - before.player.shield);
+  const need = Math.max(0, blockableDamage(before) - before.player.shield);
   const shieldUseful = Math.min(log.shieldGained, need);
   let v = log.damageToEnemyHp + 0.5 * log.damageToEnemyShield + shieldUseful + 0.1 * (log.shieldGained - shieldUseful);
   v += log.stunApplied ? incoming * 1.2 + 3 : 0.3 * log.poisonAdded;
