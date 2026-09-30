@@ -15,7 +15,7 @@ export const CRYSTAL_MOLE: EnemyDef = {
   name: '晶背鼹鼠',
   maxHp: 314,
   fallbackDefend: 8,
-  script: [atk(11), atk(15), atk(11), atk(19)],
+  script: [atk(12), atk(16), atk(12), atk(20)],
 };
 
 /** 第 2 战：先蓄力再俯冲，教玩家用毒气眩晕打断大招（被打断的攻击连带作废蓄力） */
@@ -24,8 +24,8 @@ export const CAVE_BATS: EnemyDef = {
   name: '洞蝠群',
   maxHp: 375,
   fallbackDefend: 8,
-  // 蓄力后的俯冲 13+13=26：护盾每回合清空，一回合内挡住它很难，眩晕、抢杀或硬吃
-  script: [{ parts: [{ kind: 'charge', amount: 13 }] }, atk(13), atk(9)],
+  // 每拍都攻击：蓄力拍也会啄一下；俯冲 22 + 蓄力 13 = 35
+  script: [intent(hit(5), { kind: 'charge', amount: 8 }), atk(13), atk(11)],
 };
 
 /** 第 3 战（精英）：倍率侵蚀，教玩家先用小消除承担侵蚀，再准备爆发 */
@@ -34,12 +34,7 @@ export const ROCK_CRAB: EnemyDef = {
   name: '吞光岩蟹',
   maxHp: 604,
   fallbackDefend: 12,
-  script: [
-    atk(18),
-    { parts: [{ kind: 'erodeMultiplier' }, { kind: 'attack', amount: 13 }] },
-    atk(26),
-    { parts: [{ kind: 'defend', amount: 12 }, { kind: 'attack', amount: 10 }] },
-  ],
+  script: [atk(14), intent({ kind: 'erodeMultiplier' }, hit(11)), atk(27), intent(defend(7), hit(8))],
 };
 
 // ---- 第二层 · 封印遗迹 ----
@@ -50,7 +45,7 @@ export const STONE_GUARDIAN: EnemyDef = {
   name: '苔甲守卫',
   maxHp: 598,
   fallbackDefend: 10,
-  script: [intent(defend(14), { kind: 'petrify', count: 3 }), intent(shatter, hit(12)), atk(26)],
+  script: [intent(defend(10), { kind: 'petrify', count: 3 }, hit(10)), intent(shatter, hit(14)), atk(31)],
 };
 
 /** 第 5 战：攻击与防御交替，考验三步内的分配 */
@@ -59,7 +54,7 @@ export const SPORE_CLUSTER: EnemyDef = {
   name: '毒孢菇群',
   maxHp: 713,
   fallbackDefend: 10,
-  script: [atk(20), intent(shatter, hit(14)), atk(26), intent(defend(12))],
+  script: [atk(20), intent(shatter, hit(13)), atk(34), intent(defend(8), hit(11))],
 };
 
 /** 第 6 战（精英）：色封，构筑不能只靠一种颜色 */
@@ -68,7 +63,7 @@ export const RUNE_SPIDER: EnemyDef = {
   name: '符链石蛛',
   maxHp: 1323,
   fallbackDefend: 12,
-  script: [intent(shatter, hit(12)), atk(24), intent({ kind: 'sealColor' }, hit(14)), intent(defend(14), hit(12))],
+  script: [intent(shatter, hit(14)), atk(30), intent({ kind: 'sealColor' }, hit(16)), intent(defend(10), hit(13))],
 };
 
 // ---- 第三层 · 悬浮遗物殿 ----
@@ -81,9 +76,9 @@ export const MIMIC_CHEST: EnemyDef = {
   fallbackDefend: 12,
   script: [
     intent({ kind: 'erodeMultiplier' }, hit(18)),
-    intent(shatter, hit(12)),
-    atk(26),
-    intent({ kind: 'petrify', count: 3 }, empower(3)),
+    intent(shatter, hit(14)),
+    atk(36),
+    intent({ kind: 'petrify', count: 3 }, empower(3), hit(11)),
   ],
 };
 
@@ -93,12 +88,12 @@ export const RELIC_RAIDER: EnemyDef = {
   name: '夺宝客',
   maxHp: 1058,
   fallbackDefend: 12,
+  // 攻击在前、蓄力在后：蓄力留给下一次攻击（穿刺重击 30 + 20 = 50，一半无视护盾）
   script: [
-    intent({ kind: 'attack', amount: 10, pierce: true }),
-    intent({ kind: 'charge', amount: 10 }),
-    intent({ kind: 'charge', amount: 10 }),
-    intent({ kind: 'attack', amount: 10, pierce: true }),
-    intent(defend(12)),
+    intent({ kind: 'attack', amount: 13, pierce: true }),
+    intent(hit(15), { kind: 'charge', amount: 12 }),
+    intent({ kind: 'attack', amount: 18, pierce: true }),
+    intent(defend(8), hit(11)),
   ],
 };
 
@@ -108,15 +103,15 @@ export const RELIC_COLOSSUS: EnemyDef = {
   name: '遗物巨像',
   maxHp: 2530,
   fallbackDefend: 16,
-  // 两轮三拍：重力反转 + 强化 → 碎甲 + 色封 → 重击；侵蚀 + 强化 + 防御 → 石化 + 蓄力 → 重击
+  // 两轮三拍，每拍都攻击：重力反转 + 强化 → 碎甲 + 色封 → 重击；侵蚀 + 强化 + 防御 → 石化 + 蓄力 → 重击
   script: [
-    atk(24),
-    intent({ kind: 'gravityUp' }, empower(2)),
-    intent(shatter, { kind: 'sealColor' }, hit(12)),
-    atk(24),
-    intent({ kind: 'erodeMultiplier' }, empower(2), defend(16)),
-    intent({ kind: 'petrify', count: 4 }, { kind: 'charge', amount: 20 }),
-    atk(30),
+    atk(21),
+    intent({ kind: 'gravityUp' }, empower(2), hit(13)),
+    intent(shatter, { kind: 'sealColor' }, hit(15)),
+    atk(39),
+    intent({ kind: 'erodeMultiplier' }, empower(2), defend(11), hit(11)),
+    intent(hit(13), { kind: 'petrify', count: 4 }, { kind: 'charge', amount: 14 }),
+    atk(25),
   ],
 };
 
