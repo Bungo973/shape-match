@@ -1,0 +1,693 @@
+<title>地底秘藏视觉样板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Cormorant+Garamond:ital,wght@1,500;1,600&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* 版式：页头一段说明，下面四张样板卡片两列排开（窄屏一列）；卡片外框跟随页面主题，棋盘各自固定自己的视觉世界 */
+:root {
+  --bg: #f4f5f6;
+  --fg: #1d2127;
+  --muted: #69717c;
+  --line: #dde1e6;
+  --card: #ffffff;
+  --accent: #3a5f8f;
+  --font-display: "Noto Serif SC", "Songti SC", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --fg: #e8eaed; --muted: #9098a3; --line: #262a31; --card: #181b20; --accent: #8fb0d8; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --fg: #e8eaed; --muted: #9098a3; --line: #262a31; --card: #181b20; --accent: #8fb0d8; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 56px; display: flex; flex-direction: column; gap: 28px; }
+.intro { display: flex; flex-direction: column; gap: 10px; max-width: 66ch; }
+.eyebrow { font-size: 12px; letter-spacing: .14em; color: var(--muted); }
+h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 4vw, 40px); line-height: 1.2; margin: 0; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); }
+.rules { display: flex; flex-wrap: wrap; gap: 8px; }
+.rules span { font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 12px; color: var(--fg); background: var(--card); }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 820px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.sample { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.sample > header, .sample > footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; }
+.sample > footer { border-top: 1px solid var(--line); }
+.name { display: flex; flex-direction: column; min-width: 0; }
+.name h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.name .kw { font-size: 12px; color: var(--muted); letter-spacing: .08em; }
+.hud { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hud .lab { font-size: 12px; color: var(--muted); }
+.hud b { font-size: 22px; font-weight: 600; min-width: 4ch; text-align: right; }
+.hud .mult { font-size: 13px; color: var(--muted); min-width: 3.4ch; }
+.hud .mult.hot { color: var(--accent); }
+.stage { position: relative; aspect-ratio: 1 / 1; max-width: 100%; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: pointer; }
+.stage canvas:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.note { margin: 0; font-size: 13px; color: var(--muted); min-width: 0; }
+button.auto { font: inherit; font-size: 13px; border: 1px solid var(--line); background: transparent; color: var(--fg); border-radius: 999px; padding: 4px 12px; cursor: pointer; white-space: nowrap; }
+button.auto[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+button.auto:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 各样板的分数字体 */
+[data-style="graphite"] .hud b { font-family: "JetBrains Mono", ui-monospace, monospace; }
+[data-style="porcelain"] .hud b { font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; font-size: 26px; }
+[data-style="strata"] .hud b { font-family: "Unbounded", var(--font-body); font-size: 19px; }
+[data-style="bauhaus"] .hud b { font-family: "Archivo Black", Impact, sans-serif; font-weight: 400; }
+</style>
+
+<div class="wrap">
+  <section class="intro">
+    <span class="eyebrow">视觉样板 · 纯代码生成</span>
+    <h1>同一局三消，四种画面</h1>
+    <p>四块棋盘玩法完全相同，只换视觉。方块没有属性，只分颜色和形状；分数来自消除数量乘以连锁倍率。每块棋盘都在自动演示，点一下棋盘就交给你来玩。</p>
+    <div class="rules">
+      <span>交换相邻方块凑三连</span>
+      <span>四连做出直线炸弹</span>
+      <span>T 形、L 形或五连做出范围炸弹</span>
+      <span>点两下炸弹原地引爆</span>
+      <span>连锁每多一层，倍率 +0.5</span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <article class="sample" data-style="graphite">
+      <header>
+        <div class="name"><h2>石墨</h2><span class="kw">几何 · 近单色 · 精密</span></div>
+        <div class="hud"><span class="lab">分数</span><b data-score>0</b><span class="mult" data-mult>×1.0</span></div>
+      </header>
+      <div class="stage"><canvas tabindex="0" aria-label="石墨风格棋盘"></canvas></div>
+      <footer><p class="note">形状区分方块，颜色压到最低。动作干脆，消除只留一圈细线。</p><button class="auto" data-auto aria-pressed="true">自动演示</button></footer>
+    </article>
+
+    <article class="sample" data-style="porcelain">
+      <header>
+        <div class="name"><h2>瓷釉</h2><span class="kw">柔光 · 釉面 · 安静</span></div>
+        <div class="hud"><span class="lab">分数</span><b data-score>0</b><span class="mult" data-mult>×1.0</span></div>
+      </header>
+      <div class="stage"><canvas tabindex="0" aria-label="瓷釉风格棋盘"></canvas></div>
+      <footer><p class="note">圆润的釉面方块带柔和投影，消除时像水面荡开一圈涟漪。</p><button class="auto" data-auto aria-pressed="true">自动演示</button></footer>
+    </article>
+
+    <article class="sample" data-style="strata">
+      <header>
+        <div class="name"><h2>矿脉</h2><span class="kw">宝石 · 暗场 · 发光</span></div>
+        <div class="hud"><span class="lab">分数</span><b data-score>0</b><span class="mult" data-mult>×1.0</span></div>
+      </header>
+      <div class="stage"><canvas tabindex="0" aria-label="矿脉风格棋盘"></canvas></div>
+      <footer><p class="note">最贴近“地底秘藏”：切面宝石嵌在岩层里，消除迸出火花。</p><button class="auto" data-auto aria-pressed="true">自动演示</button></footer>
+    </article>
+
+    <article class="sample" data-style="bauhaus">
+      <header>
+        <div class="name"><h2>构成</h2><span class="kw">平涂 · 原色 · 利落</span></div>
+        <div class="hud"><span class="lab">分数</span><b data-score>0</b><span class="mult" data-mult>×1.0</span></div>
+      </header>
+      <div class="stage"><canvas tabindex="0" aria-label="构成风格棋盘"></canvas></div>
+      <footer><p class="note">红蓝黄黑四种平涂图形，没有阴影，动作带一点回弹。</p><button class="auto" data-auto aria-pressed="true">自动演示</button></footer>
+    </article>
+  </div>
+</div>
+
+<script>
+(() => {
+  const N = 7;
+  const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const SPEED = REDUCED ? 0.35 : 1;
+  const TAU = Math.PI * 2;
+
+  // ---------- 补间 ----------
+  const tweens = new Set();
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const easeIn = (t) => t * t;
+  const backOut = (t) => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+  function tween(ms, fn, ease = easeOut) {
+    return new Promise((res) => tweens.add({ t0: performance.now(), dur: Math.max(1, ms * SPEED), fn, ease, res }));
+  }
+  const wait = (ms) => tween(ms, () => {});
+
+  // ---------- 形状 ----------
+  function shape(ctx, kind, r) {
+    ctx.beginPath();
+    switch (kind) {
+      case 'circle': ctx.arc(0, 0, r, 0, TAU); break;
+      case 'square': rrect(ctx, -r * 0.86, -r * 0.86, r * 1.72, r * 1.72, r * 0.2); break;
+      case 'tri': poly(ctx, [[0, -r * 1.08], [r * 1.02, r * 0.74], [-r * 1.02, r * 0.74]]); break;
+      case 'diamond': poly(ctx, [[0, -r * 1.14], [r * 0.9, 0], [0, r * 1.14], [-r * 0.9, 0]]); break;
+      case 'hex': poly(ctx, ngon(6, r * 1.02, Math.PI / 6)); break;
+      case 'oct': poly(ctx, ngon(8, r * 1.02, Math.PI / 8)); break;
+      case 'semi': ctx.arc(0, r * 0.38, r * 1.05, Math.PI, 0); ctx.closePath(); break;
+      case 'squircle': rrect(ctx, -r, -r, r * 2, r * 2, r * 0.62); break;
+    }
+  }
+  function ngon(n, r, rot) { return Array.from({ length: n }, (_, i) => [Math.cos(rot + (i * TAU) / n) * r, Math.sin(rot + (i * TAU) / n) * r]); }
+  function poly(ctx, pts) { pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); }
+  function rrect(ctx, x, y, w, h, r) { ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function specialMarks(ctx, sp, r, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (sp === 'h') { ctx.moveTo(-r * 0.55, -r * 0.2); ctx.lineTo(r * 0.55, -r * 0.2); ctx.moveTo(-r * 0.55, r * 0.2); ctx.lineTo(r * 0.55, r * 0.2); }
+    if (sp === 'v') { ctx.moveTo(-r * 0.2, -r * 0.55); ctx.lineTo(-r * 0.2, r * 0.55); ctx.moveTo(r * 0.2, -r * 0.55); ctx.lineTo(r * 0.2, r * 0.55); }
+    if (sp === 'a') { ctx.arc(0, 0, r * 0.42, 0, TAU); ctx.moveTo(r * 0.14, 0); ctx.arc(0, 0, r * 0.14, 0, TAU); }
+    ctx.stroke();
+  }
+  const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+
+  // ---------- 四种风格 ----------
+  const STYLES = {
+    graphite: {
+      colors: ['#ECEAE4', '#8E99A6', '#C9A45C', '#5F8CAB'],
+      shapes: ['circle', 'square', 'tri', 'diamond'],
+      popFont: '600 15px "JetBrains Mono", monospace', popColor: '#ECEAE4',
+      bg(ctx, W) {
+        ctx.fillStyle = '#15171B'; ctx.fillRect(0, 0, W, W);
+        const S = W / N; ctx.fillStyle = 'rgba(255,255,255,0.09)';
+        for (let r = 1; r < N; r++) for (let c = 1; c < N; c++) ctx.fillRect(c * S - 1, r * S - 1, 2, 2);
+      },
+      tile(ctx, t, S, sel) {
+        const r = S * 0.29;
+        ctx.fillStyle = this.colors[t.c]; shape(ctx, this.shapes[t.c], r); ctx.fill();
+        if (t.sp) {
+          specialMarks(ctx, t.sp, r, '#15171B', Math.max(1.5, S * 0.045));
+          ctx.strokeStyle = hexA(this.colors[t.c], 0.45); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, TAU); ctx.stroke();
+        }
+        if (sel) { ctx.strokeStyle = '#ECEAE4'; ctx.lineWidth = 1.5; ctx.beginPath(); rrect(ctx, -S * 0.44, -S * 0.44, S * 0.88, S * 0.88, 4); ctx.stroke(); }
+      },
+      burst(b, x, y, t) {
+        b.rings.push({ x, y, r0: b.S * 0.2, r1: b.S * 0.62, life: 0, max: 420, color: this.colors[t.c], w: 1.2 });
+      },
+      blast(ctx, e, S, W, p) {
+        ctx.strokeStyle = `rgba(236,234,228,${1 - p})`; ctx.lineWidth = 1 + (1 - p) * 2;
+        drawBlastShape(ctx, e, S, W, p, 'line');
+      },
+      clearAnim(t, p) { t.s = 1 + p * 0.25; t.a = 1 - p; },
+    },
+    porcelain: {
+      colors: ['#3E5C94', '#86B19E', '#D6978C', '#D5AE57'],
+      marks: ['dot', 'bar', 'ring', 'cross'],
+      popFont: 'italic 600 20px "Cormorant Garamond", Georgia, serif', popColor: '#2B3A55',
+      bg(ctx, W) {
+        const g = ctx.createLinearGradient(0, 0, 0, W); g.addColorStop(0, '#F1F3F6'); g.addColorStop(1, '#E5E9EE');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, W);
+        const S = W / N; ctx.fillStyle = 'rgba(40,60,90,0.04)';
+        for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { ctx.beginPath(); rrect(ctx, c * S + S * 0.08, r * S + S * 0.08, S * 0.84, S * 0.84, S * 0.26); ctx.fill(); }
+      },
+      tile(ctx, t, S, sel) {
+        const r = S * 0.36, col = this.colors[t.c];
+        ctx.save();
+        ctx.shadowColor = 'rgba(30,45,70,0.22)'; ctx.shadowBlur = S * 0.12; ctx.shadowOffsetY = S * 0.05;
+        ctx.fillStyle = col; shape(ctx, 'squircle', r); ctx.fill();
+        ctx.restore();
+        const hl = ctx.createRadialGradient(-r * 0.35, -r * 0.45, 0, -r * 0.35, -r * 0.45, r * 1.2);
+        hl.addColorStop(0, 'rgba(255,255,255,0.55)'); hl.addColorStop(0.45, 'rgba(255,255,255,0.08)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = hl; shape(ctx, 'squircle', r); ctx.fill();
+        // 釉下小纹样，帮助区分颜色
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = Math.max(1.2, S * 0.03); ctx.lineCap = 'round';
+        if (!t.sp) {
+          const m = this.marks[t.c], k = r * 0.22;
+          ctx.beginPath();
+          if (m === 'dot') { ctx.arc(0, 0, k * 0.55, 0, TAU); ctx.fill(); }
+          if (m === 'bar') { ctx.moveTo(-k, 0); ctx.lineTo(k, 0); ctx.stroke(); }
+          if (m === 'ring') { ctx.arc(0, 0, k * 0.8, 0, TAU); ctx.stroke(); }
+          if (m === 'cross') { ctx.moveTo(-k * 0.8, -k * 0.8); ctx.lineTo(k * 0.8, k * 0.8); ctx.moveTo(k * 0.8, -k * 0.8); ctx.lineTo(-k * 0.8, k * 0.8); ctx.stroke(); }
+        } else {
+          specialMarks(ctx, t.sp, r * 1.15, 'rgba(255,255,255,0.9)', Math.max(2, S * 0.05));
+        }
+        if (sel) { ctx.strokeStyle = '#2B3A55'; ctx.lineWidth = 2; shape(ctx, 'squircle', r * 1.14); ctx.stroke(); }
+      },
+      burst(b, x, y, t) {
+        b.rings.push({ x, y, r0: b.S * 0.25, r1: b.S * 0.8, life: 0, max: 560, color: this.colors[t.c], w: 2, fill: true });
+        for (let i = 0; i < 5; i++) {
+          const a = Math.random() * TAU, v = 0.03 + Math.random() * 0.05;
+          b.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 0, life: 0, max: 520, size: b.S * 0.05, color: this.colors[t.c], kind: 'dot' });
+        }
+      },
+      blast(ctx, e, S, W, p) {
+        ctx.fillStyle = `rgba(255,255,255,${0.75 * (1 - p)})`;
+        drawBlastShape(ctx, e, S, W, p, 'wash');
+      },
+      clearAnim(t, p) { t.s = 1 - easeIn(p); t.a = 1 - p * 0.6; t.rot = p * 0.5; },
+    },
+    strata: {
+      colors: ['#5B86FF', '#2FD08E', '#FFB547', '#B872FF'],
+      shapes: ['hex', 'diamond', 'tri', 'oct'],
+      popFont: '700 14px "Unbounded", sans-serif', popColor: '#FFE6A8',
+      bg(ctx, W, now) {
+        const g = ctx.createLinearGradient(0, 0, 0, W); g.addColorStop(0, '#0B0E1B'); g.addColorStop(1, '#141935');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, W);
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 9; i++) {
+          const y0 = (W / 9) * (i + 0.5);
+          ctx.strokeStyle = `rgba(140,160,255,${0.035 + 0.02 * Math.sin(now / 1800 + i)})`;
+          ctx.beginPath();
+          for (let x = 0; x <= W; x += W / 24) { const y = y0 + Math.sin(x / W * 5 + i * 1.7) * W * 0.012; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+          ctx.stroke();
+        }
+      },
+      tile(ctx, t, S, sel, now) {
+        const r = S * 0.33, col = this.colors[t.c], kind = this.shapes[t.c];
+        ctx.save();
+        if (t.sp || sel) { ctx.shadowColor = col; ctx.shadowBlur = S * (0.3 + 0.12 * Math.sin(now / 220)); }
+        const g = ctx.createLinearGradient(-r, -r, r, r);
+        g.addColorStop(0, '#FFFFFF'); g.addColorStop(0.18, col); g.addColorStop(1, hexA(col, 0.55));
+        ctx.fillStyle = g; shape(ctx, kind, r); ctx.fill();
+        ctx.restore();
+        // 切面：中心到各顶点的细线
+        ctx.save(); shape(ctx, kind, r); ctx.clip();
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1;
+        const pts = kind === 'hex' ? ngon(6, r * 1.02, Math.PI / 6) : kind === 'oct' ? ngon(8, r * 1.02, Math.PI / 8) : kind === 'tri' ? [[0, -r * 1.08], [r * 1.02, r * 0.74], [-r * 1.02, r * 0.74]] : [[0, -r * 1.14], [r * 0.9, 0], [0, r * 1.14], [-r * 0.9, 0]];
+        ctx.beginPath(); for (const [x, y] of pts) { ctx.moveTo(0, -r * 0.12); ctx.lineTo(x, y); } ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.ellipse(-r * 0.3, -r * 0.45, r * 0.32, r * 0.12, -0.5, 0, TAU); ctx.fill();
+        ctx.restore();
+        if (t.sp) specialMarks(ctx, t.sp, r, 'rgba(255,255,255,0.95)', Math.max(1.5, S * 0.04));
+        if (sel) { ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 1.5; shape(ctx, kind, r * 1.28); ctx.stroke(); }
+      },
+      burst(b, x, y, t) {
+        for (let i = 0; i < 9; i++) {
+          const a = Math.random() * TAU, v = 0.06 + Math.random() * 0.12;
+          b.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 0.03, g: 0.00018, life: 0, max: 520 + Math.random() * 300, size: b.S * (0.025 + Math.random() * 0.04), color: i % 3 ? this.colors[t.c] : '#FFFFFF', kind: 'spark', add: true });
+        }
+        b.rings.push({ x, y, r0: b.S * 0.1, r1: b.S * 0.55, life: 0, max: 300, color: '#FFFFFF', w: 2, add: true });
+      },
+      blast(ctx, e, S, W, p) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(255,230,170,${0.55 * (1 - p)})`;
+        drawBlastShape(ctx, e, S, W, p, 'beam');
+        ctx.restore();
+      },
+      clearAnim(t, p) { t.s = 1 + p * 0.35; t.a = 1 - easeIn(p); },
+    },
+    bauhaus: {
+      colors: ['#D6362A', '#1D4E9E', '#EFB622', '#161616'],
+      shapes: ['circle', 'square', 'tri', 'semi'],
+      popFont: '400 17px "Archivo Black", Impact, sans-serif', popColor: '#161616',
+      bg(ctx, W) {
+        ctx.fillStyle = '#F2F1EC'; ctx.fillRect(0, 0, W, W);
+        const S = W / N; ctx.strokeStyle = 'rgba(22,22,22,0.1)'; ctx.lineWidth = 1; ctx.beginPath();
+        for (let i = 1; i < N; i++) { ctx.moveTo(i * S, 0); ctx.lineTo(i * S, W); ctx.moveTo(0, i * S); ctx.lineTo(W, i * S); }
+        ctx.stroke();
+      },
+      tile(ctx, t, S, sel) {
+        const r = S * 0.34;
+        if (sel) { ctx.fillStyle = 'rgba(22,22,22,0.08)'; ctx.fillRect(-S / 2, -S / 2, S, S); }
+        ctx.fillStyle = this.colors[t.c]; shape(ctx, this.shapes[t.c], r); ctx.fill();
+        if (t.sp) specialMarks(ctx, t.sp, r, t.c === 3 ? '#F2F1EC' : '#161616', Math.max(2.5, S * 0.07));
+      },
+      burst(b, x, y, t) {
+        for (let i = 0; i < 6; i++) {
+          const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, v = 0.1 + Math.random() * 0.12;
+          b.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 0.0009, life: 0, max: 700, size: b.S * 0.1, color: this.colors[t.c], kind: i % 2 ? 'sq' : 'tri', rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 0.02 });
+        }
+      },
+      blast(ctx, e, S, W, p) {
+        ctx.fillStyle = '#161616';
+        drawBlastShape(ctx, e, S, W, p, 'bar');
+      },
+      clearAnim(t, p) { t.s = p < 0.25 ? 1 + p * 0.8 : 1.2 * (1 - backOut((p - 0.25) / 0.75) * 0.999); t.rot = p * 1.6; t.a = 1; },
+    },
+  };
+
+  // 炸弹范围的共用绘制；mode 决定形态
+  function drawBlastShape(ctx, e, S, W, p, mode) {
+    const cx = (e.c + 0.5) * S, cy = (e.r + 0.5) * S;
+    const k = mode === 'line' ? 1 : mode === 'bar' ? (1 - easeIn(p)) : 1 - p * 0.6;
+    const th = S * (mode === 'line' ? 0.02 : mode === 'bar' ? 0.34 : 0.9) * k;
+    if (e.sp === 'h' || e.sp === 'v') {
+      const reach = mode === 'bar' ? W * Math.min(1, p * 3) : W;
+      if (mode === 'line') {
+        ctx.beginPath();
+        if (e.sp === 'h') { ctx.moveTo(cx - reach, cy); ctx.lineTo(cx + reach, cy); } else { ctx.moveTo(cx, cy - reach); ctx.lineTo(cx, cy + reach); }
+        ctx.stroke();
+      } else if (e.sp === 'h') ctx.fillRect(cx - reach, cy - th / 2, reach * 2, th);
+      else ctx.fillRect(cx - th / 2, cy - reach, th, reach * 2);
+    } else {
+      const R = S * (1.5 + p * 0.6);
+      if (mode === 'line') { ctx.beginPath(); ctx.rect(cx - R, cy - R, R * 2, R * 2); ctx.stroke(); }
+      else if (mode === 'bar') { ctx.lineWidth = S * 0.18 * (1 - p); ctx.strokeStyle = '#161616'; ctx.beginPath(); ctx.arc(cx, cy, S * (0.6 + p * 1.2), 0, TAU); ctx.stroke(); }
+      else { ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill(); }
+    }
+  }
+
+  // ---------- 棋盘 ----------
+  let nextId = 1;
+  const rand = (n) => Math.floor(Math.random() * n);
+  const key = (r, c) => r * 16 + c;
+
+  class Board {
+    constructor(card) {
+      this.card = card;
+      this.style = STYLES[card.dataset.style];
+      this.canvas = card.querySelector('canvas');
+      this.ctx = this.canvas.getContext('2d');
+      this.scoreEl = card.querySelector('[data-score]');
+      this.multEl = card.querySelector('[data-mult]');
+      this.autoBtn = card.querySelector('[data-auto]');
+      this.particles = []; this.rings = []; this.blasts = []; this.pops = [];
+      this.busy = false; this.sel = null; this.auto = true; this.lastAuto = performance.now() + Math.random() * 800;
+      this.score = 0; this.shownScore = 0; this.shake = 0;
+      this.fill();
+      this.resize();
+      new ResizeObserver(() => this.resize()).observe(this.canvas.parentElement);
+      this.bind();
+    }
+    newTile(c, r, col) { return { id: nextId++, c, sp: null, x: col, y: r, s: 1, a: 1, rot: 0 }; }
+    fill() {
+      do {
+        this.grid = [];
+        for (let r = 0; r < N; r++) {
+          const row = [];
+          this.grid.push(row);
+          for (let c = 0; c < N; c++) {
+            let color;
+            do color = rand(4);
+            while ((c >= 2 && row[c - 1].c === color && row[c - 2].c === color) || (r >= 2 && this.grid[r - 1][c].c === color && this.grid[r - 2][c].c === color));
+            row.push(this.newTile(color, r, c));
+          }
+        }
+      } while (!this.hasMove());
+    }
+    resize() {
+      const w = this.canvas.parentElement.clientWidth;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      this.W = w; this.S = w / N; this.dpr = dpr;
+      this.canvas.width = Math.round(w * dpr); this.canvas.height = Math.round(w * dpr);
+    }
+
+    // ---- 规则 ----
+    findGroups() {
+      const g = this.grid, lines = [];
+      for (let r = 0; r < N; r++) {
+        let c = 0;
+        while (c < N) {
+          const t = g[r][c]; let e = c + 1;
+          while (t && e < N && g[r][e] && g[r][e].c === t.c) e++;
+          if (t && e - c >= 3) lines.push({ dir: 'h', cells: Array.from({ length: e - c }, (_, i) => [r, c + i]) });
+          c = e;
+        }
+      }
+      for (let c = 0; c < N; c++) {
+        let r = 0;
+        while (r < N) {
+          const t = g[r][c]; let e = r + 1;
+          while (t && e < N && g[e][c] && g[e][c].c === t.c) e++;
+          if (t && e - r >= 3) lines.push({ dir: 'v', cells: Array.from({ length: e - r }, (_, i) => [r + i, c]) });
+          r = e;
+        }
+      }
+      // 共享格子的线合并为一组
+      const parent = lines.map((_, i) => i);
+      const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+      const owner = new Map();
+      lines.forEach((l, i) => l.cells.forEach(([r, c]) => { const k = key(r, c); if (owner.has(k)) parent[find(i)] = find(owner.get(k)); else owner.set(k, i); }));
+      const groups = new Map();
+      lines.forEach((l, i) => { const root = find(i); if (!groups.has(root)) groups.set(root, { lines: [], cells: new Map() }); const gr = groups.get(root); gr.lines.push(l); l.cells.forEach(([r, c]) => gr.cells.set(key(r, c), [r, c])); });
+      return [...groups.values()].map((gr) => {
+        const hasH = gr.lines.some((l) => l.dir === 'h'), hasV = gr.lines.some((l) => l.dir === 'v');
+        const long = gr.lines.some((l) => l.cells.length >= 5);
+        const sp = long || (hasH && hasV) ? 'a' : gr.lines[0].cells.length === 4 ? gr.lines[0].dir : null;
+        return { cells: [...gr.cells.values()], sp };
+      });
+    }
+    swapMakesMatch(a, b) {
+      const g = this.grid, ta = g[a[0]][a[1]], tb = g[b[0]][b[1]];
+      if (!ta || !tb || ta.c === tb.c) return 0;
+      g[a[0]][a[1]] = tb; g[b[0]][b[1]] = ta;
+      const n = this.findGroups().reduce((s, gr) => s + gr.cells.length + (gr.sp ? 4 : 0), 0);
+      g[a[0]][a[1]] = ta; g[b[0]][b[1]] = tb;
+      return n;
+    }
+    moves() {
+      const out = [];
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        const t = this.grid[r][c];
+        if (t.sp) out.push({ ignite: [r, c], w: 6 });
+        for (const [dr, dc] of [[0, 1], [1, 0]]) {
+          const r2 = r + dr, c2 = c + dc; if (r2 >= N || c2 >= N) continue;
+          const u = this.grid[r2][c2];
+          if (t.sp || u.sp) { out.push({ a: [r, c], b: [r2, c2], w: 7 }); continue; }
+          const n = this.swapMakesMatch([r, c], [r2, c2]);
+          if (n) out.push({ a: [r, c], b: [r2, c2], w: n });
+        }
+      }
+      return out;
+    }
+    hasMove() { return this.grid.flat().some((t) => t.sp) || this.moves().length > 0; }
+
+    // ---- 行动 ----
+    async swap(a, b) {
+      if (this.busy || Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) !== 1) return;
+      this.busy = true; this.sel = null;
+      const g = this.grid, ta = g[a[0]][a[1]], tb = g[b[0]][b[1]];
+      const ok = ta.sp || tb.sp || this.swapMakesMatch(a, b) > 0;
+      if (!ok) {
+        await tween(110, (p) => { ta.x = a[1] + (b[1] - a[1]) * 0.4 * p; ta.y = a[0] + (b[0] - a[0]) * 0.4 * p; tb.x = b[1] + (a[1] - b[1]) * 0.4 * p; tb.y = b[0] + (a[0] - b[0]) * 0.4 * p; });
+        await tween(200, (p) => { ta.x = a[1] + (b[1] - a[1]) * 0.4 * (1 - p); ta.y = a[0] + (b[0] - a[0]) * 0.4 * (1 - p); tb.x = b[1] + (a[1] - b[1]) * 0.4 * (1 - p); tb.y = b[0] + (a[0] - b[0]) * 0.4 * (1 - p); }, backOut);
+        this.busy = false;
+        return;
+      }
+      g[a[0]][a[1]] = tb; g[b[0]][b[1]] = ta;
+      await tween(170, (p) => { ta.x = a[1] + (b[1] - a[1]) * p; ta.y = a[0] + (b[0] - a[0]) * p; tb.x = b[1] + (a[1] - b[1]) * p; tb.y = b[0] + (a[0] - b[0]) * p; }, easeInOut);
+      const det = [];
+      if (ta.sp) det.push(b);
+      if (tb.sp) det.push(a);
+      await this.resolve([a, b], det);
+      this.busy = false;
+    }
+    async ignite(p) {
+      if (this.busy) return;
+      this.busy = true; this.sel = null;
+      await this.resolve([], [p]);
+      this.busy = false;
+    }
+    async resolve(landings, detonate) {
+      let depth = 0;
+      for (;;) {
+        const groups = this.findGroups();
+        if (!groups.length && !detonate.length) break;
+        const clear = new Map(), keep = new Set(), create = [];
+        for (const gr of groups) {
+          if (gr.sp) {
+            const pick = gr.cells.find(([r, c]) => !this.grid[r][c].sp && landings.some(([lr, lc]) => lr === r && lc === c)) || gr.cells.find(([r, c]) => !this.grid[r][c].sp) || null;
+            if (pick) { keep.add(key(...pick)); create.push({ at: pick, sp: gr.sp }); }
+          }
+          for (const [r, c] of gr.cells) if (!keep.has(key(r, c))) clear.set(key(r, c), [r, c]);
+        }
+        // 炸弹：被消除或被点燃的炸弹按自身范围爆炸，波及的炸弹接力
+        const queue = [...detonate];
+        for (const [, [r, c]] of clear) if (this.grid[r][c]?.sp) queue.push([r, c]);
+        const done = new Set(), blasts = [];
+        while (queue.length) {
+          const [r, c] = queue.shift(), k = key(r, c);
+          const t = this.grid[r][c];
+          if (done.has(k) || !t || !t.sp) continue;
+          done.add(k); clear.set(k, [r, c]); blasts.push({ r, c, sp: t.sp, life: 0, max: 380 });
+          const area = [];
+          if (t.sp === 'h') for (let cc = 0; cc < N; cc++) area.push([r, cc]);
+          if (t.sp === 'v') for (let rr = 0; rr < N; rr++) area.push([rr, c]);
+          if (t.sp === 'a') for (let rr = r - 1; rr <= r + 1; rr++) for (let cc = c - 1; cc <= c + 1; cc++) if (rr >= 0 && rr < N && cc >= 0 && cc < N) area.push([rr, cc]);
+          for (const [rr, cc] of area) {
+            const kk = key(rr, cc);
+            if (keep.has(kk)) continue;
+            clear.set(kk, [rr, cc]);
+            if (this.grid[rr][cc]?.sp && !done.has(kk)) queue.push([rr, cc]);
+          }
+        }
+        const mult = 1 + depth * 0.5;
+        const cells = [...clear.values()].filter(([r, c]) => this.grid[r][c]);
+        const gained = Math.round(cells.length * 10 * mult);
+        this.setMult(mult);
+        await this.animateClear(cells, blasts, gained, mult);
+        for (const [r, c] of cells) this.grid[r][c] = null;
+        for (const { at: [r, c], sp } of create) { const t = this.grid[r][c]; if (t) { t.sp = sp; tween(260, (p) => (t.s = 1 + Math.sin(p * Math.PI) * 0.35), easeOut); } }
+        this.score += gained;
+        await this.gravity();
+        depth++; landings = []; detonate = [];
+      }
+      this.setMult(1);
+      if (!this.hasMove()) await this.reshuffle();
+    }
+    async animateClear(cells, blasts, gained, mult) {
+      const S = this.S;
+      for (const b of blasts) this.blasts.push(b);
+      if (blasts.length) this.shake = Math.min(1, 0.35 + blasts.length * 0.2);
+      const tiles = cells.map(([r, c]) => this.grid[r][c]);
+      tiles.forEach((t) => { if (!REDUCED) this.style.burst(this, (t.x + 0.5) * S, (t.y + 0.5) * S, t); });
+      const cx = cells.reduce((s, [, c]) => s + c, 0) / cells.length, cy = cells.reduce((s, [r]) => s + r, 0) / cells.length;
+      this.pops.push({ x: (cx + 0.5) * S, y: (cy + 0.5) * S, text: `+${gained}${mult > 1 ? `  ×${mult.toFixed(1)}` : ''}`, life: 0, max: 900 });
+      await tween(blasts.length ? 300 : 230, (p) => tiles.forEach((t) => this.style.clearAnim(t, p)), (t) => t);
+    }
+    async gravity() {
+      const moves = [];
+      for (let c = 0; c < N; c++) {
+        let write = N - 1;
+        for (let r = N - 1; r >= 0; r--) {
+          const t = this.grid[r][c];
+          if (!t) continue;
+          if (r !== write) { this.grid[write][c] = t; this.grid[r][c] = null; moves.push({ t, from: t.y, to: write }); }
+          write--;
+        }
+        for (let r = write; r >= 0; r--) {
+          const t = this.newTile(rand(4), r - (write + 1), c);
+          t.s = 1; t.a = 1;
+          this.grid[r][c] = t;
+          moves.push({ t, from: t.y, to: r });
+        }
+      }
+      if (!moves.length) return;
+      await Promise.all(moves.map(({ t, from, to }) => {
+        const d = to - from;
+        return tween(140 + 70 * Math.sqrt(d), (p) => (t.y = from + d * p), easeIn).then(() => tween(120, (p) => (t.s = 1 - Math.sin(p * Math.PI) * 0.08)));
+      }));
+    }
+    async reshuffle() {
+      await tween(220, (p) => this.grid.flat().forEach((t) => (t.s = 1 - p * 0.5)));
+      do {
+        for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { const t = this.grid[r][c]; if (!t.sp) t.c = rand(4); }
+      } while (this.findGroups().length || !this.hasMove());
+      await tween(260, (p) => this.grid.flat().forEach((t) => (t.s = 0.5 + p * 0.5)), backOut);
+    }
+    setMult(m) {
+      this.multEl.textContent = `×${m.toFixed(1)}`;
+      this.multEl.classList.toggle('hot', m > 1);
+    }
+
+    // ---- 自动演示 ----
+    autoStep(now) {
+      if (!this.auto || this.busy || now - this.lastAuto < 1300) return;
+      this.lastAuto = now;
+      const ms = this.moves();
+      if (!ms.length) return;
+      const total = ms.reduce((s, m) => s + m.w * m.w, 0);
+      let roll = Math.random() * total, pick = ms[0];
+      for (const m of ms) { roll -= m.w * m.w; if (roll <= 0) { pick = m; break; } }
+      if (pick.ignite) this.ignite(pick.ignite);
+      else { this.sel = pick.a; setTimeout(() => this.swap(pick.a, pick.b), 260 * SPEED); }
+    }
+    setAuto(on) {
+      this.auto = on;
+      this.autoBtn.setAttribute('aria-pressed', String(on));
+      this.lastAuto = performance.now();
+    }
+
+    // ---- 输入 ----
+    bind() {
+      const cv = this.canvas;
+      const cellAt = (e) => {
+        const rect = cv.getBoundingClientRect();
+        const c = Math.floor(((e.clientX - rect.left) / rect.width) * N), r = Math.floor(((e.clientY - rect.top) / rect.height) * N);
+        return r >= 0 && r < N && c >= 0 && c < N ? [r, c] : null;
+      };
+      cv.addEventListener('pointerdown', (e) => {
+        this.setAuto(false);
+        const p = cellAt(e);
+        if (!p) return;
+        this.drag = { p, x: e.clientX, y: e.clientY };
+        try { cv.setPointerCapture(e.pointerId); } catch {}
+      });
+      cv.addEventListener('pointermove', (e) => {
+        if (!this.drag || this.busy) return;
+        const rect = cv.getBoundingClientRect(), s = rect.width / N;
+        const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
+        if (Math.hypot(dx, dy) < s * 0.35) return;
+        const [r, c] = this.drag.p;
+        const to = Math.abs(dx) > Math.abs(dy) ? [r, c + Math.sign(dx)] : [r + Math.sign(dy), c];
+        this.drag = null;
+        if (to[0] >= 0 && to[0] < N && to[1] >= 0 && to[1] < N) this.swap([r, c], to);
+      });
+      cv.addEventListener('pointerup', () => { if (this.drag) this.click(this.drag.p); this.drag = null; });
+      cv.addEventListener('pointercancel', () => (this.drag = null));
+      this.autoBtn.addEventListener('click', () => this.setAuto(!this.auto));
+      // 键盘：方向键移动光标，回车等同点击
+      this.cursor = [3, 3];
+      cv.addEventListener('keydown', (e) => {
+        const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+        if (d) { this.setAuto(false); this.cursor = [Math.max(0, Math.min(N - 1, this.cursor[0] + d[0])), Math.max(0, Math.min(N - 1, this.cursor[1] + d[1]))]; this.showCursor = true; e.preventDefault(); }
+        if (e.key === 'Enter' || e.key === ' ') { this.setAuto(false); this.click(this.cursor); e.preventDefault(); }
+      });
+      cv.addEventListener('blur', () => (this.showCursor = false));
+    }
+    click(p) {
+      if (this.busy) return;
+      const s = this.sel;
+      if (s && s[0] === p[0] && s[1] === p[1]) { if (this.grid[p[0]][p[1]].sp) this.ignite(p); else this.sel = null; return; }
+      if (s && Math.abs(s[0] - p[0]) + Math.abs(s[1] - p[1]) === 1) { this.swap(s, p); return; }
+      this.sel = p;
+    }
+
+    // ---- 绘制 ----
+    draw(now, dt) {
+      const { ctx, W, S, dpr, style } = this;
+      if (!W) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      style.bg(ctx, W, now);
+      ctx.save();
+      if (this.shake > 0.01) { ctx.translate((Math.random() - 0.5) * 7 * this.shake, (Math.random() - 0.5) * 7 * this.shake); this.shake *= Math.pow(0.02, dt / 1000); }
+      ctx.beginPath(); ctx.rect(0, 0, W, W); ctx.clip();
+      for (const e of this.blasts) { e.life += dt; style.blast(ctx, e, S, W, Math.min(1, e.life / e.max)); }
+      this.blasts = this.blasts.filter((e) => e.life < e.max);
+      for (const row of this.grid) for (const t of row) {
+        if (!t || t.y < -1) continue;
+        ctx.save();
+        ctx.translate((t.x + 0.5) * S, (t.y + 0.5) * S);
+        ctx.rotate(t.rot); ctx.scale(Math.max(0, t.s), Math.max(0, t.s)); ctx.globalAlpha = Math.max(0, Math.min(1, t.a));
+        const sel = this.sel && this.sel[0] === Math.round(t.y) && this.sel[1] === Math.round(t.x);
+        style.tile(ctx, t, S, sel, now);
+        ctx.restore();
+      }
+      if (this.showCursor) { ctx.strokeStyle = style.popColor; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.strokeRect(this.cursor[1] * S + 3, this.cursor[0] * S + 3, S - 6, S - 6); ctx.setLineDash([]); }
+      for (const g of this.rings) {
+        g.life += dt; const p = Math.min(1, g.life / g.max), rr = g.r0 + (g.r1 - g.r0) * easeOut(p);
+        ctx.save(); if (g.add) ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 1 - p; ctx.beginPath(); ctx.arc(g.x, g.y, rr, 0, TAU);
+        if (g.fill) { ctx.fillStyle = hexA(g.color, 0.18); ctx.fill(); }
+        ctx.strokeStyle = g.color; ctx.lineWidth = g.w; ctx.stroke(); ctx.restore();
+      }
+      this.rings = this.rings.filter((g) => g.life < g.max);
+      for (const q of this.particles) {
+        q.life += dt; q.vy += (q.g || 0) * dt; q.x += q.vx * dt; q.y += q.vy * dt; if (q.vr) q.rot += q.vr * dt;
+        const p = Math.min(1, q.life / q.max);
+        ctx.save(); if (q.add) ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 1 - p; ctx.fillStyle = q.color; ctx.translate(q.x, q.y);
+        if (q.kind === 'spark') { const s = q.size * (1 - p * 0.5); ctx.beginPath(); ctx.moveTo(0, -s * 2); ctx.lineTo(s * 0.5, 0); ctx.lineTo(0, s * 2); ctx.lineTo(-s * 0.5, 0); ctx.closePath(); ctx.fill(); ctx.rotate(Math.PI / 2); ctx.fill(); }
+        else if (q.kind === 'sq') { ctx.rotate(q.rot); ctx.fillRect(-q.size / 2, -q.size / 2, q.size, q.size); }
+        else if (q.kind === 'tri') { ctx.rotate(q.rot); poly(ctx, [[0, -q.size * 0.6], [q.size * 0.55, q.size * 0.4], [-q.size * 0.55, q.size * 0.4]]); ctx.fill(); }
+        else { ctx.beginPath(); ctx.arc(0, 0, q.size * (1 - p), 0, TAU); ctx.fill(); }
+        ctx.restore();
+      }
+      this.particles = this.particles.filter((q) => q.life < q.max);
+      ctx.restore();
+      for (const q of this.pops) {
+        q.life += dt; const p = Math.min(1, q.life / q.max);
+        ctx.save(); ctx.globalAlpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
+        ctx.font = style.popFont; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = style.popColor; ctx.fillText(q.text, q.x, q.y - easeOut(p) * S * 0.9);
+        ctx.restore();
+      }
+      this.pops = this.pops.filter((q) => q.life < q.max);
+      // 分数滚动
+      if (this.shownScore !== this.score) {
+        this.shownScore += Math.max(1, Math.round((this.score - this.shownScore) * Math.min(1, dt / 120)));
+        if (this.shownScore > this.score) this.shownScore = this.score;
+        this.scoreEl.textContent = this.shownScore.toLocaleString('zh-CN');
+      }
+    }
+  }
+
+  const boards = [...document.querySelectorAll('.sample')].map((card) => new Board(card));
+  let last = performance.now();
+  function tick(now) {
+    const dt = Math.min(50, now - last); last = now;
+    for (const tw of [...tweens]) {
+      const p = Math.min(1, (now - tw.t0) / tw.dur);
+      tw.fn(tw.ease(p));
+      if (p >= 1) { tweens.delete(tw); tw.res(); }
+    }
+    for (const b of boards) { b.autoStep(now); b.draw(now, dt); }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>

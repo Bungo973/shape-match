@@ -78,3 +78,6 @@
 | [ENEMY_DESIGN](ENEMY_DESIGN.md) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 试玩太简单：敌人每拍都攻击，难度目标下调到模拟熟练约 65–72% | 现行（原型数值） |
 | [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 转向讨论：三消冲分原型（`?mode=score`），每关 12 步凑目标分，未达标按差距扣血 | 原型，待试玩 |
 | [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 冲分改为 5 回合、前期目标降低；回合开始类神器：火药桶、虹彩原石 | 原型，待试玩 |
+| [VISUAL_STYLE](VISUAL_STYLE.md) · [prototypes/style-samples.html](prototypes/style-samples.html) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) | 转向冲分 + 作品集：美术素材停用，画面纯代码绘制；四种样板中选定“构成”风格 | 现行 |
+
+**2026-09-30 起停用**：[ART_DIRECTION](ART_DIRECTION.md)、[ASSET_PLAN](ASSET_PLAN.md)、[ASSET_BATCH2](ASSET_BATCH2.md)、[ASSET_BATCH3](ASSET_BATCH3.md)、[BOARD_INSERT_VISUAL](BOARD_INSERT_VISUAL.md)（美术素材不再使用，视觉以 VISUAL_STYLE 为准）；[THEME_STORY](THEME_STORY.md) 中的敌人与故事线随打怪模式搁置。
