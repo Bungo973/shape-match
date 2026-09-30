@@ -83,4 +83,6 @@
 | [prototypes/tiles-bombs.html](prototypes/tiles-bombs.html) | 方块与炸弹样板：换掉黑半圆的三套方块组（四色／两种五色）、四种炸弹方案；正式界面棋盘随窗口放大。定案：四色绿菱形 + 黑块白标炸弹，已接入正式界面 | 现行 |
 | [VISUAL_STYLE](VISUAL_STYLE.md#声音第一版2026-09-30待试听) | 合成音效第一版：木琴／玻璃／方波三套音色可切换，五声音阶随连锁升高；连锁音阶可切换为谢泼德音调（无限上升的错觉） | 待试听 |
 
+| [README](../README.md) | 仓库清理：删除旧 PixiJS 界面（`src/ui/`）、美术素材（`assets/`、`public/game/`）与素材脚本，README 改写为冲分现状 | 现行 |
+
 **2026-09-30 起停用**：[ART_DIRECTION](ART_DIRECTION.md)、[ASSET_PLAN](ASSET_PLAN.md)、[ASSET_BATCH2](ASSET_BATCH2.md)、[ASSET_BATCH3](ASSET_BATCH3.md)、[BOARD_INSERT_VISUAL](BOARD_INSERT_VISUAL.md)（美术素材不再使用，视觉以 VISUAL_STYLE 为准）；[THEME_STORY](THEME_STORY.md) 中的敌人与故事线随打怪模式搁置。
