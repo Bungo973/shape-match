@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方块与炸弹样板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* 版式：说明 → 炸弹方案切换 → 三套方块组（可玩棋盘）→ 四种炸弹（点击预览爆炸）。整页沿用构成风格的纸色与黑线 */
+:root {
+  --paper: #F2F1EC; --ink: #161616; --muted: #6d6a62; --rule: rgba(22,22,22,.14);
+  --red: #D6362A; --blue: #1D4E9E; --yellow: #EFB622;
+  --font-num: "Archivo Black", Impact, sans-serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 36px 16px 64px; display: flex; flex-direction: column; gap: 28px; }
+.intro { display: flex; flex-direction: column; gap: 10px; max-width: 70ch; }
+.eyebrow { align-self: flex-start; font-size: 12px; font-weight: 700; letter-spacing: .14em; background: var(--yellow); padding: 2px 8px; }
+h1 { margin: 0; font-size: clamp(28px, 4vw, 40px); line-height: 1.2; text-wrap: balance; }
+h2 { margin: 0; font-size: 22px; display: flex; align-items: baseline; gap: 10px; }
+h2 .num { font-family: var(--font-num); font-weight: 400; font-size: 14px; background: var(--ink); color: var(--paper); padding: 0 7px; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 14px; }
+.sechead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; border-bottom: 3px solid var(--ink); padding-bottom: 10px; }
+.sechead p { max-width: 70ch; }
+.seg { display: flex; flex-wrap: wrap; border: 2px solid var(--ink); }
+.seg button { font: inherit; font-size: 14px; background: none; border: none; border-right: 2px solid var(--ink); padding: 5px 14px; cursor: pointer; color: var(--ink); }
+.seg button:last-child { border-right: none; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.seg button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 20px; }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 20px; }
+.card { border: 3px solid var(--ink); display: flex; flex-direction: column; min-width: 0; background: var(--paper); }
+.card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 3px solid var(--ink); }
+.card > header .name { display: flex; flex-direction: column; min-width: 0; }
+.card > header b { font-size: 17px; }
+.card > header .kw { font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.card .score { font-family: var(--font-num); font-size: 20px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.card > footer { padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px; border-top: 3px solid var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend svg { width: 16px; height: 16px; }
+.stage { position: relative; aspect-ratio: 1 / 1; }
+.stage.wide { aspect-ratio: 7 / 5; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: pointer; }
+.stage canvas:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+button.auto { font: inherit; font-size: 13px; border: 2px solid var(--ink); background: none; padding: 2px 12px; cursor: pointer; white-space: nowrap; color: var(--ink); }
+button.auto[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.note { font-size: 13px; color: var(--muted); }
+.tag { font-size: 12px; font-weight: 700; padding: 1px 7px; white-space: nowrap; }
+.tag.warn { background: var(--red); color: var(--paper); }
+.tag.ok { background: var(--blue); color: var(--paper); }
+.facts { border-left: 6px solid var(--red); padding: 4px 0 4px 14px; display: flex; flex-direction: column; gap: 6px; max-width: 80ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="intro">
+    <span class="eyebrow">样板 · 方块与炸弹</span>
+    <h1>换掉黑半圆，重新设计炸弹</h1>
+    <p class="muted">上半部分是三套方块组，都是可玩的 10×10 棋盘（自动演示，点一下棋盘接手）。下半部分是四种炸弹，点炸弹看爆炸。炸弹方案可以在上面切换，套到三块棋盘上一起看。</p>
+    <div class="facts">
+      <p><b>黑色空出来了。</b>去掉黑半圆以后，方块里不再有黑色，黑色就可以专门留给炸弹：彩色是普通方块，黑色是炸弹，一眼分开。下面四种炸弹都用这一点。</p>
+      <p><b>五色会明显改变难度。</b>颜色从 4 种变 5 种，随手凑三连和自然连锁都会少很多（看每块棋盘右上角的分数就能感觉到）。选五色的话，目标分要用模拟器重新校准。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sechead">
+      <div><h2><span class="num">01</span>方块组</h2><p class="muted">红圆、蓝方、黄三角保留，替换黑半圆，或再加一种。</p></div>
+      <div class="seg" role="group" aria-label="棋盘上使用的炸弹方案" id="bombPick"></div>
+    </div>
+    <div class="grid3" id="sets"></div>
+  </section>
+
+  <section>
+    <div class="sechead">
+      <div><h2><span class="num">02</span>炸弹</h2><p class="muted">从左到右：横向直线、竖向直线、3×3、五连（消掉同一种颜色）。静止时都有轻微的动作提示方向或范围；点一下看爆炸。</p></div>
+    </div>
+    <div class="grid4" id="bombs"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const SPEED = REDUCED ? 0.35 : 1;
+  const TAU = Math.PI * 2;
+  const INK = '#161616', PAPER = '#F2F1EC';
+
+  // ---------- 补间 ----------
+  const tweens = new Set();
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const easeIn = (t) => t * t;
+  const backOut = (t) => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+  function tween(ms, fn, ease = easeOut) {
+    return new Promise((res) => tweens.add({ t0: performance.now(), dur: Math.max(1, ms * SPEED), fn, ease, res }));
+  }
+
+  // ---------- 方块组 ----------
+  const C = { red: '#D6362A', blue: '#1D4E9E', yellow: '#EFB622', green: '#1F8A5B', pink: '#EE8FB5', violet: '#6A4BA3' };
+  const SETS = [
+    { key: 's1', name: '四色 · 绿菱形', kw: '只替换，数量不变', tag: ['ok', '难度基本不变'],
+      tiles: [['red', 'circle', '红圆'], ['blue', 'square', '蓝方'], ['yellow', 'tri', '黄三角'], ['green', 'diamond', '绿菱形']],
+      note: '最稳妥：绿色补上原来的位置，菱形和方形、三角都分得开。' },
+    { key: 's2', name: '五色 · 加粉十字', kw: '绿菱形 + 粉十字', tag: ['warn', '需重新校准'],
+      tiles: [['red', 'circle', '红圆'], ['blue', 'square', '蓝方'], ['yellow', 'tri', '黄三角'], ['green', 'diamond', '绿菱形'], ['pink', 'plus', '粉十字']],
+      note: '粉色明度高，和红色靠明暗就能分开；十字是最不像其他图形的形状。' },
+    { key: 's3', name: '五色 · 加紫菱形', kw: '绿六边形 + 紫菱形', tag: ['warn', '需重新校准'],
+      tiles: [['red', 'circle', '红圆'], ['blue', 'square', '蓝方'], ['yellow', 'tri', '黄三角'], ['green', 'hex', '绿六边形'], ['violet', 'diamond', '紫菱形']],
+      note: '色相分得最开，但紫和蓝都偏深，小尺寸下要靠形状区分。' },
+  ];
+
+  function shapePath(ctx, kind, r) {
+    ctx.beginPath();
+    switch (kind) {
+      case 'circle': ctx.arc(0, 0, r, 0, TAU); break;
+      case 'square': rrect(ctx, -r * 0.86, -r * 0.86, r * 1.72, r * 1.72, r * 0.2); break;
+      case 'tri': poly(ctx, [[0, -r * 1.08], [r * 1.02, r * 0.74], [-r * 1.02, r * 0.74]]); break;
+      case 'diamond': poly(ctx, [[0, -r * 1.12], [r * 0.92, 0], [0, r * 1.12], [-r * 0.92, 0]]); break;
+      case 'hex': poly(ctx, ngon(6, r * 1.02, 0)); break;
+      case 'plus': { const a = r * 0.34, b = r * 0.98; poly(ctx, [[-a, -b], [a, -b], [a, -a], [b, -a], [b, a], [a, a], [a, b], [-a, b], [-a, a], [-b, a], [-b, -a], [-a, -a]]); break; }
+    }
+  }
+  function ngon(n, r, rot) { return Array.from({ length: n }, (_, i) => [Math.cos(rot + (i * TAU) / n) * r, Math.sin(rot + (i * TAU) / n) * r]); }
+  function poly(ctx, pts) { pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); }
+  function rrect(ctx, x, y, w, h, r) { ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function drawTile(ctx, set, c, S) { const [col, kind] = set.tiles[c]; ctx.fillStyle = C[col]; shapePath(ctx, kind, S * 0.34); ctx.fill(); }
+
+  function tileSvg(col, kind) {
+    const f = C[col];
+    const m = { circle: `<circle r="0.8" fill="${f}"/>`, square: `<rect x="-.72" y="-.72" width="1.44" height="1.44" rx=".16" fill="${f}"/>`,
+      tri: `<polygon points="0,-.86 .82,.6 -.82,.6" fill="${f}"/>`, diamond: `<polygon points="0,-.9 .74,0 0,.9 -.74,0" fill="${f}"/>`,
+      hex: `<polygon points="${ngon(6, 0.82, 0).map((p) => p.map((v) => v.toFixed(2)).join(',')).join(' ')}" fill="${f}"/>`,
+      plus: `<path d="M-.27-.8h.54v.53h.53v.54h-.53v.53h-.54v-.53h-.53v-.54h.53z" fill="${f}"/>` };
+    return `<svg viewBox="-1 -1 2 2" aria-hidden="true">${m[kind]}</svg>`;
+  }
+
+  // ---------- 四种炸弹 ----------
+  // 每种方案给出静止绘制（含待机动作）；t 为毫秒时间，ph 为每枚炸弹自己的相位，免得整盘同步闪动
+  const MULTI = [C.red, C.blue, C.yellow, C.green];
+  const BOMBS = [
+    { key: 'b1', name: '黑块白标', kw: '黑色方块 + 白色箭头',
+      note: '最直白：箭头指向爆炸方向，3×3 是一个方框。待机时箭头向外轻推。',
+      draw(ctx, sp, S, t, ph) {
+        const h = S * 0.36; ctx.fillStyle = INK; ctx.beginPath(); rrect(ctx, -h, -h, h * 2, h * 2, S * 0.07); ctx.fill();
+        const k = 0.5 + 0.5 * Math.sin(t / 380 + ph); const w = Math.max(2, S * 0.065);
+        ctx.strokeStyle = PAPER; ctx.fillStyle = PAPER; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        if (sp === 'h' || sp === 'v') {
+          ctx.save(); if (sp === 'v') ctx.rotate(Math.PI / 2);
+          const L = h * (0.5 + 0.12 * k), a = h * 0.26;
+          ctx.beginPath(); ctx.moveTo(-L, 0); ctx.lineTo(L, 0);
+          ctx.moveTo(L - a, -a); ctx.lineTo(L, 0); ctx.lineTo(L - a, a);
+          ctx.moveTo(-L + a, -a); ctx.lineTo(-L, 0); ctx.lineTo(-L + a, a); ctx.stroke(); ctx.restore();
+        } else if (sp === 'a') {
+          const q = h * (0.42 + 0.1 * k); ctx.strokeRect(-q, -q, q * 2, q * 2);
+          ctx.fillRect(-w / 2, -w / 2, w, w);
+        } else {
+          ctx.save(); ctx.rotate(t / 1400 + ph);
+          const d = h * 0.34, r = h * 0.2;
+          MULTI.forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(Math.cos(i * TAU / 4) * d, Math.sin(i * TAU / 4) * d, r, 0, TAU); ctx.fill(); });
+          ctx.restore();
+        }
+      } },
+    { key: 'b2', name: '形即范围', kw: '图形本身就是爆炸的样子',
+      note: '横条就是横向爆炸，圆环就是范围爆炸，不用读记号。待机时轻轻伸缩。',
+      draw(ctx, sp, S, t, ph) {
+        const k = 0.5 + 0.5 * Math.sin(t / 420 + ph);
+        ctx.fillStyle = INK; ctx.strokeStyle = INK;
+        if (sp === 'h' || sp === 'v') {
+          ctx.save(); if (sp === 'v') ctx.rotate(Math.PI / 2);
+          const L = S * (0.4 + 0.05 * k), th = S * 0.24;
+          ctx.beginPath(); rrect(ctx, -L, -th / 2, L * 2, th, th / 2); ctx.fill();
+          // 两端外侧的小点，表示“还会继续往外”
+          const dx = L + S * 0.09 + S * 0.03 * k;
+          ctx.beginPath(); ctx.arc(dx, 0, S * 0.035, 0, TAU); ctx.arc(-dx, 0, S * 0.035, 0, TAU); ctx.fill();
+          ctx.restore();
+        } else if (sp === 'a') {
+          ctx.lineWidth = S * 0.1; ctx.beginPath(); ctx.arc(0, 0, S * (0.26 + 0.04 * k), 0, TAU); ctx.stroke();
+          ctx.beginPath(); ctx.arc(0, 0, S * 0.08, 0, TAU); ctx.fill();
+        } else {
+          ctx.beginPath(); ctx.arc(0, 0, S * 0.34, 0, TAU); ctx.fill();
+          ctx.save(); ctx.rotate(t / 1600 + ph);
+          MULTI.forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, S * 0.22, i * TAU / 4, (i + 1) * TAU / 4); ctx.closePath(); ctx.fill(); });
+          ctx.restore();
+        }
+      } },
+    { key: 'b3', name: '引信', kw: '黑色圆弹 + 顶部火花',
+      note: '最像“炸弹”：黑色圆体，顶上一点黄色火花在闪。白色记号说明范围。',
+      draw(ctx, sp, S, t, ph) {
+        const R = S * 0.3;
+        ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(0, S * 0.03, R, 0, TAU); ctx.fill();
+        // 引线与火花
+        ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.5, S * 0.04); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(R * 0.5, -R * 0.75); ctx.quadraticCurveTo(R * 0.8, -R * 1.25, R * 1.1, -R * 1.2); ctx.stroke();
+        const f = 0.6 + 0.4 * Math.abs(Math.sin(t / 110 + ph * 3));
+        ctx.save(); ctx.translate(R * 1.12, -R * 1.2); ctx.rotate(t / 300 + ph); ctx.fillStyle = C.yellow;
+        const s = S * 0.08 * f; poly(ctx, [[0, -s * 1.6], [s * 0.4, -s * 0.4], [s * 1.6, 0], [s * 0.4, s * 0.4], [0, s * 1.6], [-s * 0.4, s * 0.4], [-s * 1.6, 0], [-s * 0.4, -s * 0.4]]); ctx.fill(); ctx.restore();
+        ctx.strokeStyle = PAPER; ctx.fillStyle = PAPER; ctx.lineWidth = Math.max(2, S * 0.06);
+        ctx.save(); ctx.translate(0, S * 0.03);
+        if (sp === 'h') { ctx.beginPath(); ctx.moveTo(-R * 0.55, 0); ctx.lineTo(R * 0.55, 0); ctx.stroke(); }
+        else if (sp === 'v') { ctx.beginPath(); ctx.moveTo(0, -R * 0.55); ctx.lineTo(0, R * 0.55); ctx.stroke(); }
+        else if (sp === 'a') { const q = R * 0.36; ctx.lineWidth = Math.max(1.5, S * 0.05); ctx.strokeRect(-q, -q, q * 2, q * 2); }
+        else { MULTI.forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc((i % 2 ? 1 : -1) * R * 0.28, (i < 2 ? -1 : 1) * R * 0.28, R * 0.2, 0, TAU); ctx.fill(); }); }
+        ctx.restore();
+      } },
+    { key: 'b4', name: '脉冲', kw: '黑色实心 + 向外扩散的提示',
+      note: '静止时本体最简单，方向和范围由一圈圈往外走的细线提示，动感最强。',
+      draw(ctx, sp, S, t, ph) {
+        const p = ((t / 1100 + ph / TAU) % 1 + 1) % 1;
+        ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, S * 0.035) * (1 - p); ctx.globalAlpha *= 1;
+        const fade = (1 - p);
+        ctx.save(); ctx.globalAlpha *= fade;
+        if (sp === 'h' || sp === 'v') {
+          ctx.save(); if (sp === 'v') ctx.rotate(Math.PI / 2);
+          const x = S * (0.24 + 0.24 * easeOut(p)), a = S * 0.1;
+          ctx.lineWidth = Math.max(1.5, S * 0.05); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          ctx.beginPath(); ctx.moveTo(x - a, -a); ctx.lineTo(x, 0); ctx.lineTo(x - a, a); ctx.moveTo(-x + a, -a); ctx.lineTo(-x, 0); ctx.lineTo(-x + a, a); ctx.stroke();
+          ctx.restore();
+        } else if (sp === 'a') {
+          const q = S * (0.24 + 0.22 * easeOut(p)); ctx.strokeRect(-q, -q, q * 2, q * 2);
+        } else {
+          const r = S * (0.22 + 0.24 * easeOut(p)); ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+        }
+        ctx.restore();
+        ctx.fillStyle = INK;
+        if (sp === 'h' || sp === 'v') { ctx.save(); if (sp === 'v') ctx.rotate(Math.PI / 2); ctx.beginPath(); rrect(ctx, -S * 0.2, -S * 0.2, S * 0.4, S * 0.4, S * 0.05); ctx.fill(); ctx.fillStyle = PAPER; ctx.fillRect(-S * 0.13, -S * 0.025, S * 0.26, S * 0.05); ctx.restore(); }
+        else if (sp === 'a') { ctx.beginPath(); rrect(ctx, -S * 0.2, -S * 0.2, S * 0.4, S * 0.4, S * 0.05); ctx.fill(); ctx.fillStyle = PAPER; ctx.beginPath(); ctx.arc(0, 0, S * 0.06, 0, TAU); ctx.fill(); }
+        else { ctx.beginPath(); ctx.arc(0, 0, S * 0.21, 0, TAU); ctx.fill(); MULTI.forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(Math.cos(i * TAU / 4 + t / 900) * S * 0.1, Math.sin(i * TAU / 4 + t / 900) * S * 0.1, S * 0.045, 0, TAU); ctx.fill(); }); }
+      } },
+  ];
+  let bombDesign = BOMBS[0];
+
+  // 爆炸效果：黑色粗条扫开 / 黑色圆环扩散 / 五连为细线连到每个目标
+  function drawBlast(ctx, e, S, cols, rows, p) {
+    const cx = (e.c + 0.5) * S, cy = (e.r + 0.5) * S, W = cols * S, H = rows * S;
+    ctx.fillStyle = INK; ctx.strokeStyle = INK;
+    const th = S * 0.34 * (1 - easeIn(p));
+    if (e.sp === 'h') { const reach = W * Math.min(1, p * 3); ctx.fillRect(cx - reach, cy - th / 2, reach * 2, th); }
+    else if (e.sp === 'v') { const reach = H * Math.min(1, p * 3); ctx.fillRect(cx - th / 2, cy - reach, th, reach * 2); }
+    else if (e.sp === 'a') { ctx.lineWidth = S * 0.18 * (1 - p); ctx.beginPath(); ctx.arc(cx, cy, S * (0.6 + p * 1.2), 0, TAU); ctx.stroke(); }
+    else {
+      ctx.lineWidth = Math.max(1.5, S * 0.05) * (1 - p); ctx.beginPath();
+      for (const [r, c] of e.targets || []) { ctx.moveTo(cx, cy); ctx.lineTo((c + 0.5) * S, (r + 0.5) * S); }
+      ctx.stroke();
+      const k = S * 0.3 * (1 - p); for (const [r, c] of e.targets || []) ctx.fillRect((c + 0.5) * S - k / 2, (r + 0.5) * S - k / 2, k, k);
+    }
+  }
+
+  // ---------- 可玩棋盘（方块组） ----------
+  let nextId = 1;
+  const rand = (n) => Math.floor(Math.random() * n);
+  const key = (r, c) => r * 32 + c;
+
+  class Board {
+    constructor(el, set, N) {
+      this.set = set; this.K = set.tiles.length; this.N = N;
+      this.canvas = el.querySelector('canvas'); this.ctx = this.canvas.getContext('2d');
+      this.scoreEl = el.querySelector('[data-score]'); this.autoBtn = el.querySelector('[data-auto]');
+      this.particles = []; this.blasts = []; this.pops = [];
+      this.busy = false; this.sel = null; this.auto = true; this.lastAuto = performance.now() + Math.random() * 800;
+      this.score = 0; this.shown = 0; this.shake = 0;
+      this.fill(); this.resize();
+      new ResizeObserver(() => this.resize()).observe(this.canvas.parentElement);
+      this.bind();
+    }
+    newTile(c, r, col) { return { id: nextId++, c, sp: null, x: col, y: r, s: 1, a: 1, rot: 0, ph: Math.random() * TAU }; }
+    fill() {
+      const N = this.N;
+      do {
+        this.grid = [];
+        for (let r = 0; r < N; r++) {
+          const row = []; this.grid.push(row);
+          for (let c = 0; c < N; c++) {
+            let color;
+            do color = rand(this.K);
+            while ((c >= 2 && row[c - 1].c === color && row[c - 2].c === color) || (r >= 2 && this.grid[r - 1][c].c === color && this.grid[r - 2][c].c === color));
+            row.push(this.newTile(color, r, c));
+          }
+        }
+      } while (!this.hasMove());
+    }
+    resize() {
+      const w = this.canvas.parentElement.clientWidth, dpr = Math.min(2, window.devicePixelRatio || 1);
+      this.W = w; this.S = w / this.N; this.dpr = dpr;
+      this.canvas.width = Math.round(w * dpr); this.canvas.height = Math.round(w * dpr);
+    }
+    findGroups() {
+      const g = this.grid, N = this.N, lines = [];
+      const same = (a, b) => a && b && !a.sp && !b.sp && a.c === b.c;
+      for (let r = 0; r < N; r++) { let c = 0; while (c < N) { let e = c + 1; while (e < N && same(g[r][c], g[r][e])) e++; if (e - c >= 3) lines.push({ dir: 'h', cells: Array.from({ length: e - c }, (_, i) => [r, c + i]) }); c = e; } }
+      for (let c = 0; c < N; c++) { let r = 0; while (r < N) { let e = r + 1; while (e < N && same(g[r][c], g[e][c])) e++; if (e - r >= 3) lines.push({ dir: 'v', cells: Array.from({ length: e - r }, (_, i) => [r + i, c]) }); r = e; } }
+      const parent = lines.map((_, i) => i), find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i]))), owner = new Map();
+      lines.forEach((l, i) => l.cells.forEach(([r, c]) => { const k = key(r, c); if (owner.has(k)) parent[find(i)] = find(owner.get(k)); else owner.set(k, i); }));
+      const groups = new Map();
+      lines.forEach((l, i) => { const root = find(i); if (!groups.has(root)) groups.set(root, { lines: [], cells: new Map() }); const gr = groups.get(root); gr.lines.push(l); l.cells.forEach(([r, c]) => gr.cells.set(key(r, c), [r, c])); });
+      return [...groups.values()].map((gr) => {
+        const hasH = gr.lines.some((l) => l.dir === 'h'), hasV = gr.lines.some((l) => l.dir === 'v');
+        const five = gr.lines.some((l) => l.cells.length >= 5);
+        // 五连 ＞ T/L ＞ 四连；四连做出与连线同向的直线炸弹
+        const sp = five ? 'c' : hasH && hasV ? 'a' : gr.lines[0].cells.length === 4 ? gr.lines[0].dir : null;
+        return { cells: [...gr.cells.values()], sp };
+      });
+    }
+    swapMakesMatch(a, b) {
+      const g = this.grid, ta = g[a[0]][a[1]], tb = g[b[0]][b[1]];
+      if (!ta || !tb || ta.sp || tb.sp || ta.c === tb.c) return 0;
+      g[a[0]][a[1]] = tb; g[b[0]][b[1]] = ta;
+      const n = this.findGroups().reduce((s, gr) => s + gr.cells.length + (gr.sp ? 5 : 0), 0);
+      g[a[0]][a[1]] = ta; g[b[0]][b[1]] = tb;
+      return n;
+    }
+    moves() {
+      const out = [], N = this.N;
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        const t = this.grid[r][c];
+        if (t.sp) out.push({ ignite: [r, c], w: 7 });
+        for (const [dr, dc] of [[0, 1], [1, 0]]) {
+          const r2 = r + dr, c2 = c + dc; if (r2 >= N || c2 >= N) continue;
+          const u = this.grid[r2][c2];
+          if (t.sp || u.sp) { out.push({ a: [r, c], b: [r2, c2], w: 7 }); continue; }
+          const n = this.swapMakesMatch([r, c], [r2, c2]); if (n) out.push({ a: [r, c], b: [r2, c2], w: n });
+        }
+      }
+      return out;
+    }
+    hasMove() { return this.moves().length > 0; }
+    async swap(a, b) {
+      if (this.busy || Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) !== 1) return;
+      this.busy = true; this.sel = null;
+      const g = this.grid, ta = g[a[0]][a[1]], tb = g[b[0]][b[1]];
+      const ok = ta.sp || tb.sp || this.swapMakesMatch(a, b) > 0;
+      const mv = (p) => { ta.x = a[1] + (b[1] - a[1]) * p; ta.y = a[0] + (b[0] - a[0]) * p; tb.x = b[1] + (a[1] - b[1]) * p; tb.y = b[0] + (a[0] - b[0]) * p; };
+      if (!ok) { await tween(110, (p) => mv(0.4 * p)); await tween(200, (p) => mv(0.4 * (1 - p)), backOut); this.busy = false; return; }
+      g[a[0]][a[1]] = tb; g[b[0]][b[1]] = ta;
+      await tween(170, mv, easeInOut);
+      // 炸弹换位即引爆；五连炸弹与普通方块交换时，目标取对方的颜色
+      const det = [];
+      if (ta.sp) det.push({ at: b, color: tb.sp ? null : tb.c });
+      if (tb.sp) det.push({ at: a, color: ta.sp ? null : ta.c });
+      await this.resolve([a, b], det);
+      this.busy = false;
+    }
+    async ignite(p) { if (this.busy) return; this.busy = true; this.sel = null; await this.resolve([], [{ at: p, color: null }]); this.busy = false; }
+    commonColor() { const n = new Array(this.K).fill(0); this.grid.flat().forEach((t) => t && !t.sp && n[t.c]++); return n.indexOf(Math.max(...n)); }
+    async resolve(landings, detonate) {
+      let depth = 0; const N = this.N;
+      for (;;) {
+        const groups = this.findGroups();
+        if (!groups.length && !detonate.length) break;
+        const clear = new Map(), keep = new Set(), create = [];
+        for (const gr of groups) {
+          if (gr.sp) {
+            const pick = gr.cells.find(([r, c]) => landings.some(([lr, lc]) => lr === r && lc === c)) || gr.cells[Math.floor(gr.cells.length / 2)];
+            keep.add(key(...pick)); create.push({ at: pick, sp: gr.sp });
+          }
+          for (const [r, c] of gr.cells) if (!keep.has(key(r, c))) clear.set(key(r, c), [r, c]);
+        }
+        const queue = [...detonate];
+        for (const [, [r, c]] of clear) if (this.grid[r][c]?.sp) queue.push({ at: [r, c], color: null });
+        const done = new Set(), blasts = [];
+        while (queue.length) {
+          const { at: [r, c], color } = queue.shift(), k = key(r, c), t = this.grid[r][c];
+          if (done.has(k) || !t || !t.sp) continue;
+          done.add(k); clear.set(k, [r, c]);
+          const area = [];
+          if (t.sp === 'h') for (let cc = 0; cc < N; cc++) area.push([r, cc]);
+          if (t.sp === 'v') for (let rr = 0; rr < N; rr++) area.push([rr, c]);
+          if (t.sp === 'a') for (let rr = r - 1; rr <= r + 1; rr++) for (let cc = c - 1; cc <= c + 1; cc++) if (rr >= 0 && rr < N && cc >= 0 && cc < N) area.push([rr, cc]);
+          if (t.sp === 'c') { const col = color ?? this.commonColor(); for (let rr = 0; rr < N; rr++) for (let cc = 0; cc < N; cc++) { const u = this.grid[rr][cc]; if (u && !u.sp && u.c === col) area.push([rr, cc]); } }
+          blasts.push({ r, c, sp: t.sp, life: 0, max: t.sp === 'c' ? 480 : 380, targets: t.sp === 'c' ? area : null });
+          for (const [rr, cc] of area) { const kk = key(rr, cc); if (keep.has(kk)) continue; clear.set(kk, [rr, cc]); if (this.grid[rr][cc]?.sp && !done.has(kk)) queue.push({ at: [rr, cc], color: null }); }
+        }
+        const mult = 1 + depth * 0.5;
+        const cells = [...clear.values()].filter(([r, c]) => this.grid[r][c]);
+        const gained = Math.round(cells.length * 10 * mult);
+        await this.animateClear(cells, blasts, gained, mult);
+        for (const [r, c] of cells) this.grid[r][c] = null;
+        for (const { at: [r, c], sp } of create) { const t = this.grid[r][c]; if (t) { t.sp = sp; tween(260, (p) => (t.s = 1 + Math.sin(p * Math.PI) * 0.35)); } }
+        this.score += gained;
+        await this.gravity();
+        depth++; landings = []; detonate = [];
+      }
+      if (!this.hasMove()) await this.reshuffle();
+    }
+    async animateClear(cells, blasts, gained, mult) {
+      for (const b of blasts) this.blasts.push(b);
+      if (blasts.length) this.shake = Math.min(1, 0.35 + blasts.length * 0.2);
+      const tiles = cells.map(([r, c]) => this.grid[r][c]);
+      if (!REDUCED) tiles.forEach((t) => { if (!t.sp) burst(this, t.x + 0.5, t.y + 0.5, C[this.set.tiles[t.c][0]]); });
+      const cx = cells.reduce((s, [, c]) => s + c, 0) / cells.length, cy = cells.reduce((s, [r]) => s + r, 0) / cells.length;
+      this.pops.push({ x: cx + 0.5, y: cy + 0.5, text: `+${gained}`, sub: mult > 1 ? `×${mult.toFixed(1)}` : '', life: 0, max: 900 });
+      await tween(blasts.length ? 300 : 230, (p) => tiles.forEach((t) => { t.s = p < 0.25 ? 1 + p * 0.8 : 1.2 * (1 - backOut((p - 0.25) / 0.75) * 0.999); t.rot = p * 1.6; }), (t) => t);
+    }
+    async gravity() {
+      const moves = [], N = this.N;
+      for (let c = 0; c < N; c++) {
+        let write = N - 1;
+        for (let r = N - 1; r >= 0; r--) { const t = this.grid[r][c]; if (!t) continue; if (r !== write) { this.grid[write][c] = t; this.grid[r][c] = null; moves.push({ t, from: t.y, to: write }); } write--; }
+        for (let r = write; r >= 0; r--) { const t = this.newTile(rand(this.K), r - (write + 1), c); this.grid[r][c] = t; moves.push({ t, from: t.y, to: r }); }
+      }
+      await Promise.all(moves.map(({ t, from, to }) => { const d = to - from; return tween(140 + 70 * Math.sqrt(d), (p) => (t.y = from + d * p), easeIn).then(() => tween(120, (p) => (t.sq = Math.sin(p * Math.PI)))); }));
+    }
+    async reshuffle() {
+      await tween(220, (p) => this.grid.flat().forEach((t) => (t.s = 1 - p * 0.5)));
+      do { for (const t of this.grid.flat()) if (!t.sp) t.c = rand(this.K); } while (this.findGroups().length || !this.hasMove());
+      await tween(260, (p) => this.grid.flat().forEach((t) => (t.s = 0.5 + p * 0.5)), backOut);
+    }
+    autoStep(now) {
+      if (!this.auto || this.busy || now - this.lastAuto < 1300) return;
+      this.lastAuto = now;
+      const ms = this.moves(); if (!ms.length) return;
+      const total = ms.reduce((s, m) => s + m.w * m.w, 0); let roll = Math.random() * total, pick = ms[0];
+      for (const m of ms) { roll -= m.w * m.w; if (roll <= 0) { pick = m; break; } }
+      if (pick.ignite) this.ignite(pick.ignite); else { this.sel = pick.a; setTimeout(() => this.swap(pick.a, pick.b), 260 * SPEED); }
+    }
+    setAuto(on) { this.auto = on; this.autoBtn.setAttribute('aria-pressed', String(on)); this.lastAuto = performance.now(); }
+    bind() {
+      const cv = this.canvas, N = this.N;
+      const cellAt = (e) => { const R = cv.getBoundingClientRect(); const c = Math.floor(((e.clientX - R.left) / R.width) * N), r = Math.floor(((e.clientY - R.top) / R.height) * N); return r >= 0 && r < N && c >= 0 && c < N ? [r, c] : null; };
+      cv.addEventListener('pointerdown', (e) => { this.setAuto(false); const p = cellAt(e); if (!p) return; this.drag = { p, x: e.clientX, y: e.clientY }; try { cv.setPointerCapture(e.pointerId); } catch {} });
+      cv.addEventListener('pointermove', (e) => {
+        if (!this.drag || this.busy) return;
+        const s = cv.getBoundingClientRect().width / N, dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
+        if (Math.hypot(dx, dy) < s * 0.35) return;
+        const [r, c] = this.drag.p, to = Math.abs(dx) > Math.abs(dy) ? [r, c + Math.sign(dx)] : [r + Math.sign(dy), c];
+        this.drag = null; if (to[0] >= 0 && to[0] < N && to[1] >= 0 && to[1] < N) this.swap([r, c], to);
+      });
+      cv.addEventListener('pointerup', () => { if (this.drag) this.click(this.drag.p); this.drag = null; });
+      cv.addEventListener('pointercancel', () => (this.drag = null));
+      this.autoBtn.addEventListener('click', () => this.setAuto(!this.auto));
+    }
+    click(p) {
+      if (this.busy) return;
+      const s = this.sel;
+      if (s && s[0] === p[0] && s[1] === p[1]) { if (this.grid[p[0]][p[1]].sp) this.ignite(p); else this.sel = null; return; }
+      if (s && Math.abs(s[0] - p[0]) + Math.abs(s[1] - p[1]) === 1) { this.swap(s, p); return; }
+      this.sel = p;
+    }
+    draw(now, dt) {
+      const { ctx, W, S, dpr, N } = this; if (!W) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paper(ctx, W, W, S, N, N);
+      ctx.save();
+      if (this.shake > 0.01) { ctx.translate((Math.random() - 0.5) * 7 * this.shake, (Math.random() - 0.5) * 7 * this.shake); this.shake *= Math.pow(0.02, dt / 1000); }
+      if (this.sel) { ctx.fillStyle = 'rgba(22,22,22,0.08)'; ctx.fillRect(this.sel[1] * S, this.sel[0] * S, S, S); }
+      for (const e of this.blasts) { e.life += dt; drawBlast(ctx, e, S, N, N, Math.min(1, e.life / e.max)); }
+      this.blasts = this.blasts.filter((e) => e.life < e.max);
+      for (const row of this.grid) for (const t of row) {
+        if (!t || t.y < -1) continue;
+        ctx.save(); ctx.translate((t.x + 0.5) * S, (t.y + 0.5) * S); ctx.rotate(t.rot);
+        const sq = t.sq || 0; ctx.scale(Math.max(0, t.s) * (1 + 0.04 * sq), Math.max(0, t.s) * (1 - 0.08 * sq));
+        if (t.sp) bombDesign.draw(ctx, t.sp, S, REDUCED ? 0 : now, t.ph); else drawTile(ctx, this.set, t.c, S);
+        ctx.restore();
+      }
+      drawParticles(ctx, this, S, dt);
+      ctx.restore();
+      drawPops(ctx, this, S, W, dt);
+      if (this.shown !== this.score) { this.shown += Math.max(1, Math.round((this.score - this.shown) * Math.min(1, dt / 120))); if (this.shown > this.score) this.shown = this.score; this.scoreEl.textContent = this.shown.toLocaleString('zh-CN'); }
+    }
+  }
+
+  function paper(ctx, W, H, S, cols, rows) {
+    ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(22,22,22,0.10)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let i = 1; i < cols; i++) { ctx.moveTo(Math.round(i * S) + 0.5, 0); ctx.lineTo(Math.round(i * S) + 0.5, H); }
+    for (let i = 1; i < rows; i++) { ctx.moveTo(0, Math.round(i * S) + 0.5); ctx.lineTo(W, Math.round(i * S) + 0.5); }
+    ctx.stroke();
+  }
+  function burst(b, x, y, color) {
+    for (let i = 0; i < 6; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, v = 0.1 + Math.random() * 0.12;
+      b.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 700, color, tri: i % 2 === 0, rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 0.02 });
+    }
+  }
+  function drawParticles(ctx, b, S, dt) {
+    for (const q of b.particles) {
+      q.life += dt; q.vy += 0.0009 * dt; q.x += (q.vx * dt) / S; q.y += (q.vy * dt) / S; q.rot += q.vr * dt;
+      const size = S * 0.1;
+      ctx.save(); ctx.globalAlpha = 1 - Math.min(1, q.life / q.max); ctx.fillStyle = q.color; ctx.translate(q.x * S, q.y * S); ctx.rotate(q.rot);
+      if (q.tri) { ctx.beginPath(); poly(ctx, [[0, -size * 0.6], [size * 0.55, size * 0.4], [-size * 0.55, size * 0.4]]); ctx.fill(); } else ctx.fillRect(-size / 2, -size / 2, size, size);
+      ctx.restore();
+    }
+    b.particles = b.particles.filter((q) => q.life < q.max);
+  }
+  function drawPops(ctx, b, S, W, dt) {
+    for (const q of b.pops) {
+      q.life += dt; const p = Math.min(1, q.life / q.max);
+      const size = Math.max(14, S * 0.46);
+      ctx.save(); ctx.globalAlpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
+      ctx.translate(Math.max(S * 1.2, Math.min(W - S * 1.2, q.x * S)), q.y * S - easeOut(p) * S * 0.9);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `400 ${size}px "Archivo Black", Impact, sans-serif`;
+      const w = ctx.measureText(q.text).width; ctx.fillStyle = PAPER; ctx.fillRect(-w / 2 - size * 0.25, -size * 0.62, w + size * 0.5, size * 1.2);
+      ctx.fillStyle = INK; ctx.fillText(q.text, 0, 0);
+      if (q.sub) { ctx.font = `400 ${size * 0.5}px "Archivo Black", Impact, sans-serif`; const sw = ctx.measureText(q.sub).width; ctx.fillStyle = '#D6362A'; ctx.fillRect(-sw / 2 - size * 0.18, size * 0.58, sw + size * 0.36, size * 0.62); ctx.fillStyle = PAPER; ctx.fillText(q.sub, 0, size * 0.9); }
+      ctx.restore();
+    }
+    b.pops = b.pops.filter((q) => q.life < q.max);
+  }
+
+  // ---------- 炸弹展示板：7×5，四枚炸弹放在固定位置，点击预览爆炸后复原 ----------
+  const SHOW_SET = SETS[0];
+  const SHOW_SPOTS = [[2, 0, 'h'], [2, 2, 'v'], [2, 4, 'a'], [2, 6, 'c']];
+  class Showcase {
+    constructor(el, design) {
+      this.design = design; this.cols = 7; this.rows = 5;
+      this.canvas = el.querySelector('canvas'); this.ctx = this.canvas.getContext('2d');
+      this.blasts = []; this.particles = []; this.pops = []; this.busy = false;
+      this.reset(); this.resize();
+      new ResizeObserver(() => this.resize()).observe(this.canvas.parentElement);
+      this.canvas.addEventListener('pointerup', (e) => {
+        const R = this.canvas.getBoundingClientRect(); const c = Math.floor(((e.clientX - R.left) / R.width) * this.cols), r = Math.floor(((e.clientY - R.top) / R.height) * this.rows);
+        this.fire(r, c);
+      });
+      this.canvas.addEventListener('keydown', (e) => { const n = { 1: 0, 2: 1, 3: 2, 4: 3 }[e.key]; if (n != null) { const [r, c] = SHOW_SPOTS[n]; this.fire(r, c); } });
+    }
+    reset() {
+      this.grid = [];
+      for (let r = 0; r < this.rows; r++) { const row = []; this.grid.push(row); for (let c = 0; c < this.cols; c++) row.push({ c: (r * 3 + c * 2 + (r * c) % 3) % 4, sp: null, s: 1, rot: 0, ph: Math.random() * TAU }); }
+      for (const [r, c, sp] of SHOW_SPOTS) this.grid[r][c].sp = sp;
+    }
+    resize() { const w = this.canvas.parentElement.clientWidth, dpr = Math.min(2, window.devicePixelRatio || 1); this.S = w / this.cols; this.W = w; this.H = this.S * this.rows; this.dpr = dpr; this.canvas.width = Math.round(w * dpr); this.canvas.height = Math.round(this.H * dpr); }
+    async fire(r, c) {
+      const t = this.grid[r]?.[c]; if (!t || !t.sp || this.busy) return;
+      this.busy = true;
+      const area = [];
+      if (t.sp === 'h') for (let cc = 0; cc < this.cols; cc++) area.push([r, cc]);
+      if (t.sp === 'v') for (let rr = 0; rr < this.rows; rr++) area.push([rr, c]);
+      if (t.sp === 'a') for (let rr = r - 1; rr <= r + 1; rr++) for (let cc = c - 1; cc <= c + 1; cc++) if (this.grid[rr]?.[cc]) area.push([rr, cc]);
+      if (t.sp === 'c') { for (let rr = 0; rr < this.rows; rr++) for (let cc = 0; cc < this.cols; cc++) { const u = this.grid[rr][cc]; if (!u.sp && u.c === 0) area.push([rr, cc]); } }
+      await tween(90, (p) => (t.s = 1 + 0.3 * Math.sin(p * Math.PI)));
+      this.blasts.push({ r, c, sp: t.sp, life: 0, max: t.sp === 'c' ? 480 : 380, targets: t.sp === 'c' ? area : null });
+      const hit = area.filter(([rr, cc]) => !(rr === r && cc === c) && !this.grid[rr][cc].sp).map(([rr, cc]) => ({ t: this.grid[rr][cc], rr, cc }));
+      if (!REDUCED) hit.forEach(({ t: u, rr, cc }) => burst(this, cc + 0.5, rr + 0.5, C[SHOW_SET.tiles[u.c][0]]));
+      await tween(300, (p) => { for (const { t: u } of [...hit, { t }]) { u.s = p < 0.25 ? 1 + p * 0.8 : 1.2 * (1 - backOut((p - 0.25) / 0.75) * 0.999); u.rot = p * 1.6; } }, (x) => x);
+      await tween(420, () => {});
+      for (const u of [...hit.map((h) => h.t), t]) { u.rot = 0; }
+      await tween(320, (p) => { for (const u of [...hit.map((h) => h.t), t]) u.s = backOut(p); });
+      this.busy = false;
+    }
+    draw(now, dt) {
+      const { ctx, W, H, S, dpr } = this; if (!W) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paper(ctx, W, H, S, this.cols, this.rows);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+      for (const e of this.blasts) { e.life += dt; drawBlast(ctx, e, S, this.cols, this.rows, Math.min(1, e.life / e.max)); }
+      this.blasts = this.blasts.filter((e) => e.life < e.max);
+      this.grid.forEach((row, r) => row.forEach((t, c) => {
+        if (t.s <= 0.001) return;
+        ctx.save(); ctx.translate((c + 0.5) * S, (r + 0.5) * S); ctx.rotate(t.rot); ctx.scale(t.s, t.s);
+        if (t.sp) this.design.draw(ctx, t.sp, S, REDUCED ? 0 : now, t.ph); else drawTile(ctx, SHOW_SET, t.c, S);
+        ctx.restore();
+      }));
+      drawParticles(ctx, this, S, dt);
+      ctx.restore();
+    }
+  }
+
+  // ---------- 组装页面 ----------
+  const drawables = [];
+  const setsEl = document.getElementById('sets');
+  for (const set of SETS) {
+    const el = document.createElement('article'); el.className = 'card';
+    el.innerHTML = `<header><div class="name"><b>${set.name}</b><span class="kw">${set.kw}</span></div><div class="score" data-score>0</div></header>
+      <div class="stage"><canvas tabindex="0" aria-label="${set.name}棋盘"></canvas></div>
+      <footer><div class="legend">${set.tiles.map(([c, k, n]) => `<span>${tileSvg(c, k)}${n}</span>`).join('')}</div>
+      <p class="note">${set.note}</p><div class="row"><span class="tag ${set.tag[0]}">${set.tag[1]}</span><button class="auto" data-auto aria-pressed="true">自动演示</button></div></footer>`;
+    setsEl.appendChild(el);
+    drawables.push(new Board(el, set, 10));
+  }
+  const bombsEl = document.getElementById('bombs');
+  BOMBS.forEach((d, i) => {
+    const el = document.createElement('article'); el.className = 'card';
+    el.innerHTML = `<header><div class="name"><b>${String.fromCharCode(65 + i)} · ${d.name}</b><span class="kw">${d.kw}</span></div></header>
+      <div class="stage wide"><canvas tabindex="0" aria-label="${d.name}炸弹展示，点击炸弹或按 1–4 预览爆炸"></canvas></div>
+      <footer><div class="legend"><span>横向</span><span>竖向</span><span>3×3</span><span>五连</span></div><p class="note">${d.note}</p></footer>`;
+    bombsEl.appendChild(el);
+    drawables.push(new Showcase(el, d));
+  });
+  const pick = document.getElementById('bombPick');
+  pick.innerHTML = '<span style="align-self:center;padding:0 10px;font-size:13px;color:var(--muted)">棋盘炸弹</span>' + BOMBS.map((d, i) => `<button aria-pressed="${i === 0}" data-i="${i}">${String.fromCharCode(65 + i)} ${d.name}</button>`).join('');
+  pick.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    bombDesign = BOMBS[+b.dataset.i];
+    pick.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
+
+  let last = performance.now();
+  function tick(now) {
+    const dt = Math.min(50, now - last); last = now;
+    for (const tw of [...tweens]) { const p = Math.min(1, (now - tw.t0) / tw.dur); tw.fn(tw.ease(p)); if (p >= 1) { tweens.delete(tw); tw.res(); } }
+    for (const d of drawables) { d.autoStep?.(now); d.draw(now, dt); }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
