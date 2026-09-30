@@ -74,3 +74,4 @@
 | [ENEMY_DESIGN](ENEMY_DESIGN.md) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 三拍循环兜底模板；碎甲、穿刺（夺宝客）、强化；第二、三层重排与校准 | 现行 |
 | [ARTIFACT_DESIGN](ARTIFACT_DESIGN.md) · [GAME_RULES](GAME_RULES.md) · [BALANCE_LOG](BALANCE_LOG.md) | 神器盘点：删除 8 件，反应线圈改写，现行 9 件 | 现行 |
 | [BLOCK_BUILD](BLOCK_BUILD.md) · [GAME_RULES](GAME_RULES.md) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) | 炸弹升级重做为本场爆破等级（越炸越强，每场重置，三类独立） | 现行（原型数值） |
+| [ARTIFACT_DESIGN](ARTIFACT_DESIGN.md) · [GAME_RULES](GAME_RULES.md) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) | 累加触发类神器：引信匣、溢流护符、余震核心（进度跨战斗保留） | 现行（原型数值） |

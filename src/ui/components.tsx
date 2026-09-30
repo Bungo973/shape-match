@@ -32,7 +32,8 @@ export function ShapePreview({ cells, type, cell = 18 }: { cells: Pos[]; type: I
 /** 神器图标文件名：public/game/artifact-{slug}.webp */
 const artifactIcon = (k: ArtifactKey) => `/game/artifact-${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}.webp`;
 
-export function ArtifactCard({ k, onPick, compact }: { k: ArtifactKey; onPick?: () => void; compact?: boolean }) {
+/** progress：累加触发类神器的当前进度（仅在战斗中的神器栏显示） */
+export function ArtifactCard({ k, onPick, compact, progress }: { k: ArtifactKey; onPick?: () => void; compact?: boolean; progress?: number }) {
   const a = ARTIFACTS[k];
   return (
     <button className={`card artifact ${compact ? 'compact' : ''} ${a.cost ? 'cursed' : ''}`} onClick={onPick} disabled={!onPick}>
@@ -43,6 +44,16 @@ export function ArtifactCard({ k, onPick, compact }: { k: ArtifactKey; onPick?: 
       </div>
       <div className="card-text">{a.text}</div>
       {a.cost && <div className="card-cost">代价：{a.cost}</div>}
+      {a.every && progress !== undefined && (
+        <div className="card-progress" title="进度跨战斗保留">
+          <span className="meter">
+            <i style={{ width: `${Math.min(1, progress / a.every) * 100}%` }} />
+          </span>
+          <span>
+            {Math.min(progress, a.every)}/{a.every}
+          </span>
+        </div>
+      )}
     </button>
   );
 }

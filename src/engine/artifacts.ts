@@ -12,7 +12,10 @@ export type ArtifactKey =
   | 'treasureMap' // A17 藏宝图残页
   | 'pureCrystal' // A18 纯粹结晶
   | 'fourPrism' // A19 四色棱镜
-  | 'thunderFuse'; // A22 雷鸣引线
+  | 'thunderFuse' // A22 雷鸣引线
+  | 'fuseBox' // A23 引信匣（累加）
+  | 'overflowCharm' // A24 溢流护符（累加）
+  | 'aftershockCore'; // A25 余震核心（累加）
 
 export interface ArtifactDef {
   key: ArtifactKey;
@@ -25,6 +28,8 @@ export interface ArtifactDef {
   text: string;
   /** 卡面文案：代价；领取前与收益同屏展示 */
   cost?: string;
+  /** 累加触发类：进度跨战斗保留，达到门槛时在本步结束触发；卡面显示进度 */
+  every?: number;
 }
 
 export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
@@ -50,9 +55,20 @@ export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
     starter: false,
     text: '直线炸弹爆炸时引出闪电，在直线两侧 2 行（列）内随机击碎 5–8 个方块。',
   },
+  fuseBox: { key: 'fuseBox', id: 'A23', name: '引信匣', starter: false, every: 15, text: '每引爆 15 枚炸弹，本回合 +1 行动力（每回合最多一次）。' },
+  overflowCharm: { key: 'overflowCharm', id: 'A24', name: '溢流护符', starter: false, every: 150, text: '超出上限浪费的护盾每累计 150，对敌人造成 40 点伤害。' },
+  aftershockCore: { key: 'aftershockCore', id: 'A25', name: '余震核心', starter: false, every: 200, text: '连锁中每被动清除 200 格，棋盘上随机一个方块变成 3×3 炸弹。' },
 };
 
 export const ARTIFACT_PARAMS = {
+  /** 引信匣：每引爆多少枚炸弹，本回合 +1 行动力（每回合最多一次） */
+  fuseBoxEvery: 15,
+  fuseBoxAp: 1,
+  /** 溢流护符：每溢出（因上限浪费）多少护盾，对敌人造成的伤害 */
+  overflowCharmEvery: 150,
+  overflowCharmDamage: 40,
+  /** 余震核心：每被动清除多少格，把棋盘上随机一个普通方块变成 3×3 炸弹 */
+  aftershockEvery: 200,
   /** 反应线圈：反击被完全挡住的那次攻击的这个比例（向下取整） */
   reactionCoilRatio: 0.5,
   /** 纯粹结晶：只清一种颜色时该色加的基数 */

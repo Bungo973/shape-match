@@ -125,11 +125,11 @@ export function BombHeatPanel({ b }: { b: BattleState }) {
   );
 }
 
-export function ArtifactStrip({ artifacts }: { artifacts: ArtifactKey[] }) {
+export function ArtifactStrip({ artifacts, counters }: { artifacts: ArtifactKey[]; counters?: Partial<Record<ArtifactKey, number>> }) {
   return (
     <div className="artifact-strip">
       {artifacts.map((k) => (
-        <ArtifactCard key={k} k={k} compact />
+        <ArtifactCard key={k} k={k} compact progress={counters?.[k] ?? 0} />
       ))}
     </div>
   );

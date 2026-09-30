@@ -10,6 +10,7 @@ import {
   type ActionLog,
   type Board,
   type Color,
+  type CounterTrigger,
   type EnemyTurnLog,
   type Explosion,
   type InsertType,
@@ -1134,6 +1135,34 @@ export class Stage {
       last = Math.max(last, t + 0.38);
     });
     return last;
+  }
+
+  /** 累加触发类神器：在各自的位置弹出提示 */
+  async showCounterTriggers(triggers: CounterTrigger[]): Promise<void> {
+    if (triggers.length === 0) return;
+    const tl = gsap.timeline();
+    triggers.forEach((t, i) => {
+      const at = i * 0.25;
+      if (t.key === 'fuseBox') {
+        tl.call(() => this.floatText(HERO.x, 250, `引信匣：+${t.ap} 行动力`, 0xffd76a, 32), [], at);
+      } else if (t.key === 'overflowCharm') {
+        tl.call(() => {
+          this.floatText(this.enemyX, 380, `溢流 -${t.toHp + t.toShield}`, 0x8fd0ff, 40);
+          this.shake(8);
+          sfx.hitEnemy(true);
+        }, [], at);
+        tl.to(this.enemy, { x: this.enemy.x + 18, duration: 0.06, yoyo: true, repeat: 1 }, at);
+      } else if (t.at) {
+        const { x, y } = center(t.at);
+        tl.call(() => {
+          this.burst(x, y, 0xffb347, 16);
+          this.floatText(x, y - 36, '余震！', 0xffb347, 30);
+          sfx.bombCreate();
+        }, [], at);
+      }
+    });
+    tl.to({}, { duration: 0.45 });
+    await tl;
   }
 
   /** 爆破等级提升：棋盘中央弹出提示并震屏 */

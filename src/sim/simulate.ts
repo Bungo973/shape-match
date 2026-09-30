@@ -136,7 +136,8 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         const s = r.log.settlement;
         if (s) {
           report.multipliers.push(s.multiplier);
-          report.actionDamage.push(r.log.damageToEnemyHp + r.log.damageToEnemyShield);
+          const counterDamage = r.log.counterTriggers.reduce((n, t) => n + (t.key === 'overflowCharm' ? t.toHp + t.toShield : 0), 0);
+          report.actionDamage.push(r.log.damageToEnemyHp + r.log.damageToEnemyShield + counterDamage);
           report.shieldGains.push(r.log.shieldGained);
           report.shieldWasted += s.finalEffects.shield - r.log.shieldGained;
           if (r.log.stunApplied) report.stuns++;

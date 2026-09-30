@@ -120,6 +120,7 @@ export function App() {
     const rating = rateMove(out.log);
     if (rating) stage.showRating(rating);
     await stage.playPlayerEffects(out.log);
+    await stage.showCounterTriggers(out.log.counterTriggers);
     const heat = out.run.battle?.bombHeat;
     if (heat) {
       // 同一类一步升多级时只报最终等级
@@ -247,8 +248,28 @@ export function App() {
         {run.phase === 'battle' && b && (
           <>
             <PlayerPanel b={b} gold={run.gold} />
-            <ArtifactStrip artifacts={run.artifacts} />
-            <BombHeatPanel b={b} />
+            {/* 右侧一列：神器（含累加进度）、爆破等级、升级调试面板，从上往下排，不互相覆盖 */}
+            <div className="side-column">
+              <ArtifactStrip artifacts={run.artifacts} counters={b.player.counters ?? {}} />
+              <BombHeatPanel b={b} />
+          <div className="levels-debug" title="原型：左键 +1 级，右键 −1 级">
+                <div className="levels-title">升级（原型）</div>
+                {UPGRADE_KEYS.map((k) => (
+                  <button
+                    key={k}
+                    className={run.levels[k] > 1 ? 'on' : ''}
+                    title={`${UPGRADE_NAMES[k]} ${run.levels[k]} 级`}
+                    onClick={() => debugLevel(k, 1)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      debugLevel(k, -1);
+                    }}
+                  >
+                    {LEVEL_LABEL[k]} {run.levels[k]}
+                  </button>
+                ))}
+              </div>
+            </div>
             <EnemyPanel b={b} battleIndex={run.battleIndex} />
             <SettlePanel b={b} lastLog={lastLog} hint="交换相邻方块或点燃炸弹。第一次下落前的清除给基数，之后的连锁提高倍率。" />
             <button className="end-turn" disabled={busy || b.outcome !== 'ongoing'} onClick={() => void doEndTurn()}>
@@ -296,26 +317,6 @@ export function App() {
             </>
           )}
         </div>
-
-        {run.phase === 'battle' && (
-          <div className="levels-debug" title="原型：左键 +1 级，右键 −1 级">
-            <div className="levels-title">升级（原型）</div>
-            {UPGRADE_KEYS.map((k) => (
-              <button
-                key={k}
-                className={run.levels[k] > 1 ? 'on' : ''}
-                title={`${UPGRADE_NAMES[k]} ${run.levels[k]} 级`}
-                onClick={() => debugLevel(k, 1)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  debugLevel(k, -1);
-                }}
-              >
-                {LEVEL_LABEL[k]} {run.levels[k]}
-              </button>
-            ))}
-          </div>
-        )}
 
         {toast && <div className="toast">{toast}</div>}
       </div>

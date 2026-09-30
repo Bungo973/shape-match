@@ -1,6 +1,6 @@
 // 一场战斗的状态与回合流程，规则见 docs/GAME_RULES.md §1、§3、§4 与 docs/ENEMY_DESIGN.md。
 // 所有函数都是纯函数：输入旧状态，返回新状态与日志；状态可直接序列化存档。
-import { ARTIFACT_PARAMS, artifactBaseBonus, type ArtifactKey } from './artifacts';
+import { ARTIFACT_PARAMS, ARTIFACTS, artifactBaseBonus, type ArtifactKey } from './artifacts';
 import { addDetonations, BOMB_UPGRADES, defaultLevels, initialBombHeat, type BombHeat, type BombUpgrade, type UpgradeLevels } from './upgrades';
 import { createBoard, createIdGen, weightedSpawner } from './board';
 import { CARD_DEFS, cardBonus, drawCards, shuffle, type CardInstance, type CardPiles } from './cards';
@@ -11,7 +11,7 @@ import { resolveAction, type ActionResult } from './resolve';
 import { hasLegalMove, reshuffle } from './shuffle';
 import { createRng } from './rng';
 import { settle, type Settlement } from './score';
-import { COLORS, emptyClears, type Action, type Board, type ClearsByType, type Color, type Gravity, type Pos } from './types';
+import { COLORS, emptyClears, type Action, type BombKind, type Board, type ClearsByType, type Color, type Gravity, type Pos } from './types';
 
 export const RULES_VERSION = 2;
 
@@ -60,6 +60,8 @@ export interface PlayerState {
   maxHp: number;
   shield: number;
   catalystCharges: number;
+  /** 累加触发类神器的进度，跨战斗保留 */
+  counters?: Partial<Record<ArtifactKey, number>>;
 }
 
 export interface EnemyState {
@@ -103,7 +105,7 @@ export interface BattleState {
   /** 敌人本回合成功施加、从下一玩家回合起生效的状态 */
   pending: { erosion: boolean; suppressId: string | null; gravity: boolean; sealColor: Color | null; shatter?: boolean };
   /** 本玩家回合生效中的状态；shattered 为碎甲（护盾上限降低） */
-  current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null; shattered?: boolean };
+  current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null; shattered?: boolean; fuseBoxFired?: boolean };
   outcome: 'ongoing' | 'won' | 'lost';
   totalScore: number;
   /** 嵌片卡模式：抽牌堆、手牌、弃牌堆；交换模式下不存在 */
@@ -138,7 +140,14 @@ export interface ActionLog {
   artifactBaseBonus: ClearsByType;
   /** 本步结算后升级的爆破等级类别（每升一级记一次）；新等级从下一次行动起生效 */
   bombLevelUps: BombUpgrade[];
+  /** 本步结束时触发的累加神器 */
+  counterTriggers: CounterTrigger[];
 }
+
+export type CounterTrigger =
+  | { key: 'fuseBox'; ap: number }
+  | { key: 'overflowCharm'; toShield: number; toHp: number }
+  | { key: 'aftershockCore'; at: Pos | null };
 
 export interface EnemyTurnLog {
   cancelledByStun: boolean;
@@ -272,6 +281,7 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     erosionConsumed: false,
     artifactBaseBonus: emptyClears(),
     bombLevelUps: [],
+    counterTriggers: [],
   };
 
   // 爆破等级：本步的引爆在结算完之后计入，新等级从下一次行动起生效
@@ -311,7 +321,54 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     state.totalScore += s.settlementScore;
     applyPlayerEffects(state, s, log, config);
   }
+  if (state.outcome === 'ongoing') applyCounterArtifacts(state, result, log, config);
   return { ok: true, state, log };
+}
+
+/**
+ * 累加触发类神器：本步结算完成后累加进度，达到门槛就在本步结束时触发，每步每件最多一次，多余进度留到下次。
+ * 效果都发生在结算之外（加行动力、直接伤害、往稳定的棋盘上放炸弹），不会引发新的结算。
+ */
+function applyCounterArtifacts(state: BattleState, result: ActionResult, log: ActionLog, config: EngineConfig): void {
+  const counters = (state.player.counters ??= {});
+  const gains: Partial<Record<ArtifactKey, number>> = {
+    fuseBox: result.detonatedByType.line + result.detonatedByType.area + result.detonatedByType.color,
+    overflowCharm: log.settlement ? log.settlement.finalEffects.shield - log.shieldGained : 0,
+    aftershockCore: result.passiveClearCount,
+  };
+  // 同一时机按神器 ID 顺序结算
+  for (const key of ['fuseBox', 'overflowCharm', 'aftershockCore'] as const) {
+    if (!state.artifacts.includes(key)) continue;
+    const every = ARTIFACTS[key].every!;
+    counters[key] = (counters[key] ?? 0) + (gains[key] ?? 0);
+    if (counters[key]! < every) continue;
+    if (key === 'fuseBox') {
+      // 每回合最多一次；本回合已触发时进度保留，下回合的行动再触发
+      if (state.current.fuseBoxFired) continue;
+      state.current.fuseBoxFired = true;
+      state.ap += ARTIFACT_PARAMS.fuseBoxAp;
+      log.counterTriggers.push({ key, ap: ARTIFACT_PARAMS.fuseBoxAp });
+    } else if (key === 'overflowCharm') {
+      const hit = damageEnemy(state, ARTIFACT_PARAMS.overflowCharmDamage);
+      log.counterTriggers.push({ key, ...hit });
+    } else {
+      log.counterTriggers.push({ key, at: placeBombOnRandomTile(state, 'A') });
+    }
+    counters[key]! -= every;
+    if (state.outcome !== 'ongoing') return;
+  }
+}
+
+/** 把棋盘上按种子选出的一个普通方块变成炸弹；炸弹不参与匹配，稳定棋盘放下后仍然稳定 */
+function placeBombOnRandomTile(state: BattleState, bomb: BombKind): Pos | null {
+  const cells: Pos[] = [];
+  state.board.forEach((row, r) => row.forEach((t, c) => t?.kind === 'normal' && cells.push({ r, c })));
+  if (cells.length === 0) return null;
+  const rng = createRng(state.rngState);
+  const at = cells[rng.int(cells.length)]!;
+  state.rngState = rng.state;
+  state.board[at.r]![at.c] = { id: state.nextId++, kind: 'bomb', bomb };
+  return at;
 }
 
 function applyPlayerEffects(state: BattleState, s: Settlement, log: ActionLog, config: EngineConfig): void {
