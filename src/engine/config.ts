@@ -27,6 +27,12 @@ export interface EngineConfig {
   maxInstalledInserts: number;
   /** 工程保护：单次行动的阶段数上限，超出视为程序错误 */
   maxPhases: number;
+  /**
+   * 冲分模式（2026-09-30 原型）：每关在 scoreTurns 个回合内累计结算分达到敌人的目标分；敌人不行动。
+   * 回合用完仍未达标时，按差距比例扣生命（差 20% 扣最大生命的 20%，向上取整）。见 docs/DESIGN_JOURNAL.md。
+   */
+  scoreMode: boolean;
+  scoreTurns: number;
   // ---- 战斗 ----
   playerMaxHp: number;
   apPerTurn: number;
@@ -70,6 +76,8 @@ export const DEFAULT_CONFIG: EngineConfig = {
   socketPerCell: 2,
   maxInstalledInserts: 6,
   maxPhases: 200,
+  scoreMode: false,
+  scoreTurns: 4,
   playerMaxHp: 40,
   apPerTurn: 3,
   playerShieldCap: 40,

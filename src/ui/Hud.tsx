@@ -48,7 +48,7 @@ function intentText(intent: Intent, bonus: number): string {
     .join(' · ');
 }
 
-export function Bar({ value, max, kind = 'hp' }: { value: number; max: number; kind?: 'hp' | 'poison' }) {
+export function Bar({ value, max, kind = 'hp' }: { value: number; max: number; kind?: 'hp' | 'poison' | 'score' }) {
   return (
     <div className={`bar ${kind}`}>
       <div className="fill" style={{ width: `${Math.max(0, Math.min(1, value / max)) * 100}%` }} />
@@ -67,10 +67,10 @@ export function PlayerPanel({ b, gold, apLabel = '行动力' }: { b: BattleState
       </div>
       <Bar value={b.player.hp} max={b.player.maxHp} />
       <div className="row">
-        <span className="chip shield" title={DEFAULT_CONFIG.playerShieldRetain < 1 ? '护盾只挡本回合的敌人行动，敌人行动后清空' : undefined}>
+        {!b.goal && <span className="chip shield" title={DEFAULT_CONFIG.playerShieldRetain < 1 ? '护盾只挡本回合的敌人行动，敌人行动后清空' : undefined}>
           护盾 {b.player.shield}
           {DEFAULT_CONFIG.playerShieldRetain < 1 && <small className="dim">本回合</small>}
-        </span>
+        </span>}
         <span className="chip">
           {apLabel}
           {Array.from({ length: Math.max(DEFAULT_CONFIG.apPerTurn, b.ap) }, (_, i) => (
@@ -144,6 +144,18 @@ export function EnemyPanel({ b, battleIndex }: { b: BattleState; battleIndex: nu
           第 {battleIndex} 战 · 第 {b.turn} 回合
         </span>
       </div>
+      {b.goal ? (
+        <>
+          <Bar value={b.totalScore} max={b.goal.target} kind="score" />
+          <div className="row">
+            <span className="chip intent">
+              目标分 {b.goal.target} · 第 {b.turn} / {b.goal.turns} 回合
+            </span>
+            <span className="note">未达标：按差距比例扣生命</span>
+          </div>
+        </>
+      ) : (
+        <>
       <Bar value={b.enemy.hp} max={b.enemy.def.maxHp} />
       <div className="row">
         <span className="chip shield">护盾 {b.enemy.shield}</span>
@@ -159,6 +171,8 @@ export function EnemyPanel({ b, battleIndex }: { b: BattleState; battleIndex: nu
         <Bar value={b.enemy.poison} max={poisonThreshold(b.enemy.def.maxHp)} kind="poison" />
         <span className="note">回合末 −{poisonDecay(b.enemy.def.maxHp)}</span>
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -189,9 +203,15 @@ export function SettlePanel({ b, lastLog, hint, className = '' }: { b: BattleSta
               {lastLog.erosionConsumed ? '，被侵蚀降一档' : ''}
             </span>
             <span className="eq">=</span>
-            <b className="c-atk">伤害 {st.finalEffects.attack}</b>
-            <b className="c-sh">护盾 {st.finalEffects.shield}</b>
-            <b className="c-po">毒气 {st.finalEffects.poison}</b>
+            {b.goal ? (
+              <b className="c-score">得分 {st.settlementScore}</b>
+            ) : (
+              <>
+                <b className="c-atk">伤害 {st.finalEffects.attack}</b>
+                <b className="c-sh">护盾 {st.finalEffects.shield}</b>
+                <b className="c-po">毒气 {st.finalEffects.poison}</b>
+              </>
+            )}
           </div>
           <div className="settle-row dim">
             结算分 {st.settlementScore} · 本场累计 {b.totalScore}

@@ -379,3 +379,37 @@ describe('爆破等级', () => {
     expect(next.log.result.events.find((e) => e.type === 'wave')).toMatchObject({ explosions: [expect.objectContaining({ blockBonus: 1 })] });
   });
 });
+
+describe('冲分模式', () => {
+  const scoreConfig = { ...DEFAULT_CONFIG, scoreMode: true };
+  const start = (target: number) => {
+    const s = startBattle({ seed: 7, player: player(), enemy: { ...enemy([attack(30)]), targetScore: target } }, scoreConfig);
+    s.board = boardWith({ '4,0': 'H' });
+    return s;
+  };
+
+  it('累计结算分达到目标立即过关；攻击、护盾不生效', () => {
+    const s = start(1);
+    expect(s.goal).toEqual({ target: 1, turns: 4 });
+    const out = playerAction(s, ignite(4, 0), scoreConfig);
+    if (!out.ok) throw new Error(out.reason);
+    expect(out.state.outcome).toBe('won');
+    expect(out.state.enemy.hp).toBe(out.state.enemy.def.maxHp);
+    expect(out.state.player.shield).toBe(0);
+  });
+
+  it('敌人不行动；最后一回合结束仍未达标，按差距比例扣生命后过关', () => {
+    let s = start(1000);
+    for (let t = 1; t < 4; t++) {
+      const { state, log } = endTurn(s, scoreConfig);
+      expect(log!.damageToPlayerHp).toBe(0);
+      expect(state.turn).toBe(t + 1);
+      s = state;
+    }
+    s.totalScore = 750;
+    const { state, log } = endTurn(s, scoreConfig);
+    expect(log!.scorePenalty).toBe(10); // 差 25%，扣最大生命 40 的 25%
+    expect(state.player.hp).toBe(30);
+    expect(state.outcome).toBe('won');
+  });
+});

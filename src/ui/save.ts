@@ -2,9 +2,10 @@
 import { RUN_RULES_VERSION, RULES_VERSION, type RunState } from '../engine';
 
 import { BOARD_N } from './boardSize';
+import { SCORE_MODE } from './gameMode';
 
-// 不同棋盘尺寸的原型各存各的档
-const KEY = BOARD_N === 8 ? 'dixia-micang/run' : `dixia-micang/run@${BOARD_N}`;
+// 不同棋盘尺寸、不同玩法的原型各存各的档
+const KEY = (BOARD_N === 8 ? 'dixia-micang/run' : `dixia-micang/run@${BOARD_N}`) + (SCORE_MODE ? ':score' : '');
 
 export function loadRun(): RunState | null {
   try {

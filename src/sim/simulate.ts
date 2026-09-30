@@ -48,6 +48,9 @@ export interface BattleReport {
   /** 敌人真正出手攻击的回合数，以及其中被护盾完全挡住（没掉血）的回合数 */
   attackTurns: number;
   blockedTurns: number;
+  /** 冲分模式：本关得分与目标 */
+  score?: number;
+  target?: number;
 }
 
 export interface RunReport {
@@ -158,9 +161,15 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         run = r.run;
         if (run.battle) report.turns = run.battle.turn;
       }
-      if (run.phase !== 'battle') report.won = run.outcome !== 'lost';
+      if (run.phase !== 'battle') {
+        report.won = run.outcome !== 'lost';
+        if (b.goal && run.battle) {
+          report.score = run.battle.totalScore;
+          report.target = b.goal.target;
+        }
+      }
     } else if (run.phase === 'reward') {
-      run = ok(chooseUpgrade(run, 0));
+      run = ok(chooseUpgrade(run, 0, config));
     } else if (run.phase === 'artifact') {
       run = ok(chooseArtifact(run, run.artifactChoices[0]!));
     } else if (run.phase === 'camp') {

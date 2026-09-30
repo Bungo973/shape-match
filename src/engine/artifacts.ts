@@ -30,6 +30,8 @@ export interface ArtifactDef {
   cost?: string;
   /** 累加触发类：进度跨战斗保留，达到门槛时在本步结束触发；卡面显示进度 */
   every?: number;
+  /** 只在打怪模式有意义（依赖护盾或敌人攻击），冲分模式不进候选 */
+  battleOnly?: boolean;
 }
 
 export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
@@ -42,7 +44,7 @@ export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
     cost: '引爆过载直线炸弹的那一步不获得护盾。',
   },
   fineChisel: { key: 'fineChisel', id: 'A11', name: '精工刻刀', starter: false, text: '营地升级时多升一级。' },
-  reactionCoil: { key: 'reactionCoil', id: 'A13', name: '反应线圈', starter: true, text: '护盾完全挡住攻击时，反击其一半伤害（碎甲时不触发）。' },
+  reactionCoil: { key: 'reactionCoil', id: 'A13', name: '反应线圈', starter: true, text: '护盾完全挡住攻击时，反击其一半伤害（碎甲时不触发）。', battleOnly: true },
   chainLens: { key: 'chainLens', id: 'A14', name: '连锁透镜', starter: true, text: '被动连锁达到 3 时，倍率再提高一档。' },
   scavengerGoggles: { key: 'scavengerGoggles', id: 'A16', name: '拾荒眼镜', starter: false, text: '重掷升级奖励时可保留一项。' },
   treasureMap: { key: 'treasureMap', id: 'A17', name: '藏宝图残页', starter: true, text: '升级奖励多展示一个候选。' },
@@ -56,7 +58,7 @@ export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
     text: '直线炸弹爆炸时引出闪电，在直线两侧 2 行（列）内随机击碎 5–8 个方块。',
   },
   fuseBox: { key: 'fuseBox', id: 'A23', name: '引信匣', starter: false, every: 15, text: '每引爆 15 枚炸弹，本回合 +1 行动力（每回合最多一次）。' },
-  overflowCharm: { key: 'overflowCharm', id: 'A24', name: '溢流护符', starter: false, every: 150, text: '超出上限浪费的护盾每累计 150，对敌人造成 40 点伤害。' },
+  overflowCharm: { key: 'overflowCharm', id: 'A24', name: '溢流护符', starter: false, every: 150, battleOnly: true, text: '超出上限浪费的护盾每累计 150，对敌人造成 40 点伤害。' },
   aftershockCore: { key: 'aftershockCore', id: 'A25', name: '余震核心', starter: false, every: 200, text: '连锁中每被动清除 200 格，棋盘上随机一个方块变成 3×3 炸弹。' },
 };
 
@@ -81,8 +83,9 @@ export const ARTIFACT_PARAMS = {
   thunderReach: 2,
 };
 
-/** 当前可出现在开局、精英、事件与商店候选中的神器 */
-export const offeredArtifacts = (): ArtifactKey[] => Object.keys(ARTIFACTS) as ArtifactKey[];
+/** 当前可出现在开局、精英、事件与商店候选中的神器；冲分模式排除只对打怪有意义的几件 */
+export const offeredArtifacts = (scoreMode = false): ArtifactKey[] =>
+  (Object.keys(ARTIFACTS) as ArtifactKey[]).filter((k) => !(scoreMode && ARTIFACTS[k].battleOnly));
 
 /** 本步主动清除的有色方块数（不计等级与加成，炸弹不算） */
 export function activeColorTileCount(events: ActionResult['events']): number {

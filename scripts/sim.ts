@@ -40,6 +40,9 @@ args.forEach((a, i) => {
   (config as unknown as Record<string, number>)[k!] = Number(v);
 });
 
+// --mode score：冲分模式（2026-09-30 原型）
+config.scoreMode = opt('mode', 'battle') === 'score';
+
 const route: RouteNode[] = FULL_ROUTE.map((n) => ({
   ...n,
   enemy: {
@@ -102,6 +105,14 @@ function report(style: BotStyle) {
       `重排 ${bs.reduce((n, b) => n + b.shuffles, 0)} 次`,
   );
   const sum = (f: (b: BattleReport) => number) => bs.reduce((n, b) => n + f(b), 0);
+  if (config.scoreMode) {
+    for (let i = 0; i < route.length; i++) {
+      const g = all.map((r) => r.battles[i]).filter((b): b is BattleReport => !!b && b.target !== undefined);
+      if (!g.length) continue;
+      const ratios = g.map((b) => b.score! / b.target!);
+      console.log(`冲分 ${i + 1} ${route[i]!.enemy.name}：目标 ${g[0]!.target}，达标 ${pc(ratios.filter((x) => x >= 1).length / g.length)}，得分/目标 p25 ${pct(ratios, 0.25).toFixed(2)} 中位 ${pct(ratios, 0.5).toFixed(2)}，未达标扣血 ${f1(avg(g.map((b) => b.hpLost)))}`);
+    }
+  }
   console.log(`敌人攻击被护盾完全挡住：${pc(sum((b) => b.blockedTurns) / Math.max(1, sum((b) => b.attackTurns)))}（${sum((b) => b.attackTurns)} 次攻击）`);
 }
 

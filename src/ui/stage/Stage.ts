@@ -1191,6 +1191,29 @@ export class Stage {
     const hitsOf = (c: Color) => this.activeHits.filter((h) => h.color === c);
     const dealt = log.damageToEnemyHp + log.damageToEnemyShield;
 
+    // 冲分模式：所有主动清除的光点都飞向目标，弹出得分
+    if (DEFAULT_CONFIG.scoreMode) {
+      const gained = log.settlement.settlementScore;
+      const src = this.activeHits.length ? this.activeHits : [heroAt];
+      const arrive = this.orbs(tl, src, 0xffd76a, enemyAt, 0.05);
+      const big = gained >= 300;
+      tl.call(
+        () => {
+          sfx.hitEnemy(big);
+          this.hitStop(big ? 110 : 50);
+          this.shake(Math.min(18, 3 + gained / 60));
+          this.floatText(this.enemyX, 440, `+${gained}`, 0xffd76a, Math.min(104, 40 + gained / 12));
+        },
+        [],
+        arrive,
+      );
+      tl.to(this.enemy, { x: this.enemyX + 18, duration: 0.06, ease: 'power2.out' }, arrive);
+      tl.to(this.enemy, { x: this.enemyX, duration: 0.3, ease: 'elastic.out(1, 0.4)' }, arrive + 0.06);
+      tl.to({}, { duration: 0.3 });
+      await tl;
+      return;
+    }
+
     // 攻击：光点飞向敌人，命中时停顿、闪红、后仰、大数字
     if (dealt > 0) {
       tl.to(this.alchemist, { x: HERO.x + 50, duration: 0.12, ease: 'power2.out' }, 0);
@@ -1261,6 +1284,7 @@ export class Stage {
         }, [], t0 + 0.14);
         if (log.damageToPlayerShield > 0) tl.call(() => this.floatText(HERO.x, 330, `-${log.damageToPlayerShield} 护盾`, 0x7cc4ff, 32), [], t0 + 0.14);
         if (log.damageToPlayerHp > 0) tl.call(() => this.floatText(HERO.x, 400, `-${log.damageToPlayerHp}`, 0xff5a5a, 48), [], t0 + 0.2);
+        if (log.scorePenalty) tl.call(() => this.floatText(HERO.x, 320, '未达目标分', 0xffb347, 34), [], t0 + 0.1);
       } else {
         tl.to(this.enemy.scale, { x: this.enemy.scale.x * 1.05, duration: 0.15, yoyo: true, repeat: 1 }, t0);
       }

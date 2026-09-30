@@ -53,6 +53,8 @@ export interface EnemyDef {
   script: Intent[];
   /** 嵌片压制找不到目标、或脚本只剩不可用意图时改用的防御值 */
   fallbackDefend: number;
+  /** 冲分模式的目标分 */
+  targetScore?: number;
 }
 
 export interface PlayerState {
@@ -110,6 +112,8 @@ export interface BattleState {
   totalScore: number;
   /** 嵌片卡模式：抽牌堆、手牌、弃牌堆；交换模式下不存在 */
   cards?: CardPiles;
+  /** 冲分模式：在 turns 个回合内让 totalScore 达到 target；敌人不行动 */
+  goal?: { target: number; turns: number };
 }
 
 export interface StartBattleInput {
@@ -161,6 +165,8 @@ export interface EnemyTurnLog {
   petrified: Pos[];
   /** 石化后无步可走而自动重排了棋盘 */
   reshuffled: boolean;
+  /** 冲分模式：回合用完仍未达标时扣的生命（已计入 damageToPlayerHp） */
+  scorePenalty?: number;
   nextIntent: Intent;
 }
 
@@ -202,6 +208,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     outcome: 'ongoing',
     totalScore: 0,
   };
+  if (config.scoreMode && input.enemy.targetScore) state.goal = { target: input.enemy.targetScore, turns: config.scoreTurns };
   if (input.deck) {
     // 洗牌与抽牌沿用同一个种子随机数，保证复现
     const cardRng = createRng(state.rngState);
@@ -319,7 +326,12 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     log.erosionConsumed = erode;
     state.player.catalystCharges = s.chargesAfter;
     state.totalScore += s.settlementScore;
-    applyPlayerEffects(state, s, log, config);
+    // 冲分模式只累计结算分，达到目标立即过关；攻击、护盾、毒气不生效
+    if (state.goal) {
+      if (state.totalScore >= state.goal.target) state.outcome = 'won';
+    } else {
+      applyPlayerEffects(state, s, log, config);
+    }
   }
   if (state.outcome === 'ongoing') applyCounterArtifacts(state, result, log, config);
   return { ok: true, state, log };
@@ -339,6 +351,8 @@ function applyCounterArtifacts(state: BattleState, result: ActionResult, log: Ac
   // 同一时机按神器 ID 顺序结算
   for (const key of ['fuseBox', 'overflowCharm', 'aftershockCore'] as const) {
     if (!state.artifacts.includes(key)) continue;
+    // 冲分模式没有护盾，溢流护符不生效
+    if (key === 'overflowCharm' && state.goal) continue;
     const every = ARTIFACTS[key].every!;
     counters[key] = (counters[key] ?? 0) + (gains[key] ?? 0);
     if (counters[key]! < every) continue;
@@ -448,6 +462,8 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
   if (prev.outcome !== 'ongoing') return { state: prev, log: null };
   const state = clone(prev);
 
+  if (state.goal) return endScoreTurn(state, config);
+
   // 碎甲回合的护盾挡住的攻击不触发反应线圈；回合状态马上到期，先记下
   const shatteredTurn = !!state.current.shattered;
   // 1. 玩家回合结束：本回合生效的状态到期；向上重力扣减一回合（提前结束也计）；手牌进弃牌堆
@@ -522,6 +538,35 @@ export function endTurn(prev: BattleState, config: EngineConfig = DEFAULT_CONFIG
     state.gravityTurnsLeft = config.gravityTurns;
   }
   state.pending = { erosion: false, suppressId: null, gravity: false, sealColor: null, shatter: false };
+  return { state, log };
+}
+
+/** 冲分模式的回合结束：敌人不行动；最后一回合结束仍未达标，按差距比例扣生命后过关（生命归零则失败） */
+function endScoreTurn(state: BattleState, config: EngineConfig): { state: BattleState; log: EnemyTurnLog } {
+  const log: EnemyTurnLog = {
+    cancelledByStun: false,
+    executed: [],
+    damageToPlayerShield: 0,
+    damageToPlayerHp: 0,
+    poisonDecayed: 0,
+    counterDamage: 0,
+    petrified: [],
+    reshuffled: false,
+    nextIntent: state.enemy.intent,
+  };
+  state.current = { erosionArmed: false, suppressedId: null, sealedColor: null, shattered: false };
+  const goal = state.goal!;
+  if (state.turn >= goal.turns) {
+    const shortfall = Math.max(0, goal.target - state.totalScore) / goal.target;
+    const penalty = Math.ceil(state.player.maxHp * shortfall);
+    const hurt = damagePlayer(state, penalty);
+    log.damageToPlayerHp = hurt.toHp;
+    log.scorePenalty = hurt.toHp;
+    if (state.outcome === 'ongoing') state.outcome = 'won';
+    return { state, log };
+  }
+  state.turn++;
+  state.ap = config.apPerTurn;
   return { state, log };
 }
 

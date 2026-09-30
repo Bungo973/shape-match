@@ -91,8 +91,10 @@ export function chooseAction(state: BattleState, style: BotStyle, evalSeed: numb
     const imagined: BattleState = { ...state, rngState: mixSeed(evalSeed, i) };
     const out = playerAction(imagined, action, config);
     if (!out.ok) return;
-    const score =
-      style === 'skilled'
+    // 冲分模式：熟练玩家按结算分选步
+    const score = state.goal
+      ? (style === 'skilled' ? (out.log.settlement?.settlementScore ?? 0) : Object.values(out.log.result.activeClearsByType).reduce((a, b) => a + b, 0)) + (out.state.outcome === 'won' ? 1e6 : 0)
+      : style === 'skilled'
         ? value(state, out.log, out.state)
         : Object.values(out.log.result.activeClearsByType).reduce((a, b) => a + b, 0) + (out.state.outcome === 'won' ? 1e6 : 0);
     if (score > bestScore) {

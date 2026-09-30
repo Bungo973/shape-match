@@ -204,3 +204,7 @@ button.primary { background: linear-gradient(#d48a34, #8a4d17); font-size: 22px;
 .card-progress { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
 .card-progress .meter { flex: 1; height: 5px; background: rgba(255,255,255,.1); border-radius: 3px; overflow: hidden; }
 .card-progress .meter i { display: block; height: 100%; background: linear-gradient(90deg, #6fd3ff, #ffe08a); }
+
+/* 冲分模式 */
+.bar.score .fill { background: linear-gradient(90deg, #ffb347, #ffe08a); }
+.c-score { color: #ffd76a; }

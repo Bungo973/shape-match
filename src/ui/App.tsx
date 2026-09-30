@@ -271,7 +271,7 @@ export function App() {
               </div>
             </div>
             <EnemyPanel b={b} battleIndex={run.battleIndex} />
-            <SettlePanel b={b} lastLog={lastLog} hint="交换相邻方块或点燃炸弹。第一次下落前的清除给基数，之后的连锁提高倍率。" />
+            <SettlePanel b={b} lastLog={lastLog} hint={DEFAULT_CONFIG.scoreMode ? '交换相邻方块或点燃炸弹，在 4 个回合内凑够目标分。第一次下落前的清除给基数，之后的连锁提高倍率。' : '交换相邻方块或点燃炸弹。第一次下落前的清除给基数，之后的连锁提高倍率。'} />
             <button className="end-turn" disabled={busy || b.outcome !== 'ongoing'} onClick={() => void doEndTurn()}>
               结束回合 <small>E</small>
             </button>

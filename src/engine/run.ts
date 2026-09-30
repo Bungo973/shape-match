@@ -52,7 +52,7 @@ function sample<T>(items: T[], n: number, seed: number): T[] {
 const current = (run: RunState): RouteNode => run.route[run.battleIndex - 1]!;
 
 export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, route: RouteNode[] = FULL_ROUTE): RunState {
-  const starters = offeredArtifacts().filter((k) => ARTIFACTS[k].starter);
+  const starters = offeredArtifacts(config.scoreMode).filter((k) => ARTIFACTS[k].starter);
   return {
     rulesVersion: RUN_RULES_VERSION,
     seed,
@@ -170,14 +170,14 @@ export function rerollRewards(prev: RunState, keepIndex?: number, config: Engine
 }
 
 /** 选一项升级 +1 级；精英战后接神器三选一，否则进入营地 */
-export function chooseUpgrade(prev: RunState, index: number): RunResult {
+export function chooseUpgrade(prev: RunState, index: number, config: EngineConfig = DEFAULT_CONFIG): RunResult {
   const c = prev.reward?.choices[index];
   if (prev.phase !== 'reward' || !c) return fail(prev, '无效的升级候选');
   const run = clone(prev);
   run.levels[c.key]++;
   run.reward = null;
   if (current(run).tier === 'elite') {
-    const pool = offeredArtifacts().filter((k) => !run.artifacts.includes(k));
+    const pool = offeredArtifacts(config.scoreMode).filter((k) => !run.artifacts.includes(k));
     run.artifactChoices = sample(pool, 3, mixSeed(run.seed, 0xe, run.battleIndex));
     run.phase = 'artifact';
   } else {
