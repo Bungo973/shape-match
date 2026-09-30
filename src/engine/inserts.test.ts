@@ -62,11 +62,12 @@ describe('土质火药', () => {
     expect(res.activeClearsByType.attack).toBe(2);
   });
 
-  it('被动竖三连碰到覆盖格，按重力最远格产 V', () => {
+  it('被动竖三连碰到覆盖格，在刚落定的格中按重力最远产 V', () => {
     const board = boardWith({ '2,0': 'a', '3,0': 'a', '4,0': 'H', '5,0': 'a' });
     const res = run(board, ignite(4, 0), [ins('i1', 'earthPowder', [5, 0], [6, 0], [7, 0], [7, 1])]);
     const passive = matches(res.events).find((m) => m.phase === 'passive')!;
-    expect(passive.created).toEqual([expect.objectContaining({ bomb: 'V', at: { r: 5, c: 0 } })]);
+    // 第 2、3 行落到 3、4 行；刚落定的格里沿重力最远的是 (4,0)
+    expect(passive.created).toEqual([expect.objectContaining({ bomb: 'V', at: { r: 4, c: 0 } })]);
     expect(res.passiveClearCount).toBe(2);
   });
 

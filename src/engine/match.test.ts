@@ -23,12 +23,19 @@ describe('匹配识别与归组（SPECIAL_TILES 实例）', () => {
     ]);
   });
 
-  it('例 4：L 形产 A；向下取 (5,1)，向上取 (3,4)', () => {
+  it('例 4：L 形产 A，产在横竖交叉的拐角，与重力方向无关', () => {
     const board = boardWith(cells([5, 1], [5, 2], [5, 3], [5, 4], [3, 4], [4, 4]));
     const [g] = findGroups(board);
     expect(g!.product).toBe('A');
+    expect(passiveBombCell(g!, 'down')).toEqual({ r: 5, c: 4 });
+    expect(passiveBombCell(g!, 'up')).toEqual({ r: 5, c: 4 });
+  });
+
+  it('直线组取刚落定的格；没有落定信息时按重力最远端', () => {
+    const board = boardWith(cells([5, 1], [5, 2], [5, 3], [5, 4]));
+    const [g] = findGroups(board);
+    expect(passiveBombCell(g!, 'down', [{ r: 5, c: 3 }, { r: 4, c: 3 }])).toEqual({ r: 5, c: 3 });
     expect(passiveBombCell(g!, 'down')).toEqual({ r: 5, c: 1 });
-    expect(passiveBombCell(g!, 'up')).toEqual({ r: 3, c: 4 });
   });
 
   it('例 5：竖四连按重力方向取最远端', () => {

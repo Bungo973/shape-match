@@ -6,13 +6,20 @@ import {
   BOMB_NAME,
   BOMB_UPGRADES,
   buyHeal,
+  buyItem,
+  ITEMS,
+  runUseItem,
   buyUpgrade,
   chainMultiplier,
+  BOSS_RULES,
   chooseArtifact,
+  continueEndless,
   DEFAULT_CONFIG,
   newRun,
   pickStarter,
   leaveShop,
+  levelInfo,
+  ruleConfig,
   runAction,
   runEndTurn,
   startNextBattle,
@@ -22,7 +29,11 @@ import {
   type Action,
   type ArtifactKey,
   type BattleState,
+  type Color,
   type Income,
+  type ItemUse,
+  type ResolutionEvent,
+  type ActionLog,
   type Pos,
   type RunResult,
   type RunState,
@@ -30,8 +41,8 @@ import {
 } from '../engine';
 import { getKit, getShepard, KIT_NAMES, setKit, setShepard, sfx, type SoundKit } from './audio';
 import { BoardView } from './board/BoardView';
-import { UpgradeIcon } from './icons';
-import { clearRun, loadRun, saveRun } from './save';
+import { ItemIcon, UpgradeIcon } from './icons';
+import { clearRun, loadBest, loadRun, recordBest, saveRun } from './save';
 
 const config = DEFAULT_CONFIG;
 
@@ -46,7 +57,9 @@ function initialRun(): RunState {
 }
 
 const upgradeName = (k: UpgradeKey) => (k === 'block' ? '方块基数' : BOMB_NAME[k]);
-const TIER_NAME = { minion: '', elite: '精英', boss: '终关' } as const;
+const ITEM_FAIL: Record<string, string> = { noBomb: '棋盘上没有炸弹', notNormal: '只能放在普通方块上', stone: '石块不能交换', sameColor: '同色方块换了也一样', noAp: '这回合没有步了', notAdjacent: '要选相邻的两格' };
+
+const COLOR_NAME: Record<Color, string> = { attack: '红圆', shield: '蓝方', poison: '黄三角', catalyst: '绿菱形' };
 const fmt = (n: number) => n.toLocaleString('zh-CN');
 
 /** 一关结束时的结算信息，关掉后才进入下一个界面 */
@@ -66,6 +79,8 @@ export function Game() {
   const setRun = useCallback((r: RunState) => {
     setRunState(r);
     saveRun(r);
+    // 一局结束（通关或生命耗尽）时记录成绩；通关后继续无尽，结束时再记一次
+    if (r.phase === 'over') recordBest({ level: r.outcome === 'won' ? r.battleIndex : r.battleIndex - 1, score: r.totalScore });
   }, []);
 
   const apply = (r: RunResult) => {
@@ -81,7 +96,9 @@ export function Game() {
     setRun(newRun(newSeed(), config));
   };
 
-  const node = run.battleIndex > 0 ? run.route[run.battleIndex - 1] : undefined;
+  // 路线页显示即将开始的那一关，其余时候显示当前（或刚结束）的一关
+  const shownLevel = run.phase === 'map' ? run.battleIndex + 1 : Math.max(1, run.battleIndex);
+  const boss = run.phase !== 'starter' && levelInfo(run, shownLevel, config).boss;
   const showBattle = (run.phase === 'battle' || ending) && run.battle;
 
   return (
@@ -89,9 +106,9 @@ export function Game() {
       <header className="top">
         <div className="level">
           <span className="lab">关卡</span>
-          <b>{String(Math.max(1, run.battleIndex)).padStart(2, '0')}</b>
-          <span className="of">/{String(run.route.length).padStart(2, '0')}</span>
-          {node && TIER_NAME[node.tier] && <span className="tier">{TIER_NAME[node.tier]}</span>}
+          <b>{String(shownLevel).padStart(2, '0')}</b>
+          <span className="of">{run.endless ? '无尽' : `/${String(run.route.length).padStart(2, '0')}`}</span>
+          {boss && <span className="tier">首领</span>}
         </div>
         <div className="vitals">
           <Hp hp={run.player.hp} max={run.player.maxHp} />
@@ -112,6 +129,7 @@ export function Game() {
         <Artifacts keys={run.artifacts} counters={run.battle?.player.counters ?? run.player.counters} />
         <div className="tools">
           <SoundPicker />
+          <ItemStepToggle />
           <button className="link" onClick={restart}>
             重新开始
           </button>
@@ -138,6 +156,48 @@ function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r:
     if (viewRef.current) viewRef.current.busy = v;
   };
 
+  /** 播放一步（交换、点燃或道具）的结果：动画、计分弹字、过关判定与回合交接 */
+  const finish = useCallback(async (next: RunState, log: ActionLog | null, events: ResolutionEvent[], at: Pos, pulseAt: Pos[] = []) => {
+    const view = viewRef.current!;
+    multRef.current = 1;
+    setMult({ value: 1, chain: 0, final: false });
+    const b = next.battle!;
+    if (events.length) await view.play(events, b.board);
+    else view.sync(b.board);
+    if (pulseAt.length) view.pulse(pulseAt);
+    const s = log?.settlement;
+    if (s && s.settlementScore > 0) {
+      sfx.score(s.settlementScore);
+      view.popText(`+${fmt(s.settlementScore)}`, s.multiplier > 1 ? `×${s.multiplier.toFixed(1)}` : '', at, s.settlementScore >= 200);
+      setMult((m) => ({ ...m, value: s.multiplier, final: true }));
+    }
+    for (const t of log?.counterTriggers ?? []) if ('at' in t && t.at) view.pulse([t.at]);
+    runRef.current = next;
+    setRun(next);
+    if (b.outcome !== 'ongoing') {
+      sfx.win();
+      setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0, income: next.income });
+      return;
+    }
+    // 冲分模式没有敌人：行动力用完就自动进入下一回合
+    if (b.ap <= 0) {
+      const after = runEndTurn(next, config);
+      if (after.ok) {
+        const nb = after.run.battle!;
+        runRef.current = after.run;
+        setRun(after.run);
+        view.sync(nb.board);
+        if (after.log?.turnStartBombs?.length) view.pulse(after.log.turnStartBombs);
+        if (nb.outcome !== 'ongoing') {
+          const won = nb.totalScore >= (nb.goal?.target ?? 0);
+          if (won) sfx.win();
+          else sfx.short();
+          setEnding({ won, score: nb.totalScore, target: nb.goal?.target ?? 0, penalty: after.log?.scorePenalty ?? 0, income: after.run.income });
+        } else sfx.turn();
+      }
+    }
+  }, [setRun, setEnding]);
+
   const doAction = useCallback(async (action: Action) => {
     const view = viewRef.current;
     if (busyRef.current || !view) return;
@@ -151,52 +211,65 @@ function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r:
       return;
     }
     setBusy(true);
-    multRef.current = 1;
-    setMult({ value: 1, chain: 0, final: false });
-    const b = out.run.battle!;
-    await view.play(out.log.result.events, b.board);
-    const s = out.log.settlement;
     const at: Pos = action.type === 'swap' ? action.to : action.type === 'ignite' ? action.at : { r: 4, c: 4 };
-    if (s && s.settlementScore > 0) {
-      sfx.score(s.settlementScore);
-      view.popText(`+${fmt(s.settlementScore)}`, s.multiplier > 1 ? `×${s.multiplier.toFixed(1)}` : '', at, s.settlementScore >= 200);
-      setMult((m) => ({ ...m, value: s.multiplier, final: true }));
-    }
-    for (const t of out.log.counterTriggers) if ('at' in t && t.at) view.pulse([t.at]);
-    runRef.current = out.run;
-    setRun(out.run);
-    if (b.outcome !== 'ongoing') {
-      sfx.win();
-      setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0, income: out.run.income });
-      setBusy(false);
+    await finish(out.run, out.log, out.log.result.events, at);
+    setBusy(false);
+  }, [finish]);
+
+  // ---- 道具 ----
+  const [picking, setPicking] = useState<number | null>(null);
+  const pickingRef = useRef<number | null>(null);
+  const [hint, setHint] = useState('');
+
+  const choose = (slot: number | null) => {
+    pickingRef.current = slot;
+    setPicking(slot);
+    const key = slot == null ? null : runRef.current.items[slot];
+    const target = key ? ITEMS[key].target : null;
+    viewRef.current?.setPick(target === 'cell' || target === 'pair' ? target : null);
+    setHint(key ? (target === 'pair' ? `选相邻两格使用${ITEMS[key].name}` : `选一格使用${ITEMS[key].name}`) : '');
+  };
+
+  const applyItem = useCallback(async (slot: number, use: ItemUse) => {
+    const view = viewRef.current;
+    if (busyRef.current || !view) return;
+    const out = runUseItem(runRef.current, slot, use, config);
+    if (!out.ok) {
+      setHint(ITEM_FAIL[out.reason] ?? '这里不能用');
       return;
     }
-    // 冲分模式没有敌人：行动力用完就自动进入下一回合
-    if (b.ap <= 0) {
-      const next = runEndTurn(out.run, config);
-      if (next.ok) {
-        const nb = next.run.battle!;
-        runRef.current = next.run;
-        setRun(next.run);
-        view.sync(nb.board);
-        if (next.log?.turnStartBombs?.length) view.pulse(next.log.turnStartBombs);
-        if (nb.outcome !== 'ongoing') {
-          const won = nb.totalScore >= (nb.goal?.target ?? 0);
-          if (won) sfx.win();
-          else sfx.short();
-          setEnding({ won, score: nb.totalScore, target: nb.goal?.target ?? 0, penalty: next.log?.scorePenalty ?? 0, income: next.run.income });
-        } else sfx.turn();
-      }
-    }
+    choose(null);
+    sfx.ui();
+    if (use.key === 'charge') sfx.bombMade();
+    setBusy(true);
+    const at: Pos = 'at' in use ? use.at : 'to' in use ? use.to : { r: 4, c: 4 };
+    await finish(out.run, out.log ?? null, out.events ?? [], at, use.key === 'charge' ? [use.at] : []);
     setBusy(false);
-  }, [setRun, setEnding]);
+  }, [finish]);
+
+  const pickItem = (slot: number) => {
+    if (busyRef.current) return;
+    if (pickingRef.current === slot) return choose(null);
+    const key = runRef.current.items[slot]!;
+    if (key === 'detonator' || key === 'shuffle') return void applyItem(slot, { key });
+    choose(slot);
+  };
 
   useEffect(() => {
     const view = new BoardView(canvasRef.current!, {
       onSwap: (from, to) => void doAction({ type: 'swap', from, to }),
       onIgnite: (at) => void doAction({ type: 'ignite', at }),
+      onPickCell: (at) => {
+        const slot = pickingRef.current;
+        const key = slot == null ? null : runRef.current.items[slot];
+        if (slot != null && (key === 'hammer' || key === 'charge')) void applyItem(slot, { key, at });
+      },
+      onPickPair: (from, to) => {
+        const slot = pickingRef.current;
+        if (slot != null && runRef.current.items[slot] === 'glove') void applyItem(slot, { key: 'glove', from, to });
+      },
       onChain: (passive, chain) => {
-        const value = chainMultiplier(passive, config);
+        const value = chainMultiplier(passive, ruleConfig(runRef.current.battle ?? {}, config));
         // 倍率跨过整数档时响一声
         if (Math.floor(value) > Math.floor(multRef.current)) sfx.multUp(Math.floor(value) - 1);
         multRef.current = value;
@@ -210,7 +283,7 @@ function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r:
       view.destroy();
       viewRef.current = null;
     };
-  }, [doAction]);
+  }, [doAction, applyItem]);
 
   const target = battle.goal?.target ?? 0;
   const score = useRolling(battle.totalScore);
@@ -223,8 +296,9 @@ function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r:
           <b>{fmt(score)}</b>
           <span className="target">/ {fmt(target)}</span>
         </div>
-        <Multiplier {...mult} />
+        <Multiplier {...mult} cap={ruleConfig(battle, config).multiplierSegments.length} />
       </section>
+      {battle.rule && <RuleBadge rule={battle.rule.key} color={battle.rule.color} />}
       <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={target} aria-valuenow={battle.totalScore}>
         <span style={{ transform: `scaleX(${progress})` }} />
       </div>
@@ -236,6 +310,17 @@ function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r:
         <Steps battle={battle} />
         <BombHeat battle={battle} />
       </section>
+      {run.items.length > 0 && (
+        <section className="items" aria-label="道具">
+          {run.items.map((k, i) => (
+            <button key={i} className="item" aria-pressed={picking === i} onClick={() => pickItem(i)} title={ITEMS[k].text}>
+              <ItemIcon item={k} size={20} />
+              {ITEMS[k].name}
+            </button>
+          ))}
+          <span className="hint">{hint || (picking == null ? '点道具使用' : '')}</span>
+        </section>
+      )}
     </main>
   );
 }
@@ -263,9 +348,8 @@ function useRolling(value: number): number {
   return shown;
 }
 
-function Multiplier({ value, chain, final }: { value: number; chain: number; final: boolean }) {
-  // 倍率槽：每段一格，段内按比例填充
-  const cap = config.multiplierSegments.length;
+function Multiplier({ value, chain, final, cap }: { value: number; chain: number; final: boolean; cap: number }) {
+  // 倍率槽：每段一格，段内按比例填充；首领规则“低压”时段数变少
   const filled = Math.min(cap, value - 1);
   return (
     <div className={`mult${value > 1 ? ' hot' : ''}${final ? ' final' : ''}`}>
@@ -364,10 +448,10 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
         </Panel>
       );
     case 'map': {
-      const next = run.route[run.battleIndex];
-      const idx = run.battleIndex + 1;
+      const info = levelInfo(run, run.battleIndex + 1, config);
       return (
-        <Panel eyebrow={`第 ${idx} 关${next && TIER_NAME[next.tier] ? ` · ${TIER_NAME[next.tier]}` : ''}`} title={`目标 ${fmt(next?.enemy.targetScore ?? 0)} 分`}>
+        <Panel eyebrow={`第 ${info.level} 关${info.boss ? ' · 首领' : ''}${run.endless ? ' · 无尽' : ''}`} title={`目标 ${fmt(info.target)} 分`}>
+          {info.rule && <RuleBadge rule={info.rule} big />}
           <p className="hint">
             {config.scoreTurns} 回合，每回合 {config.apPerTurn} 步。达到目标立即过关，剩下的每一步换 {config.goldPerStep} 金币；步数用完仍未达标，按差距扣生命。
           </p>
@@ -385,20 +469,54 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
       );
     case 'shop':
       return <Shop run={run} apply={apply} />;
-    case 'over':
+    case 'over': {
+      const best = loadBest();
+      const won = run.outcome === 'won';
+      const eyebrow = won ? '通关' : run.endless ? `无尽 · 到达第 ${run.battleIndex} 关` : '生命耗尽';
       return (
-        <Panel eyebrow={run.outcome === 'won' ? '通关' : '生命耗尽'} title={`总分 ${fmt(run.totalScore)}`}>
+        <Panel eyebrow={eyebrow} title={`总分 ${fmt(run.totalScore)}`}>
           <p className="hint">
-            {run.outcome === 'won' ? `九关全部打完，剩余生命 ${run.player.hp}。` : `停在第 ${run.battleIndex} 关。`}
+            {won
+              ? `九关全部打完，剩余生命 ${run.player.hp}。可以继续挑战无尽模式：目标每关上涨，直到生命耗尽。`
+              : run.endless
+                ? `通关后又多打了 ${run.battleIndex - 1 - run.route.length} 关。`
+                : `停在第 ${run.battleIndex} 关。`}
           </p>
-          <button className="primary big" onClick={restart} autoFocus>
-            再来一局
-          </button>
+          {best && (
+            <p className="best">
+              最好成绩：通过 {best.level} 关 · {fmt(best.score)} 分
+            </p>
+          )}
+          <div className="row">
+            {won && (
+              <button className="primary big" onClick={() => apply(continueEndless(run))} autoFocus>
+                继续挑战无尽
+              </button>
+            )}
+            <button className={won ? 'ghost' : 'primary big'} onClick={restart} autoFocus={!won}>
+              再来一局
+            </button>
+          </div>
         </Panel>
       );
+    }
     default:
       return null;
   }
+}
+
+/** 首领规则：原色方块做标记，说明写在旁边 */
+function RuleBadge({ rule, color, big }: { rule: keyof typeof BOSS_RULES; color?: Color | undefined; big?: boolean }) {
+  const r = BOSS_RULES[rule];
+  return (
+    <div className={`rule${big ? ' big' : ''}`}>
+      <b>首领 · {r.name}</b>
+      <span>
+        {r.text}
+        {color && `本关不计分的是${COLOR_NAME[color]}。`}
+      </span>
+    </div>
+  );
 }
 
 function IncomeLines({ income }: { income: Income }) {
@@ -432,7 +550,9 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
   const hurt = run.player.hp < run.player.maxHp;
   return (
     <Panel eyebrow={`金币 ${run.gold}`} title="商店">
-      <p className="hint">升级都在这里买，可以买多次；同一项每升一级涨价 {config.upgradePriceStep}。</p>
+      <h2 className="sub">
+        升级<span>可以买多次；同一项每升一级涨价 {config.upgradePriceStep}</span>
+      </h2>
       <div className="choices grid">
         {UPGRADE_KEYS.map((k) => {
           const price = upgradePrice(run, k, config);
@@ -441,6 +561,30 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
           );
         })}
       </div>
+      <h2 className="sub">
+        道具
+        <span>
+          背包 {run.items.length}/{config.itemSlots}
+          {run.items.length > 0 && `：${run.items.map((k) => ITEMS[k].name).join('、')}`}
+        </span>
+      </h2>
+      {run.shopItems.length > 0 ? (
+        <div className="choices grid">
+          {run.shopItems.map((k, i) => (
+            <button key={`${k}-${i}`} className="choice" disabled={run.gold < ITEMS[k].price || run.items.length >= config.itemSlots} onClick={() => apply(buyItem(run, i, config))}>
+              <ItemIcon item={k} size={34} />
+              <b>{ITEMS[k].name}</b>
+              <span className="desc">{ITEMS[k].text}</span>
+              <span className="price">
+                <i />
+                {ITEMS[k].price}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="hint">道具已经买空了。</p>
+      )}
       <button className="rest" disabled={!hurt || run.gold < config.healPrice} onClick={() => apply(buyHeal(run, config))}>
         <b>回血</b>
         <span>
@@ -448,7 +592,7 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
         </span>
       </button>
       <button className="primary big" onClick={() => apply(leaveShop(run))}>
-        {run.battleIndex >= run.route.length ? '结束' : '下一关'}
+        {!run.endless && run.battleIndex >= run.route.length ? '结束' : '下一关'}
       </button>
     </Panel>
   );
@@ -574,3 +718,36 @@ function SoundPicker() {
     </div>
   );
 }
+
+// 原型开关：道具是否消耗 1 步，试玩后再定
+const ITEM_STEP_KEY = 'score-chase/itemCostsStep';
+try {
+  config.itemCostsStep = window.localStorage.getItem(ITEM_STEP_KEY) === '1';
+} catch {
+  // 存储不可用时用默认值
+}
+
+function ItemStepToggle() {
+  const [on, setOn] = useState(config.itemCostsStep);
+  const set = (v: boolean) => {
+    config.itemCostsStep = v;
+    setOn(v);
+    try {
+      window.localStorage.setItem(ITEM_STEP_KEY, v ? '1' : '0');
+    } catch {
+      // 同上
+    }
+  };
+  return (
+    <div className="sound" role="group" aria-label="道具是否耗步">
+      <span className="lab">道具耗步</span>
+      <button aria-pressed={!on} onClick={() => set(false)}>
+        否
+      </button>
+      <button aria-pressed={on} onClick={() => set(true)}>
+        是
+      </button>
+    </div>
+  );
+}
+

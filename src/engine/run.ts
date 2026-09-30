@@ -2,13 +2,16 @@
 // 2026-09-30 起所有升级都在商店用金币买，取代原来的升级三选一与营地；见 docs/DESIGN_JOURNAL.md。
 import { ARTIFACTS, offeredArtifacts, type ArtifactKey } from './artifacts';
 import { defaultLevels, UPGRADE_KEYS, type UpgradeKey, type UpgradeLevels } from './upgrades';
-import { endTurn, playerAction, startBattle, stepsLeft, type ActionLog, type BattleState, type EnemyTurnLog, type PlayerState } from './battle';
+import { endTurn, playerAction, startBattle, stepsLeft, useItem, type ActionLog, type BattleState, type EnemyTurnLog, type ItemUse, type PlayerState } from './battle';
+import { ITEM_KEYS, ITEMS, type ItemKey } from './items';
+import type { ResolutionEvent } from './resolve';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import { FULL_ROUTE, type RouteNode } from './content/enemies';
+import { bossRuleFor, isBossLevel, scoreTarget } from './levels';
 import { createRng, mixSeed } from './rng';
 import type { Action } from './types';
 
-export const RUN_RULES_VERSION = 6;
+export const RUN_RULES_VERSION = 8;
 
 export type RunPhase = 'starter' | 'map' | 'battle' | 'artifact' | 'shop' | 'over';
 
@@ -31,6 +34,11 @@ export interface RunState {
   artifactChoices: ArtifactKey[];
   outcome: 'ongoing' | 'won' | 'lost';
   totalScore: number;
+  /** 冲分模式：通关后选择继续，进入无尽模式 */
+  endless: boolean;
+  /** 背包里的道具（最多 config.itemSlots 件）与本次商店上架的道具 */
+  items: ItemKey[];
+  shopItems: ItemKey[];
 }
 
 export interface Income {
@@ -58,7 +66,30 @@ function sample<T>(items: T[], n: number, seed: number): T[] {
   return out;
 }
 
-const current = (run: RunState): RouteNode => run.route[run.battleIndex - 1]!;
+/**
+ * 第 level 关（1 起）的路线节点。无尽模式超出路线的关沿用最后一关的敌人数据，
+ * 每三关一个精英位（即冲分的首领关），其余为小怪位。
+ */
+function nodeAt(run: RunState, level: number): RouteNode {
+  const node = run.route[level - 1];
+  if (node) return node;
+  const last = run.route[run.route.length - 1]!;
+  return { ...last, tier: isBossLevel(level) ? 'elite' : 'minion', enemy: { ...last.enemy, id: `endless-${level}`, name: `第 ${level} 关` } };
+}
+
+const current = (run: RunState): RouteNode => nodeAt(run, run.battleIndex);
+
+export interface LevelInfo {
+  level: number;
+  target: number;
+  boss: boolean;
+  rule: ReturnType<typeof bossRuleFor>;
+}
+
+/** 冲分模式下第 level 关的目标与首领规则，供路线页提前展示 */
+export function levelInfo(run: RunState, level: number, config: EngineConfig = DEFAULT_CONFIG): LevelInfo {
+  return { level, target: scoreTarget(level, config), boss: isBossLevel(level), rule: bossRuleFor(run.seed, level) };
+}
 
 export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, route: RouteNode[] = FULL_ROUTE): RunState {
   const starters = offeredArtifacts(config.scoreMode).filter((k) => ARTIFACTS[k].starter);
@@ -78,6 +109,9 @@ export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, rout
     artifactChoices: [],
     outcome: 'ongoing',
     totalScore: 0,
+    endless: false,
+    items: [],
+    shopItems: [],
   };
 }
 
@@ -96,13 +130,15 @@ export function startNextBattle(prev: RunState, config: EngineConfig = DEFAULT_C
   const run = clone(prev);
   run.battleIndex++;
   const node = current(run);
+  const info = config.scoreMode ? levelInfo(run, run.battleIndex, config) : null;
   run.battle = startBattle(
     {
       seed: mixSeed(run.seed, 0xb, run.battleIndex),
       player: config.playerShieldCarryOver ? run.player : { ...run.player, shield: 0 },
-      enemy: node.enemy,
+      enemy: info ? { ...node.enemy, targetScore: info.target } : node.enemy,
       artifacts: run.artifacts,
       levels: run.levels,
+      ...(info?.rule ? { rule: info.rule } : {}),
     },
     config,
   );
@@ -143,16 +179,11 @@ function settleBattle(run: RunState, config: EngineConfig): void {
   // 关后保留生命；护盾按配置决定是否带入下一关
   run.player = config.playerShieldCarryOver ? b.player : { ...b.player, shield: 0 };
   const node = current(run);
-  if (node.tier === 'boss') {
-    run.phase = 'over';
-    run.outcome = 'won';
-    return;
-  }
-  // 冲分模式：未达标（按差距扣过血）的关没有剩余步数，也照发底薪
+  // 冲分模式：未达标（按差距扣过血）的关没有剩余步数，也照发底薪；首领关（精英位与终关）多给
   const steps = b.goal && b.totalScore >= b.goal.target ? stepsLeft(b, config) : 0;
   const income: Income = {
     base: config.goldBase,
-    elite: node.tier === 'elite' ? config.goldEliteBonus : 0,
+    elite: node.tier === 'elite' || node.tier === 'boss' ? config.goldEliteBonus : 0,
     steps,
     fromSteps: steps * config.goldPerStep,
     total: 0,
@@ -160,21 +191,34 @@ function settleBattle(run: RunState, config: EngineConfig): void {
   income.total = income.base + income.elite + income.fromSteps;
   run.gold += income.total;
   run.income = income;
+  // 终关：通关，本局结束；冲分模式可以选择继续进入无尽模式（continueEndless）
+  if (node.tier === 'boss') {
+    run.phase = 'over';
+    run.outcome = 'won';
+    return;
+  }
   if (node.tier === 'elite') {
     const pool = offeredArtifacts(config.scoreMode).filter((k) => !run.artifacts.includes(k));
     run.artifactChoices = sample(pool, 3, mixSeed(run.seed, 0xe, run.battleIndex));
-    run.phase = run.artifactChoices.length ? 'artifact' : 'shop';
+    if (run.artifactChoices.length) run.phase = 'artifact';
+    else enterShop(run, config);
   } else {
-    run.phase = 'shop';
+    enterShop(run, config);
   }
 }
 
-export function chooseArtifact(prev: RunState, key: ArtifactKey): RunResult {
+/** 进商店：按局种子与关卡序号随机上架几种道具 */
+function enterShop(run: RunState, config: EngineConfig): void {
+  run.shopItems = sample(ITEM_KEYS, config.itemsPerShop, mixSeed(run.seed, 0x17e, run.battleIndex));
+  run.phase = 'shop';
+}
+
+export function chooseArtifact(prev: RunState, key: ArtifactKey, config: EngineConfig = DEFAULT_CONFIG): RunResult {
   if (prev.phase !== 'artifact' || !prev.artifactChoices.includes(key)) return fail(prev, '无效的神器候选');
   const run = clone(prev);
   run.artifacts.push(key);
   run.artifactChoices = [];
-  run.phase = 'shop';
+  enterShop(run, config);
   return { ok: true, run };
 }
 
@@ -205,11 +249,49 @@ export function buyHeal(prev: RunState, config: EngineConfig = DEFAULT_CONFIG): 
   return { ok: true, run };
 }
 
+/** 通关后继续：进入无尽模式，先去商店花掉终关的收入，之后每关目标按倍数上涨，直到生命耗尽 */
+export function continueEndless(prev: RunState, config: EngineConfig = DEFAULT_CONFIG): RunResult {
+  if (prev.phase !== 'over' || prev.outcome !== 'won' || prev.endless) return fail(prev, '只能在通关后继续');
+  const run = clone(prev);
+  run.endless = true;
+  run.outcome = 'ongoing';
+  enterShop(run, config);
+  return { ok: true, run };
+}
+
+/** 买下商店里第 index 件上架的道具：放进背包，从货架上拿走 */
+export function buyItem(prev: RunState, index: number, config: EngineConfig = DEFAULT_CONFIG): RunResult {
+  if (prev.phase !== 'shop') return fail(prev, '不在商店');
+  const key = prev.shopItems[index];
+  if (!key) return fail(prev, '没有这件道具');
+  if (prev.items.length >= config.itemSlots) return fail(prev, '背包已满');
+  if (prev.gold < ITEMS[key].price) return fail(prev, '金币不足');
+  const run = clone(prev);
+  run.gold -= ITEMS[key].price;
+  run.items.push(key);
+  run.shopItems.splice(index, 1);
+  return { ok: true, run };
+}
+
+/** 关内使用背包第 slot 件道具；用锤子、手套直接达标时和普通一步一样结算本关 */
+export function runUseItem(prev: RunState, slot: number, use: ItemUse, config: EngineConfig = DEFAULT_CONFIG): RunResult & { log?: ActionLog | null; events?: ResolutionEvent[] } {
+  if (prev.phase !== 'battle' || !prev.battle) return fail(prev, '当前不在关卡中');
+  if (prev.items[slot] !== use.key) return fail(prev, '背包里没有这件道具');
+  const out = useItem(prev.battle, use, config);
+  if (!out.ok) return fail(prev, out.reason);
+  const run = clone(prev);
+  run.items.splice(slot, 1);
+  run.battle = out.state;
+  settleBattle(run, config);
+  return { ok: true, run, log: out.log, events: out.events };
+}
+
 export function leaveShop(prev: RunState): RunResult {
   if (prev.phase !== 'shop') return fail(prev, '不在商店');
   const run = clone(prev);
   run.income = null;
-  if (run.battleIndex >= run.route.length) {
+  run.shopItems = [];
+  if (!run.endless && run.battleIndex >= run.route.length) {
     run.phase = 'over';
     run.outcome = 'won';
   } else {

@@ -31,3 +31,33 @@ export function clearRun(): void {
     // 同上
   }
 }
+
+// 最好成绩：通关与无尽模式都算，按到达的关卡、再按总分比较
+const BEST_KEY = 'score-chase/best';
+
+export interface Best {
+  level: number;
+  score: number;
+}
+
+export function loadBest(): Best | null {
+  try {
+    const raw = window.localStorage.getItem(BEST_KEY);
+    return raw ? (JSON.parse(raw) as Best) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 记录一局的成绩；返回是否刷新了最好成绩 */
+export function recordBest(result: Best): boolean {
+  const best = loadBest();
+  if (best && (best.level > result.level || (best.level === result.level && best.score >= result.score))) return false;
+  try {
+    window.localStorage.setItem(BEST_KEY, JSON.stringify(result));
+  } catch {
+    // 同上
+  }
+  return true;
+}
+

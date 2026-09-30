@@ -39,8 +39,8 @@ export type Gravity = 'down' | 'up';
 export type Phase = 'active' | 'passive';
 
 export type Action =
-  /** from 为先选中或拖动起点的格；炸弹组合的锚点取其交换后的落点，即 to。 */
-  | { type: 'swap'; from: Pos; to: Pos }
+  /** from 为先选中或拖动起点的格；炸弹组合的锚点取其交换后的落点，即 to。free 为道具“手套”：不要求能消除 */
+  | { type: 'swap'; from: Pos; to: Pos; free?: boolean }
   | { type: 'ignite'; at: Pos }
   /**
    * 嵌片卡模式：以卡片形状作为一次主动爆炸清除 cells。

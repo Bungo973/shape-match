@@ -74,6 +74,9 @@ interface Ring {
 export interface BoardHandlers {
   onSwap(from: Pos, to: Pos): void;
   onIgnite(at: Pos): void;
+  /** 道具选格：选一格（锤子、炸药包）或相邻两格（手套） */
+  onPickCell?(at: Pos): void;
+  onPickPair?(from: Pos, to: Pos): void;
   /** 播放中被动清除累计变化，供倍率槽实时显示 */
   onChain?(passive: number, chain: number): void;
 }
@@ -100,6 +103,14 @@ export class BoardView {
   private readonly ro: ResizeObserver;
   /** 播放或等待引擎时为 true，期间不接受输入 */
   busy = false;
+  /** 道具选格模式；null 为普通的交换与点燃 */
+  private pick: 'cell' | 'pair' | null = null;
+
+  setPick(mode: 'cell' | 'pair' | null): void {
+    this.pick = mode;
+    this.sel = null;
+    this.canvas.style.cursor = mode ? 'crosshair' : '';
+  }
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -481,7 +492,8 @@ export class BoardView {
       this.drag = null;
       if (to.r >= 0 && to.r < this.rows && to.c >= 0 && to.c < this.cols) {
         this.sel = null;
-        this.handlers.onSwap({ r, c }, to);
+        if (this.pick === 'pair') this.handlers.onPickPair?.({ r, c }, to);
+        else if (!this.pick) this.handlers.onSwap({ r, c }, to);
       }
     });
     cv.addEventListener('pointerup', () => {
@@ -509,7 +521,18 @@ export class BoardView {
 
   private click(p: Pos): void {
     if (this.busy) return;
+    if (this.pick === 'cell') {
+      this.handlers.onPickCell?.(p);
+      return;
+    }
     const s = this.sel;
+    if (this.pick === 'pair') {
+      if (s && Math.abs(s.r - p.r) + Math.abs(s.c - p.c) === 1) {
+        this.sel = null;
+        this.handlers.onPickPair?.(s, p);
+      } else this.sel = s && samePos(s, p) ? null : p;
+      return;
+    }
     if (s && samePos(s, p)) {
       // 点两下炸弹原地引爆
       if (this.spriteAt(p)?.tile.kind === 'bomb') {
@@ -697,6 +720,12 @@ function drawBlast(ctx: CanvasRenderingContext2D, e: Explosion, S: number, W: nu
       ctx.fillRect(cx - reach, cy - thick / 2, reach * 2, thick);
       ctx.fillRect(cx - thick / 2, cy - reach, thick, reach * 2);
       return;
+    case 'card': {
+      // 道具“锤子”：被砸的格上一个黑方块迅速收缩
+      const k = S * 0.9 * (1 - easeOut(p));
+      for (const c of e.cells) ctx.fillRect((c.c + 0.5) * S - k / 2, (c.r + 0.5) * S - k / 2, k, k);
+      return;
+    }
     case 'CB':
     case 'board':
     case 'lightning': {

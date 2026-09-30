@@ -51,6 +51,8 @@ export interface ResolveContext {
   levels?: UpgradeLevels;
   /** 色封（打怪模式）：本回合该颜色的方块按 1 级计 */
   sealedColor?: Color | null;
+  /** 首领规则“色封”（冲分模式）：该颜色的方块主动清除时不计基数 */
+  mutedColor?: Color | null;
   /** 本场三类炸弹的爆破等级；缺省全为 1 级 */
   bombLevels?: Record<BombUpgrade, number>;
 }
@@ -221,6 +223,7 @@ class Resolver {
       return;
     }
     if (tile.kind !== 'normal') return;
+    if (tile.color === this.ctx.mutedColor) return;
     // 方块等级：主动清除一块计入“等级”份基数；被炸弹炸掉时再加爆破等级的额外基数
     this.activeClears[tile.color] += blockValue(this.ctx.levels, tile.color, this.ctx.sealedColor) + extra;
     // 主动阶段的覆盖格清除：基数嵌片认同色，催化盐认催化剂
@@ -270,7 +273,7 @@ class Resolver {
           if (inGroup.length !== 1) throw new Error(`主动组包含 ${inGroup.length} 个交换落点，违反不变量`);
           bombCell = inGroup[0]!;
         } else {
-          bombCell = passiveBombCell(g, this.ctx.gravity);
+          bombCell = passiveBombCell(g, this.ctx.gravity, this.landed);
         }
       }
       return { g, product, bombCell };
@@ -481,8 +484,12 @@ class Resolver {
     if (!this.board.some((row) => row.some((t) => t === null))) return false;
     const { moves, spawns } = applyGravity(this.board, this.ctx.gravity, this.ctx.ids, this.ctx.spawn);
     this.events.push({ type: 'gravity', gravity: this.ctx.gravity, moves, spawns });
+    this.landed = [...moves.map((m) => m.to), ...spawns.map((s) => s.to)];
     return true;
   }
+
+  /** 最近一次下落中落定的格（移动到的位置与新补入的位置），用于定被动产弹格 */
+  private landed: Pos[] = [];
 
   /** 匹配结算后，若易燃物质点火，就在同一阶段进入波次 */
   matchesThenWaves(phase: Phase, landings?: Pos[]): boolean {
@@ -637,8 +644,8 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
       res.runPassive();
     } else if (res.matchesThenWaves('active', [to, from])) {
       res.runPassive();
-    } else {
-      // 只允许形成匹配的交换
+    } else if (!action.free) {
+      // 只允许形成匹配的交换；道具“手套”例外，换完即止
       return invalid('noMatch');
     }
   }

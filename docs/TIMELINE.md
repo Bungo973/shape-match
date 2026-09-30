@@ -1,6 +1,6 @@
 # 文档时间线目录
 
-按时间顺序列出各文档的产生与重要修订，并标注当前状态。想知道“为什么走到这里”，看 [DESIGN_JOURNAL](DESIGN_JOURNAL.md)；数值改动看 [BALANCE_LOG](BALANCE_LOG.md)；规则冲突时的权威顺序见 [HANDOFF_AUDIT](HANDOFF_AUDIT.md#文档权威顺序)。新增或大改文档时，在本页对应日期下追加一行。
+按时间顺序列出各文档的产生与重要修订，并标注当前状态。想知道冲分模式“现在是什么规则”，看 [SCORE_MODE](SCORE_MODE.md)；想知道“为什么走到这里”，看 [DESIGN_JOURNAL](DESIGN_JOURNAL.md)；数值改动看 [BALANCE_LOG](BALANCE_LOG.md)；规则冲突时的权威顺序见 [HANDOFF_AUDIT](HANDOFF_AUDIT.md#文档权威顺序)。新增或大改文档时，在本页对应日期下追加一行。
 
 **状态标记**：现行 = 当前规则依据；讨论稿 = 尚未定案；待修订 = 内容仍按嵌片体系写，方块构筑定案后需改；记录 = 决策或过程记录；停用 = 不作为实现依据。
 
@@ -82,8 +82,11 @@
 | [VISUAL_STYLE](VISUAL_STYLE.md) | 冲分正式界面第一版（`src/game/`）：构成风格的棋盘与页面外框，接入引擎整局流程；旧 PixiJS 界面停用 | 现行（待试玩） |
 | [prototypes/tiles-bombs.html](prototypes/tiles-bombs.html) | 方块与炸弹样板：换掉黑半圆的三套方块组（四色／两种五色）、四种炸弹方案；正式界面棋盘随窗口放大。定案：四色绿菱形 + 黑块白标炸弹，已接入正式界面 | 现行 |
 | [VISUAL_STYLE](VISUAL_STYLE.md#声音第一版2026-09-30待试听) | 合成音效第一版：木琴／玻璃／方波三套音色可切换，五声音阶随连锁升高；连锁音阶可切换为谢泼德音调（无限上升的错觉） | 待试听 |
-
 | [README](../README.md) | 仓库清理：删除旧 PixiJS 界面（`src/ui/`）、美术素材（`assets/`、`public/game/`）与素材脚本，README 改写为冲分现状 | 现行 |
 | [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 冲分手感的结构性事实；精简：四色等级合并为方块基数、去掉充能、神器只留 6 件；金币养成：升级全部移到商店，剩余步数换金币 | 现行（原型数值） |
+| [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 关卡结构：第 3、6、9 关为首领关（六条规则），通关后可继续无尽模式；目标分上调 | 现行（原型数值） |
+| [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [SPECIAL_TILES](SPECIAL_TILES.md) | 连锁产弹格改为拐角／刚落定的格；前两关降目标；道具（锤子、手套、炸药包、洗牌），商店随机上架，是否耗步为原型开关 | 现行（原型） |
+| [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 倍率不封顶、爆破等级每级 +0.1 倍率、首领关降目标；道具改版（新增雷管、炸药包改放五连、锤子降价） | 现行（原型数值） |
+| [SCORE_MODE](SCORE_MODE.md) · [VISUAL_STYLE](VISUAL_STYLE.md) | 冲分模式现行规则汇总（流程、计分、炸弹、首领、目标、金币、商店、道具、神器、待定项）；页面外框补充首领、道具栏、商店、图标 | 现行 |
 
 **2026-09-30 起停用**：[ART_DIRECTION](ART_DIRECTION.md)、[ASSET_PLAN](ASSET_PLAN.md)、[ASSET_BATCH2](ASSET_BATCH2.md)、[ASSET_BATCH3](ASSET_BATCH3.md)、[BOARD_INSERT_VISUAL](BOARD_INSERT_VISUAL.md)（美术素材不再使用，视觉以 VISUAL_STYLE 为准）；[THEME_STORY](THEME_STORY.md) 中的敌人与故事线随打怪模式搁置。

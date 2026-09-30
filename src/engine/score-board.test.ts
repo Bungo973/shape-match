@@ -36,9 +36,15 @@ describe('基数 × 倍率结算（GAME_RULES 例子）', () => {
     expect(s.finalEffects).toEqual({ attack: 5, shield: 4, poison: 0 });
   });
 
-  it('连续倍率槽：每段 6/10/14/18/22 格，段内线性、取到 0.1，封顶 ×6', () => {
+  it('连续倍率槽：每段 6/10/14/18/22 格，段内线性、取到 0.1；封顶时停在 ×6', () => {
+    const capped = { ...DEFAULT_CONFIG, multiplierUncapped: false };
     const P = [0, 3, 5, 6, 11, 16, 23, 30, 48, 69, 70, 200];
-    expect(P.map((p) => multiplierFor(p, DEFAULT_CONFIG))).toEqual([1, 1.5, 1.8, 2, 2.5, 3, 3.5, 4, 5, 5.9, 6, 6]);
+    expect(P.map((p) => multiplierFor(p, capped))).toEqual([1, 1.5, 1.8, 2, 2.5, 3, 3.5, 4, 5, 5.9, 6, 6]);
+  });
+
+  it('不封顶（默认）：用完 5 段后每 22 格再 +1；爆破等级的加成按十分位叠加', () => {
+    expect([70, 81, 92, 136].map((p) => multiplierFor(p, DEFAULT_CONFIG))).toEqual([6, 6.5, 7, 9]);
+    expect(multiplierFor(11, DEFAULT_CONFIG, 0, 0, 3)).toBe(2.8);
   });
 
   it('没有主动清除有色方块时保留旧充能；新充能不超过上限', () => {

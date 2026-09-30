@@ -40,11 +40,14 @@ describe('神器池', () => {
 
 describe('倍率修正顺序', () => {
   it('神器档位先封顶，再结算倍率侵蚀', () => {
-    // P=70 已是封顶的 ×6；连锁透镜 +1 仍封顶 ×6，侵蚀再降一档为 ×5
-    expect(multiplierFor(70, DEFAULT_CONFIG, 1, 1)).toBe(5);
+    // 封顶时（打怪模式、低压规则）：P=70 已是 ×6；连锁透镜 +1 仍封顶 ×6，侵蚀再降一档为 ×5
+    const capped = { ...DEFAULT_CONFIG, multiplierUncapped: false };
+    expect(multiplierFor(70, capped, 1, 1)).toBe(5);
     // 段内的小数保留：P=11 为 ×2.5，透镜 +1 为 ×3.5，侵蚀后 ×2.5
-    expect(multiplierFor(11, DEFAULT_CONFIG, 1, 1)).toBe(2.5);
-    expect(multiplierFor(0, DEFAULT_CONFIG, 0, 1)).toBe(1);
+    expect(multiplierFor(11, capped, 1, 1)).toBe(2.5);
+    expect(multiplierFor(0, capped, 0, 1)).toBe(1);
+    // 不封顶时透镜照样 +1
+    expect(multiplierFor(70, DEFAULT_CONFIG, 1)).toBe(7);
   });
 });
 

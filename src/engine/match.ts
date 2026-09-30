@@ -94,10 +94,19 @@ export function findGroups(board: Board): MatchGroup[] {
 }
 
 /** 被动组的产弹格：沿重力方向最远的一行，并列取最左列。 */
-export function passiveBombCell(group: MatchGroup, gravity: Gravity): Pos {
-  const rows = group.cells.map((p) => p.r);
+/**
+ * 被动匹配组的产弹格：凑成这次消除的那一格（2026-09-30 改）。
+ * 有横有竖（T、L、十字）时取横线与竖线的交叉格；直线组取刚在这次下落中落定的格（landed）。
+ * 候选多于一格时，取沿当前重力方向最远的一行、并列取最左列；没有候选时在全组中按同一规则取。
+ */
+export function passiveBombCell(group: MatchGroup, gravity: Gravity, landed: readonly Pos[] = []): Pos {
+  const inLine = (dir: 'h' | 'v', p: Pos) => group.lines.some((l) => l.dir === dir && l.cells.some((q) => q.r === p.r && q.c === p.c));
+  const cross = group.cells.filter((p) => inLine('h', p) && inLine('v', p));
+  const fresh = group.cells.filter((p) => landed.some((q) => q.r === p.r && q.c === p.c));
+  const pool = cross.length ? cross : fresh.length ? fresh : group.cells;
+  const rows = pool.map((p) => p.r);
   const targetRow = gravity === 'down' ? Math.max(...rows) : Math.min(...rows);
-  const cols = group.cells.filter((p) => p.r === targetRow).map((p) => p.c);
+  const cols = pool.filter((p) => p.r === targetRow).map((p) => p.c);
   return { r: targetRow, c: Math.min(...cols) };
 }
 

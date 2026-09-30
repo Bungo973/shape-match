@@ -7,13 +7,14 @@ import { CARD_DEFS, cardBonus, drawCards, shuffle, type CardInstance, type CardP
 import { isRotationOf } from './inserts';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import type { InstalledInsert } from './inserts';
-import { resolveAction, type ActionResult } from './resolve';
+import { resolveAction, type ActionResult, type ResolutionEvent } from './resolve';
 import { hasLegalMove, reshuffle } from './shuffle';
+import type { BossRule } from './levels';
 import { createRng } from './rng';
 import { settle, type Settlement } from './score';
 import { COLORS, emptyClears, type Action, type BombKind, type Board, type ClearsByType, type Color, type Gravity, type Pos } from './types';
 
-export const RULES_VERSION = 3;
+export const RULES_VERSION = 4;
 
 /** 状态必须可序列化存档；用 JSON 往返复制，也顺带保证了这一点 */
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
@@ -114,6 +115,8 @@ export interface BattleState {
   cards?: CardPiles;
   /** 冲分模式：在 turns 个回合内让 totalScore 达到 target；敌人不行动 */
   goal?: { target: number; turns: number };
+  /** 冲分模式首领关的规则；color 为“色封”抽中的颜色 */
+  rule?: { key: BossRule; color?: Color };
 }
 
 export interface StartBattleInput {
@@ -127,6 +130,8 @@ export interface StartBattleInput {
   deck?: CardInstance[];
   /** 事件等给敌人的初始护盾 */
   enemyStartShield?: number;
+  /** 冲分模式首领关的规则 */
+  rule?: BossRule;
 }
 
 // ---- 日志 ----
@@ -208,6 +213,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     totalScore: 0,
   };
   if (config.scoreMode && input.enemy.targetScore) state.goal = { target: input.enemy.targetScore, turns: config.scoreTurns };
+  if (input.rule) applyBossRule(state, input.rule, config);
   applyTurnStartArtifacts(state);
   if (input.deck) {
     // 洗牌与抽牌沿用同一个种子随机数，保证复现
@@ -229,8 +235,9 @@ export type PlayerActionOutcome =
   | { ok: false; state: BattleState; reason: 'battleOver' | 'noAp' | 'cardMode' | 'noCard' | 'badShape' | NonNullable<ActionResult['reason']> };
 
 /** 玩家的一次交换或点燃：结算、施加效果、扣 AP。击杀立即结束战斗。 */
-export function playerAction(prev: BattleState, input: BattleAction, config: EngineConfig = DEFAULT_CONFIG): PlayerActionOutcome {
+export function playerAction(prev: BattleState, input: BattleAction, baseConfig: EngineConfig = DEFAULT_CONFIG): PlayerActionOutcome {
   if (prev.outcome !== 'ongoing') return { ok: false, state: prev, reason: 'battleOver' };
+  const config = ruleConfig(prev, baseConfig);
 
   // 卡牌模式只接受打出卡片；把卡片换算成一次“按形状清除”的结算
   let action: Action;
@@ -265,6 +272,7 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     levels: state.levels,
     // 色封：本回合被封颜色的方块等级视为 1
     sealedColor: state.current.sealedColor,
+    mutedColor: state.rule?.key === 'sealed' ? (state.rule.color ?? null) : null,
     bombLevels: Object.fromEntries(BOMB_UPGRADES.map((k) => [k, state.bombHeat[k].level])) as Record<BombUpgrade, number>,
   });
   if (!result.valid) return { ok: false, state: prev, reason: result.reason! };
@@ -292,9 +300,12 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
   };
 
   // 爆破等级：本步的引爆在结算完之后计入，新等级从下一次行动起生效
-  const heat = addDetonations(state.bombHeat, result.detonatedByType, config);
-  state.bombHeat = heat.heat;
-  log.bombLevelUps = heat.levelUps;
+  // 首领规则“冷却”：爆破等级不上升
+  if (state.rule?.key !== 'cooldown') {
+    const heat = addDetonations(state.bombHeat, result.detonatedByType, config);
+    state.bombHeat = heat.heat;
+    log.bombLevelUps = heat.levelUps;
+  }
 
   // 没有任何清除（未消除交换）时不结算
   const anyClear = result.hadActiveColorClear || result.passiveClearCount > 0 || result.events.some((e) => e.type === 'wave');
@@ -306,9 +317,12 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     const has = (k: ArtifactKey) => state.artifacts.includes(k);
     const P = result.passiveClearCount;
     const stepDelta = has('chainLens') && P >= 3 ? 1 : 0;
+    // 爆破等级给倍率：本步引爆过的每类炸弹按引爆时的等级计
+    const bonusTenths = BOMB_UPGRADES.reduce((n, k) => n + (result.detonatedByType[k] > 0 ? (prev.bombHeat[k].level - 1) * config.bombLevelMultTenths : 0), 0);
     const s = settle(
       {
         activeClearsByType: result.activeClearsByType,
+        bonusTenths,
         passiveClearCount: P,
         hadActiveColorClear: result.hadActiveColorClear,
         // 冲分模式没有催化剂充能（颜色不再有各自的作用）
@@ -332,6 +346,49 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
   }
   if (state.outcome === 'ongoing') applyCounterArtifacts(state, result, log, config);
   return { ok: true, state, log };
+}
+
+/** 一次道具使用：锤子与炸药包选一格，手套选相邻两格，洗牌不用选 */
+export type ItemUse = { key: 'hammer' | 'charge'; at: Pos } | { key: 'glove'; from: Pos; to: Pos } | { key: 'detonator' | 'shuffle' };
+
+export type ItemOutcome =
+  | { ok: true; state: BattleState; log: ActionLog | null; events: ResolutionEvent[] }
+  | { ok: false; state: BattleState; reason: string };
+
+/**
+ * 在关内使用道具。锤子、手套走与交换相同的结算（会计分、可能直接达标）；炸药包与洗牌只改棋盘，不结算。
+ * 不耗步时仍要求本回合还有步可走，避免在回合交接时插入。
+ */
+export function useItem(prev: BattleState, use: ItemUse, config: EngineConfig = DEFAULT_CONFIG): ItemOutcome {
+  if (prev.outcome !== 'ongoing') return { ok: false, state: prev, reason: 'battleOver' };
+  const cost = config.itemCostsStep ? 1 : 0;
+  if (prev.ap < 1) return { ok: false, state: prev, reason: 'noAp' };
+  if (use.key === 'hammer' || use.key === 'glove' || use.key === 'detonator') {
+    // 锤子：对一格的一次主动爆炸（与嵌片卡同一入口）；雷管：对所有炸弹格的一次爆炸，炸弹随之接力；手套：不要求能消除的交换
+    const bombs: Pos[] = [];
+    prev.board.forEach((row, r) => row.forEach((t, c) => t?.kind === 'bomb' && bombs.push({ r, c })));
+    if (use.key === 'detonator' && bombs.length === 0) return { ok: false, state: prev, reason: 'noBomb' };
+    const action: Action =
+      use.key === 'glove' ? { type: 'swap', from: use.from, to: use.to, free: true } : { type: 'play', cells: use.key === 'hammer' ? [use.at] : bombs };
+    const out = playerAction(prev, action, config);
+    if (!out.ok) return { ok: false, state: prev, reason: out.reason };
+    // playerAction 按一步扣了行动力；道具不耗步时退回
+    if (!cost) out.state.ap = prev.ap;
+    return { ok: true, state: out.state, log: out.log, events: out.log.result.events };
+  }
+  const state = clone(prev);
+  state.ap -= cost;
+  if (use.key === 'charge') {
+    const t = state.board[use.at.r]?.[use.at.c];
+    if (!t || t.kind !== 'normal') return { ok: false, state: prev, reason: 'notNormal' };
+    state.board[use.at.r]![use.at.c] = { id: state.nextId++, kind: 'bomb', bomb: 'CB' };
+    return { ok: true, state, log: null, events: [] };
+  }
+  const rng = createRng(state.rngState);
+  const shuffled = reshuffle(state.board, rng, ruleConfig(state, config));
+  state.board = shuffled.board;
+  state.rngState = rng.state;
+  return { ok: true, state, log: null, events: [{ type: 'shuffle', moves: shuffled.moves }] };
 }
 
 /**
@@ -400,6 +457,31 @@ function applyPlayerEffects(state: BattleState, s: Settlement, log: ActionLog, c
       log.stunApplied = true;
     }
   }
+}
+
+/** 首领规则的开局效果；“低压”“冷却”“色封”在每步结算时生效，见 ruleConfig 与 playerAction */
+function applyBossRule(state: BattleState, key: BossRule, config: EngineConfig): void {
+  const rng = createRng(state.rngState);
+  state.rule = { key };
+  if (key === 'inverted') state.gravity = 'up';
+  if (key === 'sealed') state.rule.color = COLORS[rng.int(COLORS.length)]!;
+  if (key === 'silence') state.artifacts = [];
+  if (key === 'stones') {
+    const cells: Pos[] = [];
+    state.board.forEach((row, r) => row.forEach((t, c) => t?.kind === 'normal' && cells.push({ r, c })));
+    for (let i = 0; i < config.stoneRuleCount && cells.length; i++) {
+      const p = cells.splice(rng.int(cells.length), 1)[0]!;
+      state.board[p.r]![p.c] = { id: state.nextId++, kind: 'stone' };
+    }
+    if (!hasLegalMove(state.board)) state.board = reshuffle(state.board, rng, config).board;
+  }
+  state.rngState = rng.state;
+}
+
+/** 首领规则对数值的修改：“低压”只保留前几段倍率 */
+export function ruleConfig(state: Pick<BattleState, 'rule'>, config: EngineConfig = DEFAULT_CONFIG): EngineConfig {
+  if (state.rule?.key !== 'lowCap') return config;
+  return { ...config, multiplierUncapped: false, multiplierSegments: config.multiplierSegments.slice(0, config.lowCapSegments) };
 }
 
 /** 冲分模式里还没用掉的步数（本回合剩余 + 之后各回合）；打怪模式为 0 */

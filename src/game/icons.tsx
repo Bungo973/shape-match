@@ -1,5 +1,5 @@
 // 界面里用的小图标：与棋盘同一套平涂几何图形，用 SVG 画，随文字缩放。
-import type { BombKind, UpgradeKey } from '../engine';
+import type { BombKind, ItemKey, UpgradeKey } from '../engine';
 import { COLOR_HEX, INK, PAPER } from './board/paint';
 
 /** 与棋盘上的“黑块白标”炸弹一致，静态版 */
@@ -40,3 +40,43 @@ export function BlockIcon({ size = 22 }: { size?: number }) {
 export function UpgradeIcon({ upgrade, size = 22 }: { upgrade: UpgradeKey; size?: number }) {
   return upgrade === 'block' ? <BlockIcon size={size} /> : <BombIcon bomb={BOMB_OF[upgrade]} size={size} />;
 }
+
+/** 道具图标：同一套平涂几何语言 */
+export function ItemIcon({ item, size = 22 }: { item: ItemKey; size?: number }) {
+  if (item === 'charge') return <BombIcon bomb="CB" size={size} />;
+  return (
+    <svg width={size} height={size} viewBox="-1 -1 2 2" aria-hidden="true">
+      {item === 'hammer' && (
+        <g>
+          <rect x="-0.75" y="-0.8" width="1.5" height="0.62" rx="0.08" fill={INK} />
+          <rect x="-0.13" y="-0.2" width="0.26" height="1.05" fill={COLOR_HEX.poison} />
+        </g>
+      )}
+      {item === 'glove' && (
+        <g>
+          <rect x="-0.86" y="-0.3" width="0.6" height="0.6" rx="0.06" fill={COLOR_HEX.attack} />
+          <rect x="0.26" y="-0.3" width="0.6" height="0.6" rx="0.06" fill={COLOR_HEX.shield} />
+          <path d="M-0.56 -0.48 Q0 -1 0.56 -0.48 M0.56 0.48 Q0 1 -0.56 0.48" fill="none" stroke={INK} strokeWidth="0.13" />
+          <path d="M0.36 -0.62 L0.58 -0.46 L0.62 -0.74 M-0.36 0.62 L-0.58 0.46 L-0.62 0.74" fill="none" stroke={INK} strokeWidth="0.13" strokeLinejoin="round" />
+        </g>
+      )}
+      {item === 'detonator' && (
+        <g>
+          <rect x="-0.72" y="-0.1" width="1.44" height="0.9" fill={INK} />
+          <rect x="-0.08" y="-0.72" width="0.16" height="0.62" fill={INK} />
+          <rect x="-0.5" y="-0.86" width="1" height="0.2" fill={COLOR_HEX.attack} />
+          <circle cx="0" cy="0.35" r="0.16" fill={COLOR_HEX.poison} />
+        </g>
+      )}
+      {item === 'shuffle' && (
+        <g transform="rotate(12)">
+          <rect x="-0.8" y="-0.8" width="0.7" height="0.7" fill={COLOR_HEX.attack} />
+          <rect x="0.1" y="-0.8" width="0.7" height="0.7" fill={COLOR_HEX.poison} />
+          <rect x="-0.8" y="0.1" width="0.7" height="0.7" fill={COLOR_HEX.catalyst} />
+          <rect x="0.1" y="0.1" width="0.7" height="0.7" fill={COLOR_HEX.shield} />
+        </g>
+      )}
+    </svg>
+  );
+}
+

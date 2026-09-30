@@ -11,6 +11,10 @@ export interface EngineConfig {
    * 数组依次为各段所需的被动清除数，段数即封顶（5 段封顶 ×6）。见 GAME_RULES §2 第 4 步。
    */
   multiplierSegments: number[];
+  /** 取消倍率封顶：各段用完后按最后一段的格数继续加（2026-09-30 定） */
+  multiplierUncapped: boolean;
+  /** 爆破等级给倍率：本步引爆过的每类炸弹，每高出 1 级倍率 +0.1 × 此值（十分位，2026-09-30 定为 1） */
+  bombLevelMultTenths: number;
   /**
    * 爆破等级（2026-09-30）：本场每引爆这么多枚该类炸弹（含接力），该类升一级；每场重置。
    * n 级时，该类炸弹炸掉的每块方块多计 n − 1 基数。见 docs/BLOCK_BUILD.md。
@@ -33,6 +37,12 @@ export interface EngineConfig {
    */
   scoreMode: boolean;
   scoreTurns: number;
+  /** 前 9 关的目标分；之后进入无尽模式，每关乘以 endlessGrowth。见 levels.ts */
+  scoreTargets: number[];
+  endlessGrowth: number;
+  /** 首领规则“石阵”开局放下的石块数；“低压”保留的倍率段数（2 段即封顶 ×3） */
+  stoneRuleCount: number;
+  lowCapSegments: number;
   // ---- 战斗 ----
   playerMaxHp: number;
   apPerTurn: number;
@@ -69,6 +79,10 @@ export interface EngineConfig {
   upgradePriceStep: number;
   healPrice: number;
   healAmount: number;
+  /** 道具：背包格数、每次商店随机上架的种数、使用时是否消耗 1 步（原型开关） */
+  itemSlots: number;
+  itemsPerShop: number;
+  itemCostsStep: boolean;
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
@@ -76,6 +90,8 @@ export const DEFAULT_CONFIG: EngineConfig = {
   cols: 10,
   colorWeights: { attack: 30, shield: 25, poison: 25, catalyst: 20 },
   multiplierSegments: [6, 10, 14, 18, 22],
+  multiplierUncapped: true,
+  bombLevelMultTenths: 1,
   bombHeatEvery: { line: 12, area: 9, color: 3 },
   catalystPerCharge: 3,
   chargeBonus: 1,
@@ -85,6 +101,10 @@ export const DEFAULT_CONFIG: EngineConfig = {
   maxPhases: 200,
   scoreMode: false,
   scoreTurns: 5,
+  scoreTargets: [1100, 1600, 1850, 3300, 4300, 4150, 6000, 6800, 6600],
+  endlessGrowth: 1.3,
+  stoneRuleCount: 6,
+  lowCapSegments: 2,
   playerMaxHp: 40,
   apPerTurn: 3,
   playerShieldCap: 40,
@@ -105,4 +125,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   upgradePriceStep: 6,
   healPrice: 6,
   healAmount: 10,
+  itemSlots: 3,
+  itemsPerShop: 3,
+  itemCostsStep: false,
 };

@@ -1,5 +1,5 @@
 // 数值模拟：让自动玩家批量打第一段落，统计每场战斗的表现。
-// 用法：npm run sim -- [--runs 200] [--style skilled|novice|both] [--set 参数=值 ...] [--hp 倍数] [--atk 倍数]
+// 用法：npm run sim -- [--runs 200] [--style skilled|novice|both] [--set 参数=值 ...] [--hp 倍数] [--atk 倍数] [--mode score] [--targets 1100,1500,...]
 // 例：npm run sim -- --set chargeCap=3 --hp 1.5 --level attack=3 --level line=2
 import { ARTIFACTS, DEFAULT_CONFIG, FULL_ROUTE, UPGRADE_KEYS, type ArtifactKey, type EngineConfig, type RouteNode } from '../src/engine';
 import type { BotStyle } from '../src/sim/bot';
@@ -39,6 +39,10 @@ args.forEach((a, i) => {
   if (!(k! in config)) throw new Error(`未知参数 ${k}`);
   (config as unknown as Record<string, number>)[k!] = Number(v);
 });
+
+// --targets 1100,1500,...：冲分模式前 9 关的目标分
+const targetsArg = opt('targets', '');
+if (targetsArg) config.scoreTargets = targetsArg.split(',').map(Number);
 
 // --mode score：冲分模式（2026-09-30 原型）
 config.scoreMode = opt('mode', 'battle') === 'score';

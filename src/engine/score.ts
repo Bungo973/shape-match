@@ -20,6 +20,8 @@ export interface SettlementInput {
   multiplierStepDelta?: number;
   /** 敌方倍率侵蚀：在神器修正之后再降的档数（每档 = 倍率 −1），最低 ×1 */
   erosionSteps?: number;
+  /** 爆破等级带来的倍率加成（十分位） */
+  bonusTenths?: number;
   /** 过载引线的代价：本步护盾效果为 0，结算分不变 */
   zeroShieldEffect?: boolean;
 }
@@ -35,9 +37,9 @@ export interface Settlement {
   chargesAfter: number;
 }
 
-/** 倍率槽的上限 */
+/** 倍率槽的上限；取消封顶时为无穷大 */
 export function multiplierCap(config: EngineConfig): number {
-  return 1 + config.multiplierSegments.length;
+  return config.multiplierUncapped ? Infinity : 1 + config.multiplierSegments.length;
 }
 
 /**
@@ -52,7 +54,10 @@ function chainTenths(P: number, config: EngineConfig): number {
     tenths += 10;
     rest -= cost;
   }
-  return tenths;
+  if (!config.multiplierUncapped) return tenths;
+  // 不封顶：之后每段都按最后一段的格数
+  const last = config.multiplierSegments[config.multiplierSegments.length - 1]!;
+  return tenths + Math.floor((rest * 10) / last);
 }
 
 /** 连锁倍率（不含神器与侵蚀），供倍率槽实时显示 */
@@ -60,16 +65,16 @@ export function chainMultiplier(P: number, config: EngineConfig): number {
   return 1 + chainTenths(P, config) / 10;
 }
 
-export function multiplierFor(passiveClearCount: number, config: EngineConfig, stepDelta = 0, erosionSteps = 0): number {
+export function multiplierFor(passiveClearCount: number, config: EngineConfig, stepDelta = 0, erosionSteps = 0, bonusTenths = 0): number {
   const cap = (multiplierCap(config) - 1) * 10;
-  const boosted = Math.max(0, Math.min(cap, chainTenths(passiveClearCount, config) + 10 * stepDelta));
+  const boosted = Math.max(0, Math.min(cap, chainTenths(passiveClearCount, config) + 10 * stepDelta + bonusTenths));
   return 1 + Math.max(0, boosted - 10 * erosionSteps) / 10;
 }
 
 export function settle(input: SettlementInput, config: EngineConfig): Settlement {
   const A = input.activeClearsByType;
   const E = input.socketBonuses ?? { attack: 0, shield: 0, poison: 0 };
-  const M = multiplierFor(input.passiveClearCount, config, input.multiplierStepDelta ?? 0, input.erosionSteps ?? 0);
+  const M = multiplierFor(input.passiveClearCount, config, input.multiplierStepDelta ?? 0, input.erosionSteps ?? 0, input.bonusTenths ?? 0);
   // 至少主动清除一枚有色普通方块的行动才消耗旧充能（GAME_RULES §2 第 5 步）
   const C = input.hadActiveColorClear ? input.chargesBefore : 0;
   const bonus = config.chargeBonus * C;

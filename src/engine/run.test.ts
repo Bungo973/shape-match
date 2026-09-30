@@ -167,8 +167,8 @@ describe('完整一局', () => {
     }
     expect(run.phase).toBe('over');
     expect(run.outcome).toBe('won');
-    // 打怪模式没有剩余步数：八关底薪加两次精英加成
-    expect(run.gold).toBe(DEFAULT_CONFIG.goldBase * 8 + DEFAULT_CONFIG.goldEliteBonus * 2);
+    // 打怪模式没有剩余步数：九关底薪加三次首领加成（第 3、6、9 关）
+    expect(run.gold).toBe(DEFAULT_CONFIG.goldBase * 9 + DEFAULT_CONFIG.goldEliteBonus * 3);
     expect(run.artifacts).toHaveLength(3);
     expect(UPGRADE_KEYS.reduce((sum, k) => sum + run.levels[k] - 1, 0)).toBe(0);
   });
