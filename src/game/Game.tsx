@@ -5,24 +5,24 @@ import {
   ARTIFACTS,
   BOMB_NAME,
   BOMB_UPGRADES,
-  campRest,
-  campUpgrade,
-  campUpgradeAmount,
+  buyHeal,
+  buyUpgrade,
   chainMultiplier,
   chooseArtifact,
-  chooseUpgrade,
   DEFAULT_CONFIG,
   newRun,
   pickStarter,
-  rerollRewards,
+  leaveShop,
   runAction,
   runEndTurn,
   startNextBattle,
   UPGRADE_KEYS,
+  upgradePrice,
   upgradeEffectText,
   type Action,
   type ArtifactKey,
   type BattleState,
+  type Income,
   type Pos,
   type RunResult,
   type RunState,
@@ -30,7 +30,6 @@ import {
 } from '../engine';
 import { getKit, getShepard, KIT_NAMES, setKit, setShepard, sfx, type SoundKit } from './audio';
 import { BoardView } from './board/BoardView';
-import { COLOR_NAME } from './board/paint';
 import { UpgradeIcon } from './icons';
 import { clearRun, loadRun, saveRun } from './save';
 
@@ -46,7 +45,7 @@ function initialRun(): RunState {
   return loadRun() ?? newRun(newSeed(), config);
 }
 
-const upgradeName = (k: UpgradeKey) => (k === 'line' || k === 'area' || k === 'color' ? BOMB_NAME[k] : COLOR_NAME[k]);
+const upgradeName = (k: UpgradeKey) => (k === 'block' ? '方块基数' : BOMB_NAME[k]);
 const TIER_NAME = { minion: '', elite: '精英', boss: '终关' } as const;
 const fmt = (n: number) => n.toLocaleString('zh-CN');
 
@@ -56,6 +55,8 @@ interface Ending {
   score: number;
   target: number;
   penalty: number;
+  /** 本关的金币收入；终关或失败时没有 */
+  income: Income | null;
 }
 
 export function Game() {
@@ -166,7 +167,7 @@ function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r:
     setRun(out.run);
     if (b.outcome !== 'ongoing') {
       sfx.win();
-      setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0 });
+      setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0, income: out.run.income });
       setBusy(false);
       return;
     }
@@ -183,7 +184,7 @@ function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r:
           const won = nb.totalScore >= (nb.goal?.target ?? 0);
           if (won) sfx.win();
           else sfx.short();
-          setEnding({ won, score: nb.totalScore, target: nb.goal?.target ?? 0, penalty: next.log?.scorePenalty ?? 0 });
+          setEnding({ won, score: nb.totalScore, target: nb.goal?.target ?? 0, penalty: next.log?.scorePenalty ?? 0, income: next.run.income });
         } else sfx.turn();
       }
     }
@@ -336,6 +337,7 @@ function EndingCard({ ending, onNext }: { ending: Ending; onNext: () => void }) 
         <span className="lab">{ending.won ? '达标' : '未达标'}</span>
         <b>{fmt(ending.score)}</b>
         <p>{ending.won ? `目标 ${fmt(ending.target)}` : `差 ${fmt(short)} 分 · 生命 −${ending.penalty}`}</p>
+        {ending.income && <IncomeLines income={ending.income} />}
         <button
           className="primary"
           onClick={() => {
@@ -367,7 +369,7 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
       return (
         <Panel eyebrow={`第 ${idx} 关${next && TIER_NAME[next.tier] ? ` · ${TIER_NAME[next.tier]}` : ''}`} title={`目标 ${fmt(next?.enemy.targetScore ?? 0)} 分`}>
           <p className="hint">
-            {config.scoreTurns} 回合，每回合 {config.apPerTurn} 步。达到目标立即过关；步数用完仍未达标，按差距扣生命。
+            {config.scoreTurns} 回合，每回合 {config.apPerTurn} 步。达到目标立即过关，剩下的每一步换 {config.goldPerStep} 金币；步数用完仍未达标，按差距扣生命。
           </p>
           <button className="primary big" onClick={() => apply(startNextBattle(run, config))} autoFocus>
             开始
@@ -375,43 +377,14 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
         </Panel>
       );
     }
-    case 'reward':
-      return (
-        <Panel eyebrow={`金币 +${run.reward?.goldGained ?? 0}`} title="升级三选一">
-          <div className="choices">
-            {run.reward?.choices.map((c, i) => (
-              <UpgradeCard key={`${c.key}-${i}`} upgrade={c.key} level={run.levels[c.key]} add={1} onPick={() => apply(chooseUpgrade(run, i, config))} />
-            ))}
-          </div>
-          <button className="ghost" disabled={run.gold < config.rerollCost} onClick={() => apply(rerollRewards(run, undefined, config))}>
-            重掷（{config.rerollCost} 金币）
-          </button>
-        </Panel>
-      );
     case 'artifact':
       return (
         <Panel eyebrow="精英奖励" title="选一件神器">
           <ArtifactChoices keys={run.artifactChoices} onPick={(k) => apply(chooseArtifact(run, k))} />
         </Panel>
       );
-    case 'camp': {
-      const amount = campUpgradeAmount(run);
-      const afford = run.gold >= config.upgradeCost;
-      return (
-        <Panel eyebrow="营地" title="休息，或花金币升级一项">
-          <button className="rest" onClick={() => apply(campRest(run, config))}>
-            <b>休息</b>
-            <span>生命 +{config.restHeal}</span>
-          </button>
-          <div className="choices grid">
-            {UPGRADE_KEYS.map((k) => (
-              <UpgradeCard key={k} upgrade={k} level={run.levels[k]} add={amount} disabled={!afford} compact onPick={() => apply(campUpgrade(run, k, config))} />
-            ))}
-          </div>
-          <p className="hint">升级一项花 {config.upgradeCost} 金币。</p>
-        </Panel>
-      );
-    }
+    case 'shop':
+      return <Shop run={run} apply={apply} />;
     case 'over':
       return (
         <Panel eyebrow={run.outcome === 'won' ? '通关' : '生命耗尽'} title={`总分 ${fmt(run.totalScore)}`}>
@@ -428,6 +401,59 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
   }
 }
 
+function IncomeLines({ income }: { income: Income }) {
+  return (
+    <ul className="income" aria-label="金币收入">
+      <li>
+        <span>过关</span>
+        <b>+{income.base}</b>
+      </li>
+      {income.elite > 0 && (
+        <li>
+          <span>精英</span>
+          <b>+{income.elite}</b>
+        </li>
+      )}
+      {income.steps > 0 && (
+        <li>
+          <span>剩余 {income.steps} 步</span>
+          <b>+{income.fromSteps}</b>
+        </li>
+      )}
+      <li className="total">
+        <span>金币</span>
+        <b>+{income.total}</b>
+      </li>
+    </ul>
+  );
+}
+
+function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) {
+  const hurt = run.player.hp < run.player.maxHp;
+  return (
+    <Panel eyebrow={`金币 ${run.gold}`} title="商店">
+      <p className="hint">升级都在这里买，可以买多次；同一项每升一级涨价 {config.upgradePriceStep}。</p>
+      <div className="choices grid">
+        {UPGRADE_KEYS.map((k) => {
+          const price = upgradePrice(run, k, config);
+          return (
+            <UpgradeCard key={k} upgrade={k} level={run.levels[k]} add={1} price={price} disabled={run.gold < price} onPick={() => apply(buyUpgrade(run, k, config))} />
+          );
+        })}
+      </div>
+      <button className="rest" disabled={!hurt || run.gold < config.healPrice} onClick={() => apply(buyHeal(run, config))}>
+        <b>回血</b>
+        <span>
+          生命 +{config.healAmount} · {config.healPrice} 金币
+        </span>
+      </button>
+      <button className="primary big" onClick={() => apply(leaveShop(run))}>
+        {run.battleIndex >= run.route.length ? '结束' : '下一关'}
+      </button>
+    </Panel>
+  );
+}
+
 function Panel({ eyebrow, title, children }: { eyebrow: string; title: string; children: ReactNode }) {
   return (
     <main className="panel">
@@ -438,15 +464,19 @@ function Panel({ eyebrow, title, children }: { eyebrow: string; title: string; c
   );
 }
 
-function UpgradeCard({ upgrade, level, add, onPick, disabled, compact }: { upgrade: UpgradeKey; level: number; add: number; onPick: () => void; disabled?: boolean; compact?: boolean }) {
+function UpgradeCard({ upgrade, level, add, price, onPick, disabled }: { upgrade: UpgradeKey; level: number; add: number; price: number; onPick: () => void; disabled?: boolean }) {
   return (
-    <button className={`choice${compact ? ' compact' : ''}`} onClick={onPick} disabled={disabled}>
-      <UpgradeIcon upgrade={upgrade} size={compact ? 26 : 40} />
+    <button className="choice" onClick={onPick} disabled={disabled}>
+      <UpgradeIcon upgrade={upgrade} size={34} />
       <b>{upgradeName(upgrade)}</b>
       <span className="lv">
         Lv{level} → Lv{level + add}
       </span>
-      {!compact && <span className="desc">{upgradeEffectText(upgrade, level + add, config)}</span>}
+      <span className="desc">{upgradeEffectText(upgrade, level + add, config)}</span>
+      <span className="price">
+        <i />
+        {price}
+      </span>
     </button>
   );
 }
@@ -461,7 +491,6 @@ function ArtifactChoices({ keys, onPick }: { keys: ArtifactKey[]; onPick: (k: Ar
             <span className="badge">{a.id}</span>
             <b>{a.name}</b>
             <span className="desc">{a.text}</span>
-            {a.cost && <span className="desc cost">代价：{a.cost}</span>}
           </button>
         );
       })}

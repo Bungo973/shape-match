@@ -110,7 +110,11 @@ function report(style: BotStyle) {
       const g = all.map((r) => r.battles[i]).filter((b): b is BattleReport => !!b && b.target !== undefined);
       if (!g.length) continue;
       const ratios = g.map((b) => b.score! / b.target!);
-      console.log(`冲分 ${i + 1} ${route[i]!.enemy.name}：目标 ${g[0]!.target}，达标 ${pc(ratios.filter((x) => x >= 1).length / g.length)}，得分/目标 p25 ${pct(ratios, 0.25).toFixed(2)} 中位 ${pct(ratios, 0.5).toFixed(2)}，未达标扣血 ${f1(avg(g.map((b) => b.hpLost)))}`);
+      const inc = g.filter((b) => b.income !== undefined);
+      console.log(
+        `冲分 ${i + 1} ${route[i]!.enemy.name}：目标 ${g[0]!.target}，达标 ${pc(ratios.filter((x) => x >= 1).length / g.length)}，得分/目标 p25 ${pct(ratios, 0.25).toFixed(2)} 中位 ${pct(ratios, 0.5).toFixed(2)}，未达标扣血 ${f1(avg(g.map((b) => b.hpLost)))}` +
+          `，开局已升 ${f1(avg(g.map((b) => b.upgradesBefore ?? 0)))} 级${inc.length ? `，剩余步数 ${f1(avg(inc.map((b) => b.stepsLeft!)))}，收入 ${f1(avg(inc.map((b) => b.income!)))}` : ''}`,
+      );
     }
   }
   console.log(`敌人攻击被护盾完全挡住：${pc(sum((b) => b.blockedTurns) / Math.max(1, sum((b) => b.attackTurns)))}（${sum((b) => b.attackTurns)} 次攻击）`);

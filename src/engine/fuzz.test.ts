@@ -31,7 +31,7 @@ describe.each([
     for (let seed = 1; seed <= 200; seed++) {
       const rng = createRng(seed);
       const ids = createIdGen();
-      const ctx = { config: DEFAULT_CONFIG, rng, ids, spawn: weightedSpawner(rng, DEFAULT_CONFIG), gravity: seed % 2 ? ('down' as const) : ('up' as const), inserts, artifacts: inserts.length ? (['overloadFuse'] as const) : [] };
+      const ctx = { config: DEFAULT_CONFIG, rng, ids, spawn: weightedSpawner(rng, DEFAULT_CONFIG), gravity: seed % 2 ? ('down' as const) : ('up' as const), inserts, artifacts: inserts.length ? (['thunderFuse'] as const) : [] };
       let board: Board = createBoard(rng, ids, DEFAULT_CONFIG);
       for (let step = 0; step < 40; step++) {
         const action = randomAction(board, rng.int.bind(rng));

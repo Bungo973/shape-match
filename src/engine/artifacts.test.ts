@@ -30,13 +30,11 @@ function act(s: BattleState, action: Action) {
 const igniteRow4: Action = { type: 'ignite', at: { r: 4, c: 0 } };
 
 describe('神器池', () => {
-  it('共 14 件，开局池 4 件，带代价的 1 件，累加触发的 3 件', () => {
+  it('共 6 件，虹彩原石不进开局池，累加触发的 2 件', () => {
     const all = Object.values(ARTIFACTS);
-    expect(all).toHaveLength(14);
-    expect(all.filter((a) => a.every).map((a) => a.name)).toEqual(['引信匣', '溢流护符', '余震核心']);
-    expect(all.filter((a) => a.starter).map((a) => a.name)).toEqual(['反应线圈', '连锁透镜', '藏宝图残页', '纯粹结晶']);
-    expect(all.filter((a) => a.cost).map((a) => a.name)).toEqual(['过载引线']);
-    expect(all.some((a) => a.starter && a.cost)).toBe(false);
+    expect(all).toHaveLength(6);
+    expect(all.filter((a) => a.every).map((a) => a.name)).toEqual(['引信匣', '余震核心']);
+    expect(all.filter((a) => !a.starter).map((a) => a.name)).toEqual(['虹彩原石']);
   });
 });
 
@@ -51,67 +49,12 @@ describe('倍率修正顺序', () => {
 });
 
 describe('战斗中的神器', () => {
-  it('过载引线：单枚直线炸弹清三行，当步护盾为 0；组合技不受影响', () => {
-    const s = battle(['overloadFuse'], { '4,0': 'H', '3,2': 's', '5,4': 's' });
-    const { log } = act(s, igniteRow4);
-    const first = log.result.events.find((e) => e.type === 'wave');
-    expect(first && first.type === 'wave' && first.explosions[0]!.cells).toHaveLength(24);
-    expect(log.result.overloadFired).toBe(true);
-    expect(log.settlement!.baseValues.shield).toBeGreaterThan(0);
-    expect(log.settlement!.finalEffects.shield).toBe(0);
-
-    const combo = battle(['overloadFuse'], { '3,3': 'H', '3,4': 'V' });
-    const out = act(combo, { type: 'swap', from: { r: 3, c: 3 }, to: { r: 3, c: 4 } });
-    expect(out.log.result.overloadFired).toBe(false);
-  });
-
   it('连锁透镜：P≥3 时倍率提高一档', () => {
     const s = battle(['chainLens'], { '2,0': 'a', '3,0': 'a', '4,0': 'H', '5,0': 'a' });
     const { log } = act(s, igniteRow4);
     const P = log.result.passiveClearCount;
     expect(P).toBeGreaterThanOrEqual(3);
     expect(log.settlement!.multiplier).toBe(multiplierFor(P, DEFAULT_CONFIG, 1));
-  });
-
-  it('反应线圈：护盾完全挡下攻击时反击该攻击的一半', () => {
-    const s = battle(['reactionCoil'], {}, [], [attack(9)]);
-    s.player.shield = 10;
-    const { state, log } = endTurn(s);
-    expect(log!.counterDamage).toBe(4);
-    expect(state.enemy.hp).toBe(496);
-  });
-
-  it('反应线圈：碎甲回合不触发', () => {
-    const s = battle(['reactionCoil'], {}, [], [attack(9)]);
-    s.player.shield = 10;
-    s.current.shattered = true;
-    expect(endTurn(s).log!.counterDamage).toBe(0);
-  });
-
-  it('反应线圈：护盾没有完全挡下时不反击', () => {
-    const s = battle(['reactionCoil'], {}, [], [attack(5)]);
-    s.player.shield = 3;
-    expect(endTurn(s).log!.counterDamage).toBe(0);
-  });
-
-});
-
-describe('条件基数类神器', () => {
-  // 横向炸弹炸掉第 0 行：含攻击、护盾与填充的毒气／催化剂，四种颜色都有
-  const rowBoard = { '0,0': 'H', '0,1': 'a', '0,2': 's' };
-  const igniteRow0: Action = { type: 'ignite', at: { r: 0, c: 0 } };
-
-  it('纯粹结晶：只清一种颜色时该色 +3；清到多种颜色时不触发', () => {
-    const single = act(battle(['pureCrystal'], { '0,0': 'a', '0,1': 'a', '0,2': 's', '1,2': 'a' }), { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } });
-    expect(single.log.artifactBaseBonus).toEqual({ attack: 3, shield: 0, poison: 0, catalyst: 0 });
-    expect(single.log.settlement!.baseValues.attack).toBe(3 + 3);
-    const mixed = act(battle(['pureCrystal'], rowBoard), igniteRow0);
-    expect(mixed.log.artifactBaseBonus).toEqual({ attack: 0, shield: 0, poison: 0, catalyst: 0 });
-  });
-
-  it('四色棱镜：四种颜色都清到时每种 +2', () => {
-    const out = act(battle(['fourPrism'], rowBoard), igniteRow0);
-    expect(out.log.artifactBaseBonus).toEqual({ attack: 2, shield: 2, poison: 2, catalyst: 2 });
   });
 
 });
@@ -168,15 +111,6 @@ describe('累加触发类神器', () => {
     const next = endTurn(second.state).state;
     next.board = boardWith({ '4,0': 'H' });
     expect(act(next, igniteRow4).log.counterTriggers).toEqual([{ key: 'fuseBox', ap: 1 }]);
-  });
-
-  it('溢流护符：因上限浪费的护盾累计到门槛时对敌人造成伤害', () => {
-    const s = battle(['overflowCharm'], { '4,0': 'H', '4,2': 's', '4,4': 's' });
-    s.player.shield = 40;
-    s.player.counters = { overflowCharm: 149 };
-    const { state, log } = act(s, igniteRow4);
-    expect(log.counterTriggers).toEqual([{ key: 'overflowCharm', toShield: 0, toHp: 40 }]);
-    expect(state.enemy.hp).toBe(500 - log.damageToEnemyHp - 40);
   });
 
   it('余震核心：被动清除累计到门槛时把一个普通方块变成 3×3 炸弹；进度跨战斗保留在玩家状态里', () => {

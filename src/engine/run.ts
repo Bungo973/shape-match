@@ -1,17 +1,16 @@
-// 一局的状态与流程：开局神器 → 战斗 → 金币与升级三选一 →（精英）神器三选一 → 营地 → 路线页 → 下一战。
-// 规则见 docs/MAP.md 与 docs/GAME_RULES.md §7。当前实现第一段落（三战）；事件、商店与后两段落在阶段 3 加入。
+// 一局的状态与流程：开局神器 → 关卡 → 结算金币 →（精英）神器三选一 → 商店 → 路线页 → 下一关。
+// 2026-09-30 起所有升级都在商店用金币买，取代原来的升级三选一与营地；见 docs/DESIGN_JOURNAL.md。
 import { ARTIFACTS, offeredArtifacts, type ArtifactKey } from './artifacts';
 import { defaultLevels, UPGRADE_KEYS, type UpgradeKey, type UpgradeLevels } from './upgrades';
-import { endTurn, playerAction, startBattle, type ActionLog, type BattleState, type EnemyTurnLog, type PlayerState } from './battle';
+import { endTurn, playerAction, startBattle, stepsLeft, type ActionLog, type BattleState, type EnemyTurnLog, type PlayerState } from './battle';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import { FULL_ROUTE, type RouteNode } from './content/enemies';
-import { generateUpgradeChoices, mixSeed, type UpgradeCandidate } from './rewards';
-import { createRng } from './rng';
+import { createRng, mixSeed } from './rng';
 import type { Action } from './types';
 
-export const RUN_RULES_VERSION = 4;
+export const RUN_RULES_VERSION = 6;
 
-export type RunPhase = 'starter' | 'map' | 'battle' | 'reward' | 'artifact' | 'camp' | 'over';
+export type RunPhase = 'starter' | 'map' | 'battle' | 'artifact' | 'shop' | 'over';
 
 export interface RunState {
   rulesVersion: number;
@@ -27,10 +26,20 @@ export interface RunState {
   levels: UpgradeLevels;
   battle: BattleState | null;
   starterChoices: ArtifactKey[];
-  reward: { goldGained: number; choices: UpgradeCandidate[]; rerollCount: number } | null;
+  /** 上一关的金币收入明细，供结算与商店展示 */
+  income: Income | null;
   artifactChoices: ArtifactKey[];
   outcome: 'ongoing' | 'won' | 'lost';
   totalScore: number;
+}
+
+export interface Income {
+  base: number;
+  elite: number;
+  /** 提前达标时剩下的步数 */
+  steps: number;
+  fromSteps: number;
+  total: number;
 }
 
 export type RunResult =
@@ -65,7 +74,7 @@ export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, rout
     levels: defaultLevels(),
     battle: null,
     starterChoices: sample(starters, 3, mixSeed(seed, 0x5)),
-    reward: null,
+    income: null,
     artifactChoices: [],
     outcome: 'ongoing',
     totalScore: 0,
@@ -120,7 +129,7 @@ export function runEndTurn(prev: RunState, config: EngineConfig = DEFAULT_CONFIG
   return { ok: true, run, ...(log ? { log } : {}) };
 }
 
-/** 战斗结束时结转状态：胜利发金币与嵌片三选一，失败结束本局 */
+/** 关卡结束时结转状态：发金币；精英关后先选神器，然后进商店；终关或失败则结束本局 */
 function settleBattle(run: RunState, config: EngineConfig): void {
   const b = run.battle!;
   if (b.outcome === 'ongoing') return;
@@ -131,7 +140,7 @@ function settleBattle(run: RunState, config: EngineConfig): void {
     run.outcome = 'lost';
     return;
   }
-  // 战后保留生命与催化剂充能；毒气与眩晕随战斗清零；护盾按配置决定是否带入下一场
+  // 关后保留生命；护盾按配置决定是否带入下一关
   run.player = config.playerShieldCarryOver ? b.player : { ...b.player, shield: 0 };
   const node = current(run);
   if (node.tier === 'boss') {
@@ -139,51 +148,25 @@ function settleBattle(run: RunState, config: EngineConfig): void {
     run.outcome = 'won';
     return;
   }
-  const goldGained = node.tier === 'elite' ? config.goldElite : config.goldMinion;
-  run.gold += goldGained;
-  run.reward = { goldGained, choices: upgradeChoices(run, 0), rerollCount: 0 };
-  run.phase = 'reward';
-}
-
-function upgradeChoices(run: RunState, rerollCount: number, previous?: UpgradeCandidate[], keepIndex?: number): UpgradeCandidate[] {
-  return generateUpgradeChoices({
-    runSeed: run.seed,
-    battleIndex: run.battleIndex,
-    rerollCount,
-    levels: run.levels,
-    artifacts: run.artifacts,
-    ...(previous ? { previous } : {}),
-    ...(keepIndex != null ? { keepIndex } : {}),
-  });
-}
-
-/** 花金币重掷升级候选；持有拾荒眼镜时可保留一项 */
-export function rerollRewards(prev: RunState, keepIndex?: number, config: EngineConfig = DEFAULT_CONFIG): RunResult {
-  if (prev.phase !== 'reward' || !prev.reward) return fail(prev, '当前没有升级候选');
-  if (prev.gold < config.rerollCost) return fail(prev, '金币不足');
-  if (keepIndex != null && !prev.artifacts.includes('scavengerGoggles')) return fail(prev, '没有拾荒眼镜，不能保留候选');
-  const run = clone(prev);
-  run.gold -= config.rerollCost;
-  const n = run.reward!.rerollCount + 1;
-  run.reward = { ...run.reward!, rerollCount: n, choices: upgradeChoices(run, n, run.reward!.choices, keepIndex) };
-  return { ok: true, run };
-}
-
-/** 选一项升级 +1 级；精英战后接神器三选一，否则进入营地 */
-export function chooseUpgrade(prev: RunState, index: number, config: EngineConfig = DEFAULT_CONFIG): RunResult {
-  const c = prev.reward?.choices[index];
-  if (prev.phase !== 'reward' || !c) return fail(prev, '无效的升级候选');
-  const run = clone(prev);
-  run.levels[c.key]++;
-  run.reward = null;
-  if (current(run).tier === 'elite') {
+  // 冲分模式：未达标（按差距扣过血）的关没有剩余步数，也照发底薪
+  const steps = b.goal && b.totalScore >= b.goal.target ? stepsLeft(b, config) : 0;
+  const income: Income = {
+    base: config.goldBase,
+    elite: node.tier === 'elite' ? config.goldEliteBonus : 0,
+    steps,
+    fromSteps: steps * config.goldPerStep,
+    total: 0,
+  };
+  income.total = income.base + income.elite + income.fromSteps;
+  run.gold += income.total;
+  run.income = income;
+  if (node.tier === 'elite') {
     const pool = offeredArtifacts(config.scoreMode).filter((k) => !run.artifacts.includes(k));
     run.artifactChoices = sample(pool, 3, mixSeed(run.seed, 0xe, run.battleIndex));
-    run.phase = 'artifact';
+    run.phase = run.artifactChoices.length ? 'artifact' : 'shop';
   } else {
-    run.phase = 'camp';
+    run.phase = 'shop';
   }
-  return { ok: true, run };
 }
 
 export function chooseArtifact(prev: RunState, key: ArtifactKey): RunResult {
@@ -191,45 +174,51 @@ export function chooseArtifact(prev: RunState, key: ArtifactKey): RunResult {
   const run = clone(prev);
   run.artifacts.push(key);
   run.artifactChoices = [];
-  run.phase = 'camp';
+  run.phase = 'shop';
   return { ok: true, run };
 }
 
-// ---- 营地：升级或休息，二选一 ----
+// ---- 商店：升级与回血都用金币买，可买多次，离开后进入下一关 ----
 
-function leaveCamp(run: RunState): void {
+/** 某项升级当前的价格：随该项等级上涨 */
+export const upgradePrice = (run: RunState, key: UpgradeKey, config: EngineConfig = DEFAULT_CONFIG): number =>
+  config.upgradePrice + config.upgradePriceStep * (run.levels[key] - 1);
+
+export function buyUpgrade(prev: RunState, key: UpgradeKey, config: EngineConfig = DEFAULT_CONFIG): RunResult {
+  if (prev.phase !== 'shop') return fail(prev, '不在商店');
+  if (!UPGRADE_KEYS.includes(key)) return fail(prev, '没有这项升级');
+  const price = upgradePrice(prev, key, config);
+  if (prev.gold < price) return fail(prev, '金币不足');
+  const run = clone(prev);
+  run.levels[key]++;
+  run.gold -= price;
+  return { ok: true, run };
+}
+
+export function buyHeal(prev: RunState, config: EngineConfig = DEFAULT_CONFIG): RunResult {
+  if (prev.phase !== 'shop') return fail(prev, '不在商店');
+  if (prev.player.hp >= prev.player.maxHp) return fail(prev, '生命已满');
+  if (prev.gold < config.healPrice) return fail(prev, '金币不足');
+  const run = clone(prev);
+  run.player.hp = Math.min(run.player.maxHp, run.player.hp + config.healAmount);
+  run.gold -= config.healPrice;
+  return { ok: true, run };
+}
+
+export function leaveShop(prev: RunState): RunResult {
+  if (prev.phase !== 'shop') return fail(prev, '不在商店');
+  const run = clone(prev);
+  run.income = null;
   if (run.battleIndex >= run.route.length) {
     run.phase = 'over';
     run.outcome = 'won';
   } else {
     run.phase = 'map';
   }
-}
-
-export function campRest(prev: RunState, config: EngineConfig = DEFAULT_CONFIG): RunResult {
-  if (prev.phase !== 'camp') return fail(prev, '不在营地');
-  const run = clone(prev);
-  run.player.hp = Math.min(run.player.maxHp, run.player.hp + config.restHeal);
-  leaveCamp(run);
   return { ok: true, run };
 }
 
-/** 营地一次升级的级数：普通一级，持有精工刻刀时两级 */
-export const campUpgradeAmount = (run: RunState) => (run.artifacts.includes('fineChisel') ? 2 : 1);
-
-/** 花金币任选一项升级；奖励决定方向，营地决定加码 */
-export function campUpgrade(prev: RunState, key: UpgradeKey, config: EngineConfig = DEFAULT_CONFIG): RunResult {
-  if (prev.phase !== 'camp') return fail(prev, '不在营地');
-  if (!UPGRADE_KEYS.includes(key)) return fail(prev, '没有这项升级');
-  if (prev.gold < config.upgradeCost) return fail(prev, '金币不足');
-  const run = clone(prev);
-  run.levels[key] += campUpgradeAmount(run);
-  run.gold -= config.upgradeCost;
-  leaveCamp(run);
-  return { ok: true, run };
-}
-
-/** 调试／原型：直接把一项升级 +1 级（战斗中同步到当前战斗）。正式的奖励与营地接入见 docs/BLOCK_BUILD.md */
+/** 调试／原型：直接把一项升级 +1 级（战斗中同步到当前战斗） */
 export function debugLevelUp(prev: RunState, key: UpgradeKey, delta = 1): RunState {
   const run = clone(prev);
   run.levels[key] = Math.max(1, run.levels[key] + delta);
@@ -240,4 +229,3 @@ export function debugLevelUp(prev: RunState, key: UpgradeKey, delta = 1): RunSta
   }
   return run;
 }
-

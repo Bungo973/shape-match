@@ -462,7 +462,7 @@ button {
 }
 
 .choices.grid {
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
 }
 
 .choice {
@@ -519,6 +519,67 @@ button {
   color: var(--red);
 }
 
+.choice .price {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-num);
+  font-size: 16px;
+}
+
+.choice .price i,
+.income .total b::before {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--yellow);
+  display: block;
+}
+
+.rest:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.income {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  width: 100%;
+  font-size: 13px;
+}
+
+.income li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 0;
+}
+
+.income b {
+  font-family: var(--font-num);
+  font-weight: 400;
+}
+
+.income .total {
+  border-top: 2px solid var(--ink);
+  margin-top: 4px;
+  padding-top: 6px;
+  font-size: 15px;
+}
+
+.income .total b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.income .total b::before {
+  content: '';
+}
+
 .badge {
   font-family: var(--font-num);
   font-size: 11px;
@@ -543,7 +604,7 @@ button {
   font-size: 18px;
 }
 
-.rest:hover,
+.rest:hover:not(:disabled),
 .rest:focus-visible {
   transform: translateY(-3px);
   background: var(--ink);

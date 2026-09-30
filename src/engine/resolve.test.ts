@@ -65,17 +65,23 @@ describe('主动匹配与产弹', () => {
 describe('升级表：等级 × 基础值', () => {
   const withLevels = (levels: Partial<UpgradeLevels>) => ({ ...testCtx(), levels: { ...defaultLevels(), ...levels } });
 
-  it('方块等级：攻击 3 级时主动三连计 9，其他颜色不受影响', () => {
+  it('方块基数：3 级时主动三连计 9，四色通用', () => {
     const board = boardWith({ '0,0': 'a', '0,1': 'a', '0,2': 's', '1,2': 'a' });
-    const res = resolveAction(board, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } }, withLevels({ attack: 3 }));
+    const res = resolveAction(board, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } }, withLevels({ block: 3 }));
     expect(res.activeClearsByType.attack).toBe(9);
+  });
+
+  it('色封的颜色按 1 级计，其他颜色不受影响', () => {
+    const board = boardWith({ '0,0': 'a', '0,1': 'a', '0,2': 's', '1,2': 'a' });
+    const res = resolveAction(board, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } }, { ...withLevels({ block: 3 }), sealedColor: 'attack' });
+    expect(res.activeClearsByType.attack).toBe(3);
   });
 
   it('爆破等级：直线炸弹 3 级时，它炸掉的每块多计 2 基数，与方块等级叠加', () => {
     const board = boardWith({ '0,0': 'H', '0,1': 'a', '0,2': 'a', '0,3': 's' });
-    const res = resolveAction(board, { type: 'ignite', at: { r: 0, c: 0 } }, { ...withLevels({ attack: 2 }), bombLevels: { line: 3, area: 1, color: 1 } });
-    // 攻击 2 格 × (2 + 2)，护盾 1 格 × (1 + 2)
-    expect(res.activeClearsByType).toMatchObject({ attack: 8, shield: 3 });
+    const res = resolveAction(board, { type: 'ignite', at: { r: 0, c: 0 } }, { ...withLevels({ block: 2 }), bombLevels: { line: 3, area: 1, color: 1 } });
+    // 攻击 2 格 × (2 + 2)，护盾 1 格 × (2 + 2)
+    expect(res.activeClearsByType).toMatchObject({ attack: 8, shield: 4 });
     expect(res.detonatedByType).toEqual({ line: 1, area: 0, color: 0 });
   });
 
@@ -89,7 +95,7 @@ describe('升级表：等级 × 基础值', () => {
 
   it('主动爆炸清除的方块按方块等级计入基数', () => {
     const board = boardWith({ '0,0': 'H', '0,1': 'a', '0,2': 'a', '0,3': 's' });
-    const res = resolveAction(board, { type: 'ignite', at: { r: 0, c: 0 } }, withLevels({ attack: 2 }));
+    const res = resolveAction(board, { type: 'ignite', at: { r: 0, c: 0 } }, withLevels({ block: 2 }));
     const clearedAttack = res.events
       .flatMap((e) => (e.type === 'wave' && e.phase === 'active' ? e.cleared : []))
       .filter((c) => c.tile.kind === 'normal' && c.tile.color === 'attack').length;
@@ -99,7 +105,7 @@ describe('升级表：等级 × 基础值', () => {
   it('被动阶段不受等级影响，只计入 P', () => {
     const board = boardWith({ '2,0': 'a', '3,0': 'a', '4,0': 'H', '5,0': 'a' });
     const base = resolveAction(board, { type: 'ignite', at: { r: 4, c: 0 } }, testCtx());
-    const leveled = resolveAction(board, { type: 'ignite', at: { r: 4, c: 0 } }, withLevels({ attack: 5, line: 5 }));
+    const leveled = resolveAction(board, { type: 'ignite', at: { r: 4, c: 0 } }, withLevels({ block: 5, line: 5 }));
     expect(leveled.passiveClearCount).toBe(base.passiveClearCount);
   });
 });

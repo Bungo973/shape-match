@@ -21,14 +21,6 @@ export const COLOR_SHAPE: Record<Color, ShapeKind> = {
   catalyst: 'diamond',
 };
 
-/** 方块在界面上的名字：只讲颜色和形状，不再有攻击、护盾等含义 */
-export const COLOR_NAME: Record<Color, string> = {
-  attack: '红圆',
-  shield: '蓝方',
-  poison: '黄三角',
-  catalyst: '绿菱形',
-};
-
 const TAU = Math.PI * 2;
 
 function poly(ctx: CanvasRenderingContext2D, pts: [number, number][]): void {

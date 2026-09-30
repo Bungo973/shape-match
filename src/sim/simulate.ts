@@ -1,10 +1,10 @@
 // 让自动玩家把一整局打完，记录每场战斗的数值表现。
 import {
-  campRest,
-  campUpgrade,
+  buyHeal,
+  buyUpgrade,
   chooseArtifact,
-  chooseUpgrade,
   DEFAULT_CONFIG,
+  leaveShop,
   mixSeed,
   newRun,
   pickStarter,
@@ -13,6 +13,7 @@ import {
   FULL_ROUTE,
   startNextBattle,
   UPGRADE_KEYS,
+  upgradePrice,
   type ArtifactKey,
   type EngineConfig,
   type RouteNode,
@@ -51,6 +52,11 @@ export interface BattleReport {
   /** 冲分模式：本关得分与目标 */
   score?: number;
   target?: number;
+  /** 本关结束时的金币收入与其中剩余步数的部分 */
+  income?: number;
+  stepsLeft?: number;
+  /** 进本关时的升级总级数（不含初始 1 级） */
+  upgradesBefore?: number;
 }
 
 export interface RunReport {
@@ -77,11 +83,15 @@ const ok = (r: RunResult): RunState => {
   return r.run;
 };
 
-function autoCamp(run: RunState, config: EngineConfig): RunState {
-  // 残血或没钱就休息；否则给当前等级最高的一项再加码（同级时按升级表顺序取第一项）
-  if (run.player.hp <= run.player.maxHp - config.restHeal / 2 || run.gold < config.upgradeCost) return ok(campRest(run, config));
-  const best = [...UPGRADE_KEYS].sort((x, y) => run.levels[y] - run.levels[x])[0]!;
-  return ok(campUpgrade(run, best, config));
+function autoShop(run: RunState, config: EngineConfig): RunState {
+  // 生命掉了一截就先回血；剩下的钱反复买当前最便宜的升级（同价按升级表顺序），买不起为止
+  while (run.player.hp <= run.player.maxHp - config.healAmount && run.gold >= config.healPrice) run = ok(buyHeal(run, config));
+  for (;;) {
+    const key = [...UPGRADE_KEYS].sort((x, y) => upgradePrice(run, x, config) - upgradePrice(run, y, config))[0]!;
+    if (run.gold < upgradePrice(run, key, config)) break;
+    run = ok(buyUpgrade(run, key, config));
+  }
+  return ok(leaveShop(run));
 }
 
 export function simulateRun(seed: number, opts: SimOptions): RunReport {
@@ -112,6 +122,7 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         shieldGains: [],
         shieldWasted: 0,
         stuns: 0,
+        upgradesBefore: UPGRADE_KEYS.reduce((n, k) => n + run.levels[k] - 1, 0),
         passiveBombs: [],
         activeBombs: [],
         chainDepth: [],
@@ -139,8 +150,7 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         const s = r.log.settlement;
         if (s) {
           report.multipliers.push(s.multiplier);
-          const counterDamage = r.log.counterTriggers.reduce((n, t) => n + (t.key === 'overflowCharm' ? t.toHp + t.toShield : 0), 0);
-          report.actionDamage.push(r.log.damageToEnemyHp + r.log.damageToEnemyShield + counterDamage);
+          report.actionDamage.push(r.log.damageToEnemyHp + r.log.damageToEnemyShield);
           report.shieldGains.push(r.log.shieldGained);
           report.shieldWasted += s.finalEffects.shield - r.log.shieldGained;
           if (r.log.stunApplied) report.stuns++;
@@ -167,13 +177,15 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
           report.score = run.battle.totalScore;
           report.target = b.goal.target;
         }
+        if (run.income) {
+          report.income = run.income.total;
+          report.stepsLeft = run.income.steps;
+        }
       }
-    } else if (run.phase === 'reward') {
-      run = ok(chooseUpgrade(run, 0, config));
     } else if (run.phase === 'artifact') {
       run = ok(chooseArtifact(run, run.artifactChoices[0]!));
-    } else if (run.phase === 'camp') {
-      run = autoCamp(run, config);
+    } else if (run.phase === 'shop') {
+      run = autoShop(run, config);
     } else {
       throw new Error(`未处理的阶段 ${run.phase}`);
     }

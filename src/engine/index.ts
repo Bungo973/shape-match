@@ -9,7 +9,6 @@ export * from './upgrades';
 export * from './inserts';
 export * from './battle';
 export * from './artifacts';
-export * from './rewards';
 export * from './content/enemies';
 export * from './run';
 export * from './cards';

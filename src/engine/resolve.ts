@@ -49,6 +49,8 @@ export interface ResolveContext {
   artifacts?: readonly ArtifactKey[];
   /** 方块的升级等级；缺省全为 1 级 */
   levels?: UpgradeLevels;
+  /** 色封（打怪模式）：本回合该颜色的方块按 1 级计 */
+  sealedColor?: Color | null;
   /** 本场三类炸弹的爆破等级；缺省全为 1 级 */
   bombLevels?: Record<BombUpgrade, number>;
 }
@@ -137,8 +139,6 @@ export interface ActionResult {
   activeBombsDetonated: number;
   /** 本次行动按类别被引爆或消耗的炸弹数（含接力、组合技的两枚与改造出的炸弹），用于爆破等级 */
   detonatedByType: Record<BombUpgrade, number>;
-  /** 是否有过载直线炸弹引爆（过载引线的代价） */
-  overloadFired: boolean;
 }
 
 interface Detonation {
@@ -178,7 +178,6 @@ class Resolver {
   passiveCount = 0;
   activeBombsDetonated = 0;
   readonly detonatedByType: Record<BombUpgrade, number> = { line: 0, area: 0, color: 0 };
-  overloadFired = false;
   /** 本次行动中已引爆或已消耗的炸弹，保证每枚只引爆一次；也用于保留本步亲手做出的炸弹 */
   readonly spent = new Set<number>();
   private readonly insertAt = new Map<number, InstalledInsert>();
@@ -223,7 +222,7 @@ class Resolver {
     }
     if (tile.kind !== 'normal') return;
     // 方块等级：主动清除一块计入“等级”份基数；被炸弹炸掉时再加爆破等级的额外基数
-    this.activeClears[tile.color] += blockValue(this.ctx.levels, tile.color) + extra;
+    this.activeClears[tile.color] += blockValue(this.ctx.levels, tile.color, this.ctx.sealedColor) + extra;
     // 主动阶段的覆盖格清除：基数嵌片认同色，催化盐认催化剂
     const ins = this.insertAt.get(posKey(pos));
     if (!ins) return;
@@ -413,17 +412,11 @@ class Resolver {
     switch (d.bomb) {
       case 'H':
       case 'V': {
-        // 过载引线：单枚直线炸弹清三行／三列
-        const w = this.has('overloadFuse') ? 1 : 0;
-        if (w) this.overloadFired = true;
         const line: Explosion =
-          d.bomb === 'H'
-            ? { ...base, shape: 'H', cells: rect(rows, cols, r - w, r + w, 0, cols - 1) }
-            : { ...base, shape: 'V', cells: rect(rows, cols, 0, rows - 1, c - w, c + w) };
-        if (w) line.byArtifact = 'overloadFuse';
+          d.bomb === 'H' ? { ...base, shape: 'H', cells: rect(rows, cols, r, r, 0, cols - 1) } : { ...base, shape: 'V', cells: rect(rows, cols, 0, rows - 1, c, c) };
         const out: Explosion[] = [line];
         // 雷鸣引线：直线两侧的闪电，属于“修改范围”，在同一波内与直线一并清除
-        if (this.has('thunderFuse')) out.push({ ...base, shape: 'lightning', cells: this.lightningCells(d.bomb, d.pos, w), byArtifact: 'thunderFuse' });
+        if (this.has('thunderFuse')) out.push({ ...base, shape: 'lightning', cells: this.lightningCells(d.bomb, d.pos, 0), byArtifact: 'thunderFuse' });
         const ember = this.insertOn(d.pos, 'emberClay');
         if (!ember) return out;
         this.trigger({ insertId: ember.id, type: ember.type, effect: 'ember', at: [d.pos] });
@@ -579,7 +572,6 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     triggeredInsertIds: [],
     activeBombsDetonated: 0,
     detonatedByType: { line: 0, area: 0, color: 0 },
-    overloadFired: false,
   });
 
   const res = new Resolver(board, ctx);
@@ -672,6 +664,5 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     triggeredInsertIds: [...res.triggeredIds].sort(),
     activeBombsDetonated: res.activeBombsDetonated,
     detonatedByType: res.detonatedByType,
-    overloadFired: res.overloadFired,
   };
 }

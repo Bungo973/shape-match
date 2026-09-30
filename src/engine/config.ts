@@ -57,11 +57,18 @@ export interface EngineConfig {
   drawPerTurn: number;
   handLimit: number;
   // ---- 一局 ----
-  goldMinion: number;
-  goldElite: number;
-  rerollCost: number;
-  upgradeCost: number;
-  restHeal: number;
+  /**
+   * 金币（2026-09-30 起所有升级都在商店用金币买）：过关底薪 + 精英加成 + 提前达标时每剩一步的金币。
+   * 见 docs/DESIGN_JOURNAL.md。
+   */
+  goldBase: number;
+  goldEliteBonus: number;
+  goldPerStep: number;
+  /** 商店升级价格 = 起价 + 每级涨价 ×（当前等级 − 1），每项各自计 */
+  upgradePrice: number;
+  upgradePriceStep: number;
+  healPrice: number;
+  healAmount: number;
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
@@ -91,9 +98,11 @@ export const DEFAULT_CONFIG: EngineConfig = {
   gravityTurns: 3,
   drawPerTurn: 5,
   handLimit: 10,
-  goldMinion: 8,
-  goldElite: 16,
-  rerollCost: 8,
-  upgradeCost: 15,
-  restHeal: 10,
+  goldBase: 5,
+  goldEliteBonus: 6,
+  goldPerStep: 1,
+  upgradePrice: 12,
+  upgradePriceStep: 6,
+  healPrice: 6,
+  healAmount: 10,
 };

@@ -1,18 +1,6 @@
 // 界面里用的小图标：与棋盘同一套平涂几何图形，用 SVG 画，随文字缩放。
-import type { BombKind, Color, UpgradeKey } from '../engine';
+import type { BombKind, UpgradeKey } from '../engine';
 import { COLOR_HEX, INK, PAPER } from './board/paint';
-
-export function TileIcon({ color, size = 22 }: { color: Color; size?: number }) {
-  const fill = COLOR_HEX[color];
-  return (
-    <svg width={size} height={size} viewBox="-1 -1 2 2" aria-hidden="true">
-      {color === 'attack' && <circle r="0.8" fill={fill} />}
-      {color === 'shield' && <rect x="-0.72" y="-0.72" width="1.44" height="1.44" rx="0.16" fill={fill} />}
-      {color === 'poison' && <polygon points="0,-0.86 0.82,0.6 -0.82,0.6" fill={fill} />}
-      {color === 'catalyst' && <polygon points="0,-0.9 0.74,0 0,0.9 -0.74,0" fill={fill} />}
-    </svg>
-  );
-}
 
 /** 与棋盘上的“黑块白标”炸弹一致，静态版 */
 export function BombIcon({ bomb, size = 22 }: { bomb: BombKind; size?: number }) {
@@ -37,6 +25,18 @@ export function BombIcon({ bomb, size = 22 }: { bomb: BombKind; size?: number })
 
 const BOMB_OF: Record<'line' | 'area' | 'color', BombKind> = { line: 'H', area: 'A', color: 'CB' };
 
+/** 方块基数：四色图形排成田字格，表示四色通用 */
+export function BlockIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="-1 -1 2 2" aria-hidden="true">
+      <circle cx="-0.46" cy="-0.46" r="0.36" fill={COLOR_HEX.attack} />
+      <rect x="0.12" y="-0.8" width="0.68" height="0.68" rx="0.08" fill={COLOR_HEX.shield} />
+      <polygon points="-0.46,0.08 -0.08,0.8 -0.84,0.8" fill={COLOR_HEX.poison} />
+      <polygon points="0.46,0.06 0.82,0.46 0.46,0.86 0.1,0.46" fill={COLOR_HEX.catalyst} />
+    </svg>
+  );
+}
+
 export function UpgradeIcon({ upgrade, size = 22 }: { upgrade: UpgradeKey; size?: number }) {
-  return upgrade === 'line' || upgrade === 'area' || upgrade === 'color' ? <BombIcon bomb={BOMB_OF[upgrade]} size={size} /> : <TileIcon color={upgrade} size={size} />;
+  return upgrade === 'block' ? <BlockIcon size={size} /> : <BombIcon bomb={BOMB_OF[upgrade]} size={size} />;
 }

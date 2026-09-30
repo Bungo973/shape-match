@@ -84,5 +84,6 @@
 | [VISUAL_STYLE](VISUAL_STYLE.md#声音第一版2026-09-30待试听) | 合成音效第一版：木琴／玻璃／方波三套音色可切换，五声音阶随连锁升高；连锁音阶可切换为谢泼德音调（无限上升的错觉） | 待试听 |
 
 | [README](../README.md) | 仓库清理：删除旧 PixiJS 界面（`src/ui/`）、美术素材（`assets/`、`public/game/`）与素材脚本，README 改写为冲分现状 | 现行 |
+| [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 冲分手感的结构性事实；精简：四色等级合并为方块基数、去掉充能、神器只留 6 件；金币养成：升级全部移到商店，剩余步数换金币 | 现行（原型数值） |
 
 **2026-09-30 起停用**：[ART_DIRECTION](ART_DIRECTION.md)、[ASSET_PLAN](ASSET_PLAN.md)、[ASSET_BATCH2](ASSET_BATCH2.md)、[ASSET_BATCH3](ASSET_BATCH3.md)、[BOARD_INSERT_VISUAL](BOARD_INSERT_VISUAL.md)（美术素材不再使用，视觉以 VISUAL_STYLE 为准）；[THEME_STORY](THEME_STORY.md) 中的敌人与故事线随打怪模式搁置。

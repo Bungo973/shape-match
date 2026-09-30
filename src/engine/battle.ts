@@ -1,6 +1,6 @@
 // 一场战斗的状态与回合流程，规则见 docs/GAME_RULES.md §1、§3、§4 与 docs/ENEMY_DESIGN.md。
 // 所有函数都是纯函数：输入旧状态，返回新状态与日志；状态可直接序列化存档。
-import { ARTIFACT_PARAMS, ARTIFACTS, artifactBaseBonus, type ArtifactKey } from './artifacts';
+import { ARTIFACT_PARAMS, ARTIFACTS, type ArtifactKey } from './artifacts';
 import { addDetonations, BOMB_UPGRADES, defaultLevels, initialBombHeat, type BombHeat, type BombUpgrade, type UpgradeLevels } from './upgrades';
 import { createBoard, createIdGen, weightedSpawner } from './board';
 import { CARD_DEFS, cardBonus, drawCards, shuffle, type CardInstance, type CardPiles } from './cards';
@@ -13,7 +13,7 @@ import { createRng } from './rng';
 import { settle, type Settlement } from './score';
 import { COLORS, emptyClears, type Action, type BombKind, type Board, type ClearsByType, type Color, type Gravity, type Pos } from './types';
 
-export const RULES_VERSION = 2;
+export const RULES_VERSION = 3;
 
 /** 状态必须可序列化存档；用 JSON 往返复制，也顺带保证了这一点 */
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
@@ -140,8 +140,6 @@ export interface ActionLog {
   poisonAdded: number;
   stunApplied: boolean;
   erosionConsumed: boolean;
-  /** 条件基数类神器本步追加的基数（已计入结算） */
-  artifactBaseBonus: ClearsByType;
   /** 本步结算后升级的爆破等级类别（每升一级记一次）；新等级从下一次行动起生效 */
   bombLevelUps: BombUpgrade[];
   /** 本步结束时触发的累加神器 */
@@ -150,7 +148,6 @@ export interface ActionLog {
 
 export type CounterTrigger =
   | { key: 'fuseBox'; ap: number }
-  | { key: 'overflowCharm'; toShield: number; toHp: number }
   | { key: 'aftershockCore'; at: Pos | null };
 
 export interface EnemyTurnLog {
@@ -265,8 +262,9 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     gravity: state.gravity,
     inserts,
     artifacts: state.artifacts,
+    levels: state.levels,
     // 色封：本回合被封颜色的方块等级视为 1
-    levels: state.current.sealedColor ? { ...state.levels, [state.current.sealedColor]: 1 } : state.levels,
+    sealedColor: state.current.sealedColor,
     bombLevels: Object.fromEntries(BOMB_UPGRADES.map((k) => [k, state.bombHeat[k].level])) as Record<BombUpgrade, number>,
   });
   if (!result.valid) return { ok: false, state: prev, reason: result.reason! };
@@ -289,7 +287,6 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     poisonAdded: 0,
     stunApplied: false,
     erosionConsumed: false,
-    artifactBaseBonus: emptyClears(),
     bombLevelUps: [],
     counterTriggers: [],
   };
@@ -309,25 +306,22 @@ export function playerAction(prev: BattleState, input: BattleAction, config: Eng
     const has = (k: ArtifactKey) => state.artifacts.includes(k);
     const P = result.passiveClearCount;
     const stepDelta = has('chainLens') && P >= 3 ? 1 : 0;
-    // 条件基数类神器：看本步主动阶段清到了什么，追加到对应颜色的基数
-    const bonus = result.hadActiveColorClear ? artifactBaseBonus(result, state.artifacts) : emptyClears();
-    log.artifactBaseBonus = bonus;
     const s = settle(
       {
-        activeClearsByType: Object.fromEntries(COLORS.map((c) => [c, result.activeClearsByType[c] + bonus[c]])) as ClearsByType,
+        activeClearsByType: result.activeClearsByType,
         passiveClearCount: P,
         hadActiveColorClear: result.hadActiveColorClear,
-        chargesBefore: state.player.catalystCharges,
+        // 冲分模式没有催化剂充能（颜色不再有各自的作用）
+        chargesBefore: state.goal ? 0 : state.player.catalystCharges,
         socketBonuses: result.socketBonuses,
         multiplierStepDelta: stepDelta,
         erosionSteps: erode ? 1 : 0,
-        zeroShieldEffect: result.overloadFired,
       },
       config,
     );
     log.settlement = s;
     log.erosionConsumed = erode;
-    state.player.catalystCharges = s.chargesAfter;
+    if (!state.goal) state.player.catalystCharges = s.chargesAfter;
     state.totalScore += s.settlementScore;
     // 冲分模式只累计结算分，达到目标立即过关；攻击、护盾、毒气不生效
     if (state.goal) {
@@ -348,14 +342,11 @@ function applyCounterArtifacts(state: BattleState, result: ActionResult, log: Ac
   const counters = (state.player.counters ??= {});
   const gains: Partial<Record<ArtifactKey, number>> = {
     fuseBox: result.detonatedByType.line + result.detonatedByType.area + result.detonatedByType.color,
-    overflowCharm: log.settlement ? log.settlement.finalEffects.shield - log.shieldGained : 0,
     aftershockCore: result.passiveClearCount,
   };
   // 同一时机按神器 ID 顺序结算
-  for (const key of ['fuseBox', 'overflowCharm', 'aftershockCore'] as const) {
+  for (const key of ['fuseBox', 'aftershockCore'] as const) {
     if (!state.artifacts.includes(key)) continue;
-    // 冲分模式没有护盾，溢流护符不生效
-    if (key === 'overflowCharm' && state.goal) continue;
     const every = ARTIFACTS[key].every!;
     counters[key] = (counters[key] ?? 0) + (gains[key] ?? 0);
     if (counters[key]! < every) continue;
@@ -365,9 +356,6 @@ function applyCounterArtifacts(state: BattleState, result: ActionResult, log: Ac
       state.current.fuseBoxFired = true;
       state.ap += ARTIFACT_PARAMS.fuseBoxAp;
       log.counterTriggers.push({ key, ap: ARTIFACT_PARAMS.fuseBoxAp });
-    } else if (key === 'overflowCharm') {
-      const hit = damageEnemy(state, ARTIFACT_PARAMS.overflowCharmDamage);
-      log.counterTriggers.push({ key, ...hit });
     } else {
       log.counterTriggers.push({ key, at: placeBombOnRandomTile(state, 'A') });
     }
@@ -412,6 +400,12 @@ function applyPlayerEffects(state: BattleState, s: Settlement, log: ActionLog, c
       log.stunApplied = true;
     }
   }
+}
+
+/** 冲分模式里还没用掉的步数（本回合剩余 + 之后各回合）；打怪模式为 0 */
+export function stepsLeft(state: BattleState, config: EngineConfig = DEFAULT_CONFIG): number {
+  if (!state.goal) return 0;
+  return Math.max(0, state.ap + (state.goal.turns - state.turn) * config.apPerTurn);
 }
 
 /** 本玩家回合的护盾上限：碎甲生效时按比例降低 */
@@ -597,12 +591,6 @@ function executePart(state: BattleState, part: IntentPart, log: EnemyTurnLog, co
       const hurt = damagePlayer(state, dmg, part.pierce ? piercedPart(dmg, config) : 0);
       log.damageToPlayerShield += hurt.toShield;
       log.damageToPlayerHp += hurt.toHp;
-      // 反应线圈：一次攻击被护盾完全挡下时反击
-      // 反应线圈：护盾完全挡下这次攻击时，反击其一半；碎甲回合不触发
-      if (dmg > 0 && hurt.toHp === 0 && !shatteredTurn && state.outcome === 'ongoing' && state.artifacts.includes('reactionCoil')) {
-        const back = damageEnemy(state, Math.floor(dmg * ARTIFACT_PARAMS.reactionCoilRatio));
-        log.counterDamage += back.toHp + back.toShield;
-      }
       return;
     }
     case 'defend':
@@ -678,10 +666,8 @@ function revealNextIntent(state: BattleState, config: EngineConfig): void {
     if (part.kind === 'suppressInsert') {
       parts.push(targets.length === 0 ? fallback : { kind: 'suppressInsert', targetId: targets[rng.int(targets.length)]!.id });
     } else if (part.kind === 'sealColor') {
-      // 封住玩家等级最高的方块颜色，同级按种子；都还是 1 级时色封无效，改用防御
-      const top = Math.max(...COLORS.map((c) => state.levels[c]));
-      const best = COLORS.filter((c) => state.levels[c] === top);
-      parts.push(top <= 1 ? fallback : { kind: 'sealColor', color: best[rng.int(best.length)]! });
+      // 按种子封住一种颜色；方块基数还是 1 级时色封无效，改用防御
+      parts.push(state.levels.block <= 1 ? fallback : { kind: 'sealColor', color: COLORS[rng.int(COLORS.length)]! });
     } else if (part.kind === 'petrify') {
       // 棋盘石块已达上限时改用防御，避免棋盘被堵死
       parts.push(stoneCount(state.board) >= config.stoneCap ? fallback : { ...part, row: rng.int(state.board.length) });

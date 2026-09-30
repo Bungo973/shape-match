@@ -269,15 +269,17 @@ describe('石块', () => {
 describe('色封', () => {
   const seal: Intent = { parts: [{ kind: 'sealColor' }, { kind: 'attack', amount: 3 }] };
 
-  it('展示时封住等级最高的颜色；四色都是 1 级时改为防御', () => {
-    const s = startBattle({ seed: 7, player: player(), enemy: enemy([seal]), levels: { attack: 1, shield: 3, poison: 2, catalyst: 1, line: 1, area: 1, color: 1 } });
-    expect(s.enemy.intent.parts[0]).toEqual({ kind: 'sealColor', color: 'shield' });
+  it('方块基数升过级时按种子封住一种颜色；还是 1 级时改为防御', () => {
+    const s = startBattle({ seed: 7, player: player(), enemy: enemy([seal]), levels: { block: 3, line: 1, area: 1, color: 1 } });
+    expect(s.enemy.intent.parts[0]).toMatchObject({ kind: 'sealColor' });
+    expect(startBattle({ seed: 7, player: player(), enemy: enemy([seal]), levels: { block: 3, line: 1, area: 1, color: 1 } }).enemy.intent).toEqual(s.enemy.intent);
     const plain = startBattle({ seed: 7, player: player(), enemy: enemy([seal]) });
     expect(plain.enemy.intent.parts[0]).toEqual({ kind: 'defend', amount: 5 });
   });
 
   it('生效的回合里被封颜色每块只计 1；未被眩晕时才生效，回合后恢复', () => {
-    const s = startBattle({ seed: 7, player: player(), enemy: enemy([seal, attack(1)], 500), levels: { attack: 3, shield: 1, poison: 1, catalyst: 1, line: 1, area: 1, color: 1 } });
+    const s = startBattle({ seed: 7, player: player(), enemy: enemy([seal, attack(1)], 500), levels: { block: 3, line: 1, area: 1, color: 1 } });
+    s.enemy.intent = { parts: [{ kind: 'sealColor', color: 'attack' }, { kind: 'attack', amount: 3 }] };
     s.ap = 0;
     const sealed = endTurn(s).state;
     expect(sealed.current.sealedColor).toBe('attack');

@@ -2,16 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { ARTIFACTS, offeredArtifacts } from './artifacts';
 import { DEFAULT_CONFIG } from './config';
 import {
-  campRest,
-  campUpgrade,
+  buyHeal,
+  buyUpgrade,
   chooseArtifact,
-  chooseUpgrade,
+  leaveShop,
   newRun,
   pickStarter,
-  rerollRewards,
   runAction,
   runEndTurn,
   startNextBattle,
+  upgradePrice,
   type RunResult,
   type RunState,
 } from './run';
@@ -56,37 +56,31 @@ describe('开局', () => {
 });
 
 describe('战后流程', () => {
-  it('小怪胜利：发 8 金币、升级三选一，选中项 +1 级后进营地；小怪不给神器', () => {
+  it('小怪胜利：发底薪后直接进商店；小怪不给神器', () => {
     const won = winBattle(toFirstBattle());
-    expect(won.phase).toBe('reward');
-    expect(won.gold).toBe(DEFAULT_CONFIG.goldMinion);
-    expect(won.reward!.choices).toHaveLength(3);
-    const key = won.reward!.choices[0]!.key;
-    const camp = ok(chooseUpgrade(won, 0));
-    expect(camp.phase).toBe('camp');
-    expect(camp.levels[key]).toBe(won.levels[key] + 1);
+    expect(won.phase).toBe('shop');
+    expect(won.gold).toBe(DEFAULT_CONFIG.goldBase);
+    expect(won.income).toMatchObject({ base: DEFAULT_CONFIG.goldBase, elite: 0, steps: 0, total: DEFAULT_CONFIG.goldBase });
   });
 
-  it('战后保留生命与催化剂充能；护盾不带入下一场', () => {
+  it('冲分模式提前达标：剩下的每一步换金币', () => {
+    const config = { ...DEFAULT_CONFIG, scoreMode: true };
+    const run = newRun(1, config);
+    const b = ok(startNextBattle(ok(pickStarter(run, run.starterChoices[0]!)), config));
+    b.battle!.goal = { target: 1, turns: 5 };
+    b.battle!.board = boardWith({ '4,0': 'H', '4,1': 'a' });
+    const won = ok(runAction(b, { type: 'ignite', at: { r: 4, c: 0 } }, config));
+    // 第 1 回合用掉 1 步：本回合剩 2 步，之后 4 回合各 3 步
+    expect(won.income).toMatchObject({ steps: 14, fromSteps: 14 * config.goldPerStep });
+    expect(won.gold).toBe(config.goldBase + 14 * config.goldPerStep);
+  });
+
+  it('战后保留生命；护盾不带入下一场', () => {
     const b = toFirstBattle();
     b.battle!.player = { hp: 31, maxHp: 40, shield: 7, catalystCharges: 2 };
     const won = winBattle(b);
     expect(won.player.hp).toBe(31);
-    expect(won.player.catalystCharges).toBeGreaterThanOrEqual(0);
     expect(won.player.shield).toBe(0);
-  });
-
-  it('重掷：扣 8 金币、候选变化；金币不足时不能重掷', () => {
-    const won = winBattle(toFirstBattle());
-    const rerolled = ok(rerollRewards(won));
-    expect(rerolled.gold).toBe(0);
-    expect(rerolled.reward!.choices).not.toEqual(won.reward!.choices);
-    expect(rerollRewards(rerolled).ok).toBe(false);
-  });
-
-  it('没有拾荒眼镜时不能保留候选', () => {
-    const won = winBattle(toFirstBattle());
-    expect(rerollRewards(won, 0).ok).toBe(false);
   });
 
   it('失败时本局结束', () => {
@@ -99,40 +93,50 @@ describe('战后流程', () => {
   });
 });
 
-describe('营地', () => {
-  const toCamp = () => ok(chooseUpgrade(winBattle(toFirstBattle()), 0));
+describe('商店', () => {
+  const toShop = (gold = 0) => ({ ...winBattle(toFirstBattle()), gold });
 
-  it('休息回复生命，然后回到路线页', () => {
-    const camp = toCamp();
-    camp.player.hp = 20;
-    const after = ok(campRest(camp));
-    expect(after.player.hp).toBe(30);
-    expect(after.phase).toBe('map');
+  it('升级：扣当前价格、该项 +1 级，价格随等级上涨；可连续购买', () => {
+    const shop = toShop(100);
+    const p1 = upgradePrice(shop, 'block');
+    expect(p1).toBe(DEFAULT_CONFIG.upgradePrice);
+    const once = ok(buyUpgrade(shop, 'block'));
+    expect(once.levels.block).toBe(2);
+    expect(once.gold).toBe(100 - p1);
+    expect(upgradePrice(once, 'block')).toBe(p1 + DEFAULT_CONFIG.upgradePriceStep);
+    // 各项价格各自计
+    expect(upgradePrice(once, 'line')).toBe(p1);
+    const twice = ok(buyUpgrade(once, 'block'));
+    expect(twice.levels.block).toBe(3);
+    expect(twice.phase).toBe('shop');
   });
 
-  it('升级：金币不足时不能升级', () => {
-    const camp = toCamp();
-    expect(camp.gold).toBeLessThan(DEFAULT_CONFIG.upgradeCost);
-    expect(campUpgrade(camp, 'attack').ok).toBe(false);
+  it('金币不足时不能买', () => {
+    expect(buyUpgrade(toShop(0), 'block').ok).toBe(false);
+    const hurt = toShop(0);
+    hurt.player.hp = 20;
+    expect(buyHeal(hurt).ok).toBe(false);
   });
 
-  it('升级：任选一项 +1 级，扣 15 金币，然后回到路线页', () => {
-    const camp = { ...toCamp(), gold: 20 };
-    const after = ok(campUpgrade(camp, 'shield'));
-    expect(after.levels.shield).toBe(camp.levels.shield + 1);
-    expect(after.gold).toBe(5);
-    expect(after.phase).toBe('map');
+  it('回血：生命已满时不能买；不超过上限', () => {
+    const shop = toShop(100);
+    expect(buyHeal(shop).ok).toBe(false);
+    shop.player.hp = 35;
+    const healed = ok(buyHeal(shop));
+    expect(healed.player.hp).toBe(40);
+    expect(healed.gold).toBe(100 - DEFAULT_CONFIG.healPrice);
   });
 
-  it('精工刻刀：营地升级一次 +2 级', () => {
-    const camp = { ...toCamp(), gold: 20, artifacts: ['fineChisel' as const] };
-    expect(ok(campUpgrade(camp, 'line')).levels.line).toBe(camp.levels.line + 2);
+  it('离开商店回到路线页', () => {
+    const left = ok(leaveShop(toShop()));
+    expect(left.phase).toBe('map');
+    expect(left.income).toBeNull();
   });
 });
 
 describe('升级与神器池', () => {
   it('升级等级带进下一场战斗', () => {
-    let run = ok(campRest(ok(chooseUpgrade(winBattle(toFirstBattle()), 0))));
+    let run = ok(leaveShop(ok(buyUpgrade({ ...winBattle(toFirstBattle()), gold: 50 }, 'line'))));
     run = ok(startNextBattle(run));
     expect(run.battle!.levels).toEqual(run.levels);
   });
@@ -143,7 +147,7 @@ describe('升级与神器池', () => {
 });
 
 describe('完整一局', () => {
-  it('九战走完：第 3、6 战（精英）后多一次神器三选一，首领战胜利直接结束；可 JSON 往返存档', () => {
+  it('九关走完：第 3、6 关（精英）后先选神器再进商店，终关胜利直接结束；可 JSON 往返存档', () => {
     let run = newRun(9);
     expect(run.route).toHaveLength(9);
     expect(run.route.map((n) => n.layer)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3]);
@@ -152,22 +156,20 @@ describe('完整一局', () => {
       run = ok(startNextBattle(run));
       run = winBattle(run);
       if (i === 9) break;
-      expect(run.phase).toBe('reward');
-      run = ok(chooseUpgrade(run, 0));
       if (i === 3 || i === 6) {
         expect(run.phase).toBe('artifact');
         expect(run.artifactChoices.some((k) => run.artifacts.includes(k))).toBe(false);
         run = ok(chooseArtifact(run, run.artifactChoices[0]!));
       }
-      run = ok(campRest(run));
+      expect(run.phase).toBe('shop');
+      run = ok(leaveShop(run));
       run = JSON.parse(JSON.stringify(run)) as RunState;
     }
     expect(run.phase).toBe('over');
     expect(run.outcome).toBe('won');
-    expect(run.reward).toBeNull();
-    expect(run.gold).toBe(8 * 6 + 16 * 2);
+    // 打怪模式没有剩余步数：八关底薪加两次精英加成
+    expect(run.gold).toBe(DEFAULT_CONFIG.goldBase * 8 + DEFAULT_CONFIG.goldEliteBonus * 2);
     expect(run.artifacts).toHaveLength(3);
-    // 八次奖励各升一级
-    expect(UPGRADE_KEYS.reduce((sum, k) => sum + run.levels[k] - 1, 0)).toBe(8);
+    expect(UPGRADE_KEYS.reduce((sum, k) => sum + run.levels[k] - 1, 0)).toBe(0);
   });
 });

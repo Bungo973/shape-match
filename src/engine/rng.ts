@@ -37,3 +37,15 @@ export function pickWeighted<T extends string>(rng: Rng, items: readonly T[], we
   }
   return items[items.length - 1]!;
 }
+
+/** 把几个整数混合成一个种子（splitmix 风格），让各处的随机彼此独立 */
+export function mixSeed(...parts: number[]): number {
+  let h = 0x9e3779b9;
+  for (const p of parts) {
+    h = Math.imul(h ^ (p >>> 0), 0x85ebca6b);
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35);
+    h ^= h >>> 16;
+  }
+  return h >>> 0;
+}
