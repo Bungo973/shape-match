@@ -163,6 +163,7 @@ export const CHAIN_BASE_CONFIG: EngineConfig = {
   // 只用于冲分模式；界面启动时才把 DEFAULT_CONFIG 改成冲分，这里不能靠展开继承
   scoreMode: true,
   chainBase: true,
-  scoreTargets: [3600, 5000, 6400, 10100, 12900, 11300, 17800, 19900, 17050],
+  // 2026-10-06 试玩：后几关偏简单，第 3 关起逐关上调 5%–20%
+  scoreTargets: [3600, 5000, 6700, 11100, 14450, 13000, 20450, 23500, 20450],
 };
 
