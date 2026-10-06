@@ -36,6 +36,10 @@ import {
   upgradeEffectText,
   type Action,
   type ArtifactKey,
+  levelTasks,
+  type TaskDef,
+  type TaskResult,
+  type TaskState,
   type BattleState,
   type Color,
   type Income,
@@ -83,6 +87,7 @@ interface Ending {
   income: Income | null;
   /** 本关结束时消失的神器（香蕉烂掉） */
   lost?: ArtifactKey[];
+  task?: TaskResult | null | undefined;
 }
 
 export function Game() {
@@ -245,12 +250,14 @@ function Battle({
       if ('at' in t && t.at) view.pulse([t.at]);
       if ('cells' in t && t.cells.length) view.pulse(t.cells);
     }
+    // 任务在这一步完成：响一声
+    if (b.task?.done && !runRef.current.battle?.task?.done) sfx.bombMade();
     runRef.current = next;
     setRun(next);
     if (b.outcome !== 'ongoing') {
       // 结算卡立刻挂上（让界面停在棋盘上，不先闪出商店），卡片本身延迟淡入，等出分弹字和分数滚动播完
       sfx.win();
-      setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0, income: next.income, lost: next.lostArtifacts });
+      setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0, income: next.income, lost: next.lostArtifacts, task: next.taskResult });
       return;
     }
     // 冲分模式没有敌人：行动力用完就自动进入下一回合
@@ -271,7 +278,7 @@ function Battle({
           const won = nb.totalScore >= (nb.goal?.target ?? 0);
           if (won) sfx.win();
           else sfx.short();
-          setEnding({ won, score: nb.totalScore, target: nb.goal?.target ?? 0, penalty: after.log?.scorePenalty ?? 0, income: after.run.income, lost: after.run.lostArtifacts });
+          setEnding({ won, score: nb.totalScore, target: nb.goal?.target ?? 0, penalty: after.log?.scorePenalty ?? 0, income: after.run.income, lost: after.run.lostArtifacts, task: after.run.taskResult });
         } else sfx.turn();
       }
     }
@@ -378,6 +385,7 @@ function Battle({
         <Multiplier {...mult} cap={ruleConfig(battle, config).multiplierSegments.length} />
       </section>
       {battle.rule && <RuleBadge rule={battle.rule.key} color={battle.rule.color} />}
+      {battle.task && <TaskLine task={battle.task} />}
       <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={target} aria-valuenow={battle.totalScore}>
         <span style={{ transform: `scaleX(${progress})` }} />
       </div>
@@ -501,6 +509,12 @@ function EndingCard({ ending, onNext }: { ending: Ending; onNext: () => void }) 
         <span className="lab">{ending.won ? '达标' : '未达标'}</span>
         <b>{fmt(ending.score)}</b>
         <p>{ending.won ? `目标 ${fmt(ending.target)}` : `差 ${fmt(short)} 分 · 生命 −${ending.penalty}`}</p>
+        {ending.task && (
+          <p className={`taskres${ending.task.done ? ' done' : ''}`}>
+            任务「{taskText(ending.task.def)}」
+            {ending.task.done ? (ending.task.artifact ? `完成：获得 ${ARTIFACTS[ending.task.artifact].name}` : '完成') : '未完成'}
+          </p>
+        )}
         {ending.income && <IncomeLines income={ending.income} />}
         {ending.lost?.map((k) => (
           <p key={k} className="lost">
@@ -532,21 +546,8 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
           <ArtifactChoices keys={run.starterChoices} onPick={(k) => apply(pickStarter(run, k))} />
         </Panel>
       );
-    case 'map': {
-      const info = levelInfo(run, run.battleIndex + 1, config);
-      return (
-        <Panel eyebrow={`第 ${info.level} 关${info.boss ? ' · 首领' : ''}${run.endless ? ' · 无尽' : ''}`} title={`目标 ${fmt(info.target)} 分`}>
-          {info.rule && <RuleBadge rule={info.rule} big />}
-          {info.rule && run.artifacts.includes('exemption') && <p className="hint">免检章：这条首领规则对你无效。</p>}
-          <p className="hint">
-            {config.scoreTurns} 回合，每回合 {turnAp(run, config)} 步。达到目标立即过关，剩下的每一步换 {config.goldPerStep} 金币；步数用完仍未达标，按差距扣生命。
-          </p>
-          <button className="primary big" onClick={() => apply(startNextBattle(run, config))} autoFocus>
-            开始
-          </button>
-        </Panel>
-      );
-    }
+    case 'map':
+      return <MapPanel run={run} apply={apply} />;
     case 'artifact':
       return (
         <Panel eyebrow="首领奖励" title="选一件神器">
@@ -595,6 +596,78 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
   }
 }
 
+/** 路线页：本关目标、首领规则，以及一易一难两条任务二选一 */
+function MapPanel({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) {
+  const info = levelInfo(run, run.battleIndex + 1, config);
+  const tasks = levelTasks(run, info.level, config);
+  const [pick, setPick] = useState<0 | 1>(0);
+  return (
+    <Panel eyebrow={`第 ${info.level} 关${info.boss ? ' · 首领' : ''}${run.endless ? ' · 无尽' : ''}`} title={`目标 ${fmt(info.target)} 分`}>
+      {info.rule && <RuleBadge rule={info.rule} big />}
+      {info.rule && run.artifacts.includes('exemption') && <p className="hint">免检章：这条首领规则对你无效。</p>}
+      <p className="hint">
+        {config.scoreTurns} 回合，每回合 {turnAp(run, config)} 步。达到目标立即过关，剩下的每一步换 {config.goldPerStep} 金币；步数用完仍未达标，按差距扣生命。
+      </p>
+      <h2 className="sub">
+        任务<span>选一条。本关里做到就算完成，没达标也照发奖励</span>
+      </h2>
+      <div className="choices grid tasks" role="radiogroup" aria-label="任务">
+        {tasks.map((t, i) => (
+          <button key={i} className={`choice task ${t.tier}`} role="radio" aria-checked={pick === i} onClick={() => setPick(i as 0 | 1)}>
+            <span className={`badge ${t.tier === 'hard' ? 'rare' : ''}`}>{t.tier === 'easy' ? '易' : '难'}</span>
+            <b>{taskText(t)}</b>
+            <span className="desc">{taskRewardText(t, info.boss)}</span>
+          </button>
+        ))}
+      </div>
+      <button className="primary big" onClick={() => apply(startNextBattle(run, config, pick))} autoFocus>
+        开始
+      </button>
+    </Panel>
+  );
+}
+
+/** 任务的说明文字 */
+function taskText(t: TaskDef): string {
+  switch (t.kind) {
+    case 'chain':
+      return `一步连锁 ${t.goal} 层`;
+    case 'bigClear':
+      return `一步清除 ${t.goal} 格`;
+    case 'mult':
+      return `一步倍率达到 ×${t.goal}`;
+    case 'bigStep':
+      return `一步拿到 ${fmt(t.goal)} 分`;
+    case 'colorBombs':
+      return `做出 ${t.goal} 枚五连炸弹`;
+    case 'detonations':
+      return `引爆 ${t.goal} 枚炸弹`;
+    case 'noItem':
+      return '不用道具达标';
+    case 'speed':
+      return `提前 ${t.goal} 步达标`;
+  }
+}
+
+function taskRewardText(t: TaskDef, boss: boolean): string {
+  return t.tier === 'easy' ? `奖励 ${boss ? config.taskGoldBoss : config.taskGold} 金币` : `奖励一件随机神器（栏满改给 ${config.taskFullGold} 金币）`;
+}
+
+/** 关内的任务进度：单步类显示最好的一步，累计类显示总数；速通、轻装到达标时才判定 */
+function TaskLine({ task }: { task: TaskState }) {
+  const { def, progress, done, failed } = task;
+  const shown = def.kind === 'mult' ? `×${Math.max(1, progress).toFixed(1)}` : fmt(Math.floor(progress));
+  const goal = def.kind === 'mult' ? `×${def.goal}` : fmt(def.goal);
+  const status = done ? '完成' : failed ? '失败' : def.kind === 'speed' || def.kind === 'noItem' ? '达标时判定' : `${shown} / ${goal}`;
+  return (
+    <div className={`taskline${done ? ' done' : ''}${failed ? ' failed' : ''}`} key={done ? 'done' : 'todo'}>
+      <span className={`badge ${def.tier === 'hard' ? 'rare' : ''}`}>{def.tier === 'easy' ? '易' : '难'}</span>
+      <b>{taskText(def)}</b>
+      <span className="prog">{status}</span>
+    </div>
+  );
+}
+
 /** 首领规则：原色方块做标记，说明写在旁边 */
 function RuleBadge({ rule, color, big }: { rule: keyof typeof BOSS_RULES; color?: Color | undefined; big?: boolean }) {
   const r = BOSS_RULES[rule];
@@ -620,6 +693,12 @@ function IncomeLines({ income }: { income: Income }) {
         <li>
           <span>精英</span>
           <b>+{income.elite}</b>
+        </li>
+      )}
+      {income.task > 0 && (
+        <li>
+          <span>任务</span>
+          <b>+{income.task}</b>
         </li>
       )}
       {income.artifacts.map((a) => (

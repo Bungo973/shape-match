@@ -184,8 +184,8 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         }
       }
     } else if (run.phase === 'artifact') {
-      // 指定了神器时跳过首领奖励，只衡量这几件
-      run = ok(opts.artifacts ? skipArtifact(run, config) : chooseArtifact(run, run.artifactChoices[0]!));
+      // 指定了神器时跳过首领奖励，只衡量这几件；神器栏满时也跳过
+      run = ok(opts.artifacts || run.artifacts.length >= config.artifactSlots ? skipArtifact(run, config) : chooseArtifact(run, run.artifactChoices[0]!, config));
     } else if (run.phase === 'shop') {
       run = autoShop(run, config);
     } else {

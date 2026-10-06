@@ -15,3 +15,4 @@ export * from './levels';
 export * from './run';
 export * from './cards';
 export * from './shuffle';
+export * from './tasks';

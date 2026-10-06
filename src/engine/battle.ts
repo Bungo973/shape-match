@@ -12,6 +12,7 @@ import { hasLegalMove, reshuffle } from './shuffle';
 import type { BossRule } from './levels';
 import { createRng } from './rng';
 import { multiplierFor, settle, type Settlement } from './score';
+import { newTaskState, updateTask, type TaskDef, type TaskState } from './tasks';
 import { COLORS, emptyClears, type Action, type BombKind, type Board, type ClearsByType, type Color, type Gravity, type Pos } from './types';
 
 export const RULES_VERSION = 4;
@@ -119,6 +120,8 @@ export interface BattleState {
   artifactSlots?: number;
   /** 本关被用掉而消失的神器（替身） */
   spentArtifacts?: ArtifactKey[];
+  /** 本关选的可选任务与进度 */
+  task?: TaskState;
   /** 嵌片卡模式：抽牌堆、手牌、弃牌堆；交换模式下不存在 */
   cards?: CardPiles;
   /** 冲分模式：在 turns 个回合内让 totalScore 达到 target；敌人不行动 */
@@ -142,6 +145,8 @@ export interface StartBattleInput {
   rule?: BossRule;
   /** 开关时手上的金币 */
   gold?: number;
+  /** 本关选的可选任务 */
+  task?: TaskDef;
 }
 
 // ---- 日志 ----
@@ -239,6 +244,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     ap: config.apPerTurn,
     stepsTaken: 0,
     gold: input.gold ?? 0,
+    ...(input.task ? { task: newTaskState(input.task) } : {}),
     artifactSlots: config.artifactSlots,
     gravity: 'down',
     gravityTurnsLeft: 0,
@@ -418,6 +424,7 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     }
   }
   if (state.outcome === 'ongoing') applyCounterArtifacts(state, result, log, config);
+  if (state.task) updateTask(state.task, log, !!opts.item);
   return { ok: true, state, log };
 }
 
@@ -451,6 +458,7 @@ export function useItem(prev: BattleState, use: ItemUse, config: EngineConfig = 
   }
   const state = clone(prev);
   state.ap -= cost;
+  if (state.task) updateTask(state.task, null, true);
   if (use.key === 'charge') {
     const t = state.board[use.at.r]?.[use.at.c];
     if (!t || t.kind !== 'normal') return { ok: false, state: prev, reason: 'notNormal' };

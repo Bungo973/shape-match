@@ -1148,3 +1148,59 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- 可选任务 ---------- */
+
+.tasks .task[aria-checked='true'] {
+  border-color: var(--blue);
+  background: #e6ebf3;
+}
+
+.tasks .task.hard[aria-checked='true'] {
+  border-color: var(--red);
+  background: #f6e3e0;
+}
+
+.tasks .task .badge:not(.rare) {
+  background: var(--ink);
+}
+
+.taskline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-left: 6px solid var(--ink);
+  padding: 2px 0 2px 10px;
+  font-size: 13px;
+}
+
+.taskline .prog {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.taskline.done {
+  border-left-color: var(--blue);
+  animation: kick 0.42s cubic-bezier(0.34, 1.56, 0.64, 1), flash 0.9s steps(1, end);
+}
+
+.taskline.done .prog {
+  color: var(--blue);
+}
+
+.taskline.failed .prog {
+  color: var(--red);
+}
+
+.ending .taskres {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ending .taskres.done {
+  color: var(--blue);
+  font-weight: 700;
+}

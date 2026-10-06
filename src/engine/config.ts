@@ -88,6 +88,10 @@ export interface EngineConfig {
   artifactsPerShop: number;
   artifactPrices: Record<'common' | 'uncommon' | 'rare', number>;
   artifactShopWeights: Record<'common' | 'uncommon' | 'rare', number>;
+  /** 可选任务：易任务的金币（普通关、首领关）；难任务给神器，神器栏满时改给的金币 */
+  taskGold: number;
+  taskGoldBoss: number;
+  taskFullGold: number;
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
@@ -106,7 +110,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   maxPhases: 200,
   scoreMode: false,
   scoreTurns: 5,
-  scoreTargets: [1100, 1600, 1850, 3300, 4300, 4150, 6000, 6800, 6600],
+  scoreTargets: [1100, 1600, 2050, 3650, 4750, 4550, 6600, 7500, 7250],
   endlessGrowth: 1.3,
   stoneRuleCount: 6,
   lowCapSegments: 2,
@@ -137,4 +141,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   artifactsPerShop: 2,
   artifactPrices: { common: 6, uncommon: 10, rare: 15 },
   artifactShopWeights: { common: 70, uncommon: 25, rare: 5 },
+  taskGold: 3,
+  taskGoldBoss: 5,
+  taskFullGold: 10,
 };

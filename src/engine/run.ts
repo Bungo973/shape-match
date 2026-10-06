@@ -9,6 +9,7 @@ import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import { FULL_ROUTE, type RouteNode } from './content/enemies';
 import { bossRuleFor, isBossLevel, scoreTarget } from './levels';
 import { createRng, mixSeed } from './rng';
+import { finishTask, taskOptions, type TaskDef } from './tasks';
 import type { Action } from './types';
 
 export const RUN_RULES_VERSION = 9;
@@ -43,6 +44,17 @@ export interface RunState {
   shopArtifacts: ArtifactKey[];
   /** 上一关结束时消失的神器（香蕉烂掉、冰淇淋化完、替身用掉），供结算展示 */
   lostArtifacts: ArtifactKey[];
+  /** 上一关任务的结果，供结算展示 */
+  taskResult?: TaskResult | null;
+}
+
+export interface TaskResult {
+  def: TaskDef;
+  done: boolean;
+  progress: number;
+  /** 难任务奖励的神器；栏满时为 null，改给金币 */
+  artifact?: ArtifactKey | null;
+  gold: number;
 }
 
 export interface Income {
@@ -53,6 +65,8 @@ export interface Income {
   fromSteps: number;
   /** 金币类神器的收入（存钱罐、拆弹工、金怀表） */
   artifacts: { key: ArtifactKey; amount: number }[];
+  /** 易任务的金币；难任务栏满时折成的金币也算在这里 */
+  task: number;
   total: number;
 }
 
@@ -108,6 +122,7 @@ function sampleArtifacts(candidates: ArtifactKey[], n: number, weights: Record<A
 
 const STARTER_WEIGHTS: Record<ArtifactRarity, number> = { common: 1, uncommon: 0, rare: 0 };
 const BOSS_REWARD_WEIGHTS: Record<ArtifactRarity, number> = { common: 0, uncommon: 25, rare: 5 };
+const TASK_REWARD_WEIGHTS: Record<ArtifactRarity, number> = { common: 70, uncommon: 30, rare: 0 };
 
 export interface LevelInfo {
   level: number;
@@ -156,10 +171,17 @@ export function pickStarter(prev: RunState, key: ArtifactKey): RunResult {
 }
 
 /** 从路线页进入下一场战斗；进入后棋盘布局锁定 */
-export function startNextBattle(prev: RunState, config: EngineConfig = DEFAULT_CONFIG): RunResult {
+/** 第 level 关开关前的两条任务候选（一易一难）；按局种子固定，路线页与开关共用 */
+export function levelTasks(run: RunState, level: number, config: EngineConfig = DEFAULT_CONFIG): [TaskDef, TaskDef] {
+  return taskOptions(run.seed, level, scoreTarget(level, config));
+}
+
+/** 从路线页开始下一关；taskIndex 为选中的任务（0 易、1 难） */
+export function startNextBattle(prev: RunState, config: EngineConfig = DEFAULT_CONFIG, taskIndex: 0 | 1 = 0): RunResult {
   if (prev.phase !== 'map') return fail(prev, '只能从路线页开始战斗');
   const run = clone(prev);
   run.battleIndex++;
+  const task = config.scoreMode ? levelTasks(run, run.battleIndex, config)[taskIndex] : undefined;
   const node = current(run);
   const info = config.scoreMode ? levelInfo(run, run.battleIndex, config) : null;
   run.battle = startBattle(
@@ -170,6 +192,7 @@ export function startNextBattle(prev: RunState, config: EngineConfig = DEFAULT_C
       artifacts: run.artifacts,
       levels: run.levels,
       gold: run.gold,
+      ...(task ? { task } : {}),
       // 免检章：首领规则对你无效
       ...(info?.rule && !run.artifacts.includes('exemption') ? { rule: info.rule } : {}),
     },
@@ -223,9 +246,12 @@ function settleBattle(run: RunState, config: EngineConfig): void {
     steps,
     fromSteps: steps * config.goldPerStep,
     artifacts: artifactIncome(run, b),
+    task: 0,
     total: 0,
   };
-  income.total = income.base + income.elite + income.fromSteps + income.artifacts.reduce((n, a) => n + a.amount, 0);
+  run.taskResult = settleTask(run, b, steps, node.tier !== 'minion', config);
+  income.task = run.taskResult?.gold ?? 0;
+  income.total = income.base + income.elite + income.fromSteps + income.task + income.artifacts.reduce((n, a) => n + a.amount, 0);
   run.gold += income.total;
   run.income = income;
   run.lostArtifacts = [...spent];
@@ -252,6 +278,32 @@ function settleBattle(run: RunState, config: EngineConfig): void {
   } else {
     enterShop(run, config);
   }
+}
+
+/**
+ * 判定本关任务并发奖励（没达标也照发）：易任务给金币（首领关多给），难任务给一件随机神器（普通 70、罕见 30，不重复），
+ * 神器栏满时改给金币。速通与轻装只能在达标时完成。
+ */
+function settleTask(run: RunState, b: BattleState, steps: number, boss: boolean, config: EngineConfig): TaskResult | null {
+  if (!b.task) return null;
+  const task = b.task;
+  if (b.goal && b.totalScore >= b.goal.target) finishTask(task, steps);
+  const result: TaskResult = { def: task.def, done: task.done, progress: task.progress, gold: 0 };
+  if (!task.done) return result;
+  if (task.def.tier === 'easy') {
+    result.gold = boss ? config.taskGoldBoss : config.taskGold;
+    return result;
+  }
+  const pool = offeredArtifacts(config.scoreMode).filter((k) => !run.artifacts.includes(k));
+  const [pick] = run.artifacts.length < config.artifactSlots ? sampleArtifacts(pool, 1, TASK_REWARD_WEIGHTS, mixSeed(run.seed, 0x7a5d, run.battleIndex)) : [];
+  if (pick) {
+    run.artifacts.push(pick);
+    result.artifact = pick;
+  } else {
+    result.artifact = null;
+    result.gold = config.taskFullGold;
+  }
+  return result;
 }
 
 /**
@@ -415,6 +467,7 @@ export function leaveShop(prev: RunState): RunResult {
   run.shopItems = [];
   run.shopArtifacts = [];
   run.lostArtifacts = [];
+  run.taskResult = null;
   if (!run.endless && run.battleIndex >= run.route.length) {
     run.phase = 'over';
     run.outcome = 'won';
