@@ -170,6 +170,7 @@ export function Game() {
         )}
         <ArtifactPanel
           keys={run.artifacts}
+          levels={run.levels}
           counters={counters}
           gold={run.battle?.gold ?? run.gold}
           ap={run.phase === 'battle' ? (run.battle?.ap ?? null) : null}
@@ -898,7 +899,7 @@ function Artifacts({
   onOpen: () => void;
 }) {
   return (
-    <button className="artifacts" onClick={onOpen} aria-label={`查看神器（${keys.length}/${config.artifactSlots}）`}>
+    <button className="artifacts" onClick={onOpen} aria-label={`查看构筑：神器 ${keys.length}/${config.artifactSlots} 与升级等级`}>
       {keys.map((k) => {
         const a = ARTIFACTS[k];
         const p = pings[k];
@@ -916,7 +917,7 @@ function Artifacts({
         );
       })}
       <span className="slots">
-        神器 {keys.length}/{config.artifactSlots} ▸
+        构筑 · 神器 {keys.length}/{config.artifactSlots} ▸
       </span>
     </button>
   );
@@ -954,9 +955,10 @@ function artifactStatus(k: ArtifactKey, n: number, gold: number, count: number, 
   }
 }
 
-/** 神器侧边栏：宽屏常驻在棋盘右侧，窄屏为抽屉。每件写明稀有度、效果、当前状态；商店和领奖时可以卖出 */
+/** 构筑栏：宽屏常驻在棋盘右侧，窄屏为抽屉。上半是神器（每件写明稀有度、效果、当前状态，商店和领奖时可以卖出），下半是商店升级的等级 */
 function ArtifactPanel({
   keys,
+  levels,
   counters,
   gold,
   ap,
@@ -966,6 +968,7 @@ function ArtifactPanel({
   onSell,
 }: {
   keys: ArtifactKey[];
+  levels: Record<UpgradeKey, number>;
   counters: Partial<Record<ArtifactKey, number>> | undefined;
   gold: number;
   ap: number | null;
@@ -978,15 +981,16 @@ function ArtifactPanel({
   return (
     <>
       {open && <div className="backdrop" onClick={onClose} />}
-      <aside className={`side${open ? ' open' : ''}`} aria-label="神器">
+      <aside className={`side${open ? ' open' : ''}`} aria-label="构筑">
         <header>
-          <h2>
-            神器 <span>{keys.length}/{config.artifactSlots}</span>
-          </h2>
+          <h2>构筑</h2>
           <button className="link close" onClick={onClose}>
             关闭
           </button>
         </header>
+        <h3>
+          神器 <span>{keys.length}/{config.artifactSlots}</span>
+        </h3>
         {onSell && keys.length > 0 && <p className="hint">点“卖出”得半价金币。</p>}
         <ol>
           {keys.map((k) => {
@@ -1019,12 +1023,20 @@ function ArtifactPanel({
               </li>
             );
           })}
-          {Array.from({ length: Math.max(0, config.artifactSlots - keys.length) }, (_, i) => (
-            <li key={`empty-${i}`} className="card empty">
-              空栏
+          {keys.length < config.artifactSlots && (
+            <li className="card empty">{keys.length ? `还能装 ${config.artifactSlots - keys.length} 件` : '还没有神器：商店、首领奖励和困难任务都能拿到'}</li>
+          )}
+        </ol>
+        <h3>升级</h3>
+        <ul className="levels">
+          {UPGRADE_KEYS.map((k) => (
+            <li key={k} title={upgradeEffectText(k, levels[k], config)}>
+              <UpgradeIcon upgrade={k} size={18} />
+              <span>{upgradeName(k)}</span>
+              <b>Lv{levels[k]}</b>
             </li>
           ))}
-        </ol>
+        </ul>
       </aside>
     </>
   );
