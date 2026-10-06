@@ -13,6 +13,8 @@ export function loadRun(): RunState | null {
     const run = JSON.parse(raw) as RunState;
     if (run.rulesVersion !== RUN_RULES_VERSION) return null;
     if (run.battle && run.battle.rulesVersion !== RULES_VERSION) return null;
+    // 冲分存档的关卡必有目标分；没有说明是旧版原型配置漏了冲分模式时开的局，放弃（2026-10-06）
+    if (run.battle && !run.battle.goal) return null;
     return run;
   } catch {
     return null;

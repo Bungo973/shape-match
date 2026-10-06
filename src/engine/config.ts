@@ -160,6 +160,8 @@ export const DEFAULT_CONFIG: EngineConfig = {
  */
 export const CHAIN_BASE_CONFIG: EngineConfig = {
   ...DEFAULT_CONFIG,
+  // 只用于冲分模式；界面启动时才把 DEFAULT_CONFIG 改成冲分，这里不能靠展开继承
+  scoreMode: true,
   chainBase: true,
   scoreTargets: [3600, 5000, 6400, 10100, 12900, 11300, 17800, 19900, 17050],
 };

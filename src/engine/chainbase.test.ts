@@ -44,3 +44,9 @@ describe('原型：连锁计基数', () => {
     expect(three.chainBase).toBeGreaterThan(one.chainBase);
   });
 });
+
+describe('原型配置', () => {
+  it('是冲分模式，关卡有目标分', () => {
+    expect(CHAIN_BASE_CONFIG.scoreMode).toBe(true);
+  });
+});
