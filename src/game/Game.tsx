@@ -219,6 +219,10 @@ function Battle({
       sfx.score(s.settlementScore);
       view.popText(`+${fmt(s.settlementScore)}`, s.multiplier > 1 ? `×${s.multiplier.toFixed(1)}` : '', at, s.settlementScore >= 200);
       setMult((m) => ({ ...m, value: s.multiplier, final: true }));
+    } else if (s) {
+      // 基数为 0（“色封”下只消了被封的颜色）：倍率再高也是 0 分，照样弹出说明，不让结算看起来卡住
+      view.popText('+0', b.rule?.key === 'sealed' ? '色封不计分' : '基数为 0', at);
+      setMult((m) => ({ ...m, value: s.multiplier, final: true }));
     }
     for (const t of log?.counterTriggers ?? []) {
       ping(t.key, t.key === 'fuseBox' ? `+${t.ap} 步` : t.key === 'fission' ? `直线 ×${t.cells.length}` : '3×3');
@@ -231,6 +235,8 @@ function Battle({
     runRef.current = next;
     setRun(next);
     if (b.outcome !== 'ongoing') {
+      // 达标的这一步：等出分弹字和分数滚动播完，再弹出结算卡
+      if (s) await wait(700);
       sfx.win();
       setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0, income: next.income, lost: next.lostArtifacts });
       return;
