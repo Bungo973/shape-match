@@ -7,6 +7,8 @@ import {
   buyArtifact,
   chooseArtifact,
   leaveShop,
+  rerollPrice,
+  rerollShop,
   sellArtifact,
   skipArtifact,
   newRun,
@@ -305,5 +307,23 @@ describe('第三批：关卡之间', () => {
     expect(after.phase).toBe('shop');
     expect(after.artifacts).not.toContain('standIn');
     expect(after.lostArtifacts).toEqual(['standIn']);
+  });
+});
+
+describe('商店刷新', () => {
+  const toShop = (gold: number) => ({ ...winBattle(toFirstBattle()), gold });
+
+  it('付费重抽神器与道具货架，价格每次涨 1，下次进商店重置', () => {
+    const shop = toShop(20);
+    const once = ok(rerollShop(shop));
+    expect(once.gold).toBe(20 - DEFAULT_CONFIG.rerollPrice);
+    expect(rerollPrice(once)).toBe(DEFAULT_CONFIG.rerollPrice + DEFAULT_CONFIG.rerollPriceStep);
+    const twice = ok(rerollShop(once));
+    expect(twice.gold).toBe(once.gold - DEFAULT_CONFIG.rerollPrice - DEFAULT_CONFIG.rerollPriceStep);
+    expect([once.shopArtifacts, once.shopItems]).not.toEqual([twice.shopArtifacts, twice.shopItems]);
+    expect(twice.shopArtifacts.some((k) => twice.artifacts.includes(k))).toBe(false);
+    expect(rerollShop(toShop(0)).ok).toBe(false);
+    const next = winBattle(ok(startNextBattle(ok(leaveShop(twice)))));
+    expect(rerollPrice(next)).toBe(DEFAULT_CONFIG.rerollPrice);
   });
 });

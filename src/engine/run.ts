@@ -42,6 +42,8 @@ export interface RunState {
   shopItems: ItemKey[];
   /** 本次商店上架的神器（买走即下架） */
   shopArtifacts: ArtifactKey[];
+  /** 本次商店已经刷新的次数（决定下一次刷新的价格） */
+  rerolls?: number;
   /** 上一关结束时消失的神器（香蕉烂掉、冰淇淋化完、替身用掉），供结算展示 */
   lostArtifacts: ArtifactKey[];
   /** 上一关任务的结果，供结算展示 */
@@ -347,10 +349,33 @@ function rotArtifacts(run: RunState, b: BattleState): void {
 
 /** 进商店：按局种子与关卡序号随机上架几种道具，并按稀有度权重上架没有持有的神器 */
 function enterShop(run: RunState, config: EngineConfig): void {
-  run.shopItems = sample(ITEM_KEYS, config.itemsPerShop, mixSeed(run.seed, 0x17e, run.battleIndex));
-  const pool = offeredArtifacts(config.scoreMode).filter((k) => !run.artifacts.includes(k));
-  run.shopArtifacts = sampleArtifacts(pool, config.artifactsPerShop, config.artifactShopWeights, mixSeed(run.seed, 0x5a, run.battleIndex));
+  run.rerolls = 0;
+  stockShop(run, config);
   run.phase = 'shop';
+}
+
+/** 摆货架：第几次刷新也混进种子，同一局同一次刷新结果固定 */
+function stockShop(run: RunState, config: EngineConfig): void {
+  const n = run.rerolls ?? 0;
+  const salt = n ? [n] : [];
+  run.shopItems = sample(ITEM_KEYS, config.itemsPerShop, mixSeed(run.seed, 0x17e, run.battleIndex, ...salt));
+  const pool = offeredArtifacts(config.scoreMode).filter((k) => !run.artifacts.includes(k));
+  run.shopArtifacts = sampleArtifacts(pool, config.artifactsPerShop, config.artifactShopWeights, mixSeed(run.seed, 0x5a, run.battleIndex, ...salt));
+}
+
+/** 下一次刷新商店的价格 */
+export const rerollPrice = (run: RunState, config: EngineConfig = DEFAULT_CONFIG): number => config.rerollPrice + config.rerollPriceStep * (run.rerolls ?? 0);
+
+/** 付费刷新商店：神器和道具两排货架一起重抽（升级与回血不变） */
+export function rerollShop(prev: RunState, config: EngineConfig = DEFAULT_CONFIG): RunResult {
+  if (prev.phase !== 'shop') return fail(prev, '不在商店');
+  const price = rerollPrice(prev, config);
+  if (prev.gold < price) return fail(prev, '金币不足');
+  const run = clone(prev);
+  run.gold -= price;
+  run.rerolls = (run.rerolls ?? 0) + 1;
+  stockShop(run, config);
+  return { ok: true, run };
 }
 
 export function chooseArtifact(prev: RunState, key: ArtifactKey, config: EngineConfig = DEFAULT_CONFIG): RunResult {

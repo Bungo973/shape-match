@@ -92,6 +92,9 @@ export interface EngineConfig {
   taskGold: number;
   taskGoldBoss: number;
   taskFullGold: number;
+  /** 商店刷新：同一次商店第 n 次刷新的价格 = 起价 + 涨价 ×（n − 1），下次进商店重置 */
+  rerollPrice: number;
+  rerollPriceStep: number;
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
@@ -144,4 +147,6 @@ export const DEFAULT_CONFIG: EngineConfig = {
   taskGold: 3,
   taskGoldBoss: 5,
   taskFullGold: 10,
+  rerollPrice: 3,
+  rerollPriceStep: 1,
 };

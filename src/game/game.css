@@ -1204,3 +1204,9 @@ button {
   color: var(--blue);
   font-weight: 700;
 }
+
+.ghost.reroll {
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 700;
+}

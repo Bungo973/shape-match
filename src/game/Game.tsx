@@ -37,6 +37,8 @@ import {
   type Action,
   type ArtifactKey,
   levelTasks,
+  rerollPrice,
+  rerollShop,
   findHint,
   type TaskDef,
   type TaskResult,
@@ -810,6 +812,9 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
       ) : (
         <p className="hint">道具已经买空了。</p>
       )}
+      <button className="ghost reroll" disabled={run.gold < rerollPrice(run, config)} onClick={() => apply(rerollShop(run, config))}>
+        刷新神器和道具 · {rerollPrice(run, config)} 金币
+      </button>
       <button className="rest" disabled={!hurt || run.gold < config.healPrice} onClick={() => apply(buyHeal(run, config))}>
         <b>回血</b>
         <span>
