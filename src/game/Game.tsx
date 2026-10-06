@@ -37,6 +37,7 @@ import {
   type Action,
   type ArtifactKey,
   levelTasks,
+  findHint,
   type TaskDef,
   type TaskResult,
   type TaskState,
@@ -75,6 +76,8 @@ const COLOR_NAME: Record<Color, string> = { attack: '红圆', shield: '蓝方', 
 const fmt = (n: number) => n.toLocaleString('zh-CN');
 const LOST_TEXT: Partial<Record<ArtifactKey, string>> = { banana: '香蕉烂掉了', iceCream: '冰淇淋化完了', standIn: '替身挡下了致命的扣血，然后消失了' };
 const RANGE_TAG: Partial<Record<ArtifactKey, string>> = { thunderFuse: '闪电', crossFuse: '十字', bigBore: '5×5' };
+/** 弱引导：停手多久后提示一步 */
+const HINT_DELAY = 5000;
 const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
 /** 一关结束时的结算信息，关掉后才进入下一个界面 */
@@ -207,6 +210,22 @@ function Battle({
     if (viewRef.current) viewRef.current.busy = v;
   };
 
+  const pickingRef = useRef<number | null>(null);
+  // 弱引导：停手 HINT_DELAY 毫秒后提示一步（优先能做炸弹的交换，其次三消）；有任何操作就重新计时
+  const hintTimer = useRef(0);
+  const armHint = useCallback(() => {
+    window.clearTimeout(hintTimer.current);
+    viewRef.current?.clearHint();
+    hintTimer.current = window.setTimeout(() => {
+      const b = runRef.current.battle;
+      const view = viewRef.current;
+      if (!b || !view || busyRef.current || pickingRef.current != null || b.outcome !== 'ongoing') return;
+      const h = findHint(b.board);
+      if (h) view.showHint(h.from, h.to);
+    }, HINT_DELAY);
+  }, []);
+  useEffect(() => () => window.clearTimeout(hintTimer.current), []);
+
   /** 播放一步（交换、点燃或道具）的结果：动画、计分弹字、过关判定与回合交接 */
   const finish = useCallback(async (next: RunState, log: ActionLog | null, events: ResolutionEvent[], at: Pos, pulseAt: Pos[] = []) => {
     const view = viewRef.current!;
@@ -220,7 +239,6 @@ function Battle({
     const shaped = new Set<ArtifactKey>();
     for (const e of events) if (e.type === 'wave') for (const x of e.explosions) if (x.byArtifact) shaped.add(x.byArtifact);
     for (const k of shaped) ping(k, RANGE_TAG[k] ?? '');
-    if (log?.freeSwap) ping('freeHand', '自由');
     const s = log?.settlement;
     // 神器逐件结算：倍率从连锁的值开始，每件神器抖一下、倍率跳一档，最后才出分
     if (s && log?.tally) {
@@ -300,15 +318,17 @@ function Battle({
     const at: Pos = action.type === 'swap' ? action.to : action.type === 'ignite' ? action.at : { r: 4, c: 4 };
     await finish(out.run, out.log, out.log.result.events, at);
     setBusy(false);
-  }, [finish]);
+    armHint();
+  }, [finish, armHint]);
 
   // ---- 道具 ----
   const [picking, setPicking] = useState<number | null>(null);
-  const pickingRef = useRef<number | null>(null);
   const [hint, setHint] = useState('');
 
   const choose = (slot: number | null) => {
     pickingRef.current = slot;
+    if (slot == null) armHint();
+    else viewRef.current?.clearHint();
     setPicking(slot);
     const key = slot == null ? null : runRef.current.items[slot];
     const target = key ? ITEMS[key].target : null;
@@ -331,7 +351,8 @@ function Battle({
     const at: Pos = 'at' in use ? use.at : 'to' in use ? use.to : { r: 4, c: 4 };
     await finish(out.run, out.log ?? null, out.events ?? [], at, use.key === 'charge' ? [use.at] : []);
     setBusy(false);
-  }, [finish]);
+    armHint();
+  }, [finish, armHint]);
 
   const pickItem = (slot: number) => {
     if (busyRef.current) return;
@@ -340,6 +361,7 @@ function Battle({
     if (key === 'detonator' || key === 'shuffle') return void applyItem(slot, { key });
     choose(slot);
   };
+
 
   useEffect(() => {
     const view = new BoardView(canvasRef.current!, {
@@ -354,6 +376,7 @@ function Battle({
         const slot = pickingRef.current;
         if (slot != null && runRef.current.items[slot] === 'glove') void applyItem(slot, { key: 'glove', from, to });
       },
+      onActivity: () => armHint(),
       onChain: (passive, chain) => {
         const value = chainMultiplier(passive, ruleConfig(runRef.current.battle ?? {}, config));
         // 倍率跨过整数档时响一声
@@ -365,11 +388,12 @@ function Battle({
     viewRef.current = view;
     view.sync(runRef.current.battle!.board, true);
     canvasRef.current!.focus({ preventScroll: true });
+    armHint();
     return () => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [doAction, applyItem]);
+  }, [doAction, applyItem, armHint]);
 
   const target = battle.goal?.target ?? 0;
   const score = useRolling(battle.totalScore);

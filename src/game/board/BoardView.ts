@@ -79,6 +79,8 @@ export interface BoardHandlers {
   onPickPair?(from: Pos, to: Pos): void;
   /** 播放中被动清除累计变化，供倍率槽实时显示 */
   onChain?(passive: number, chain: number): void;
+  /** 玩家碰了棋盘（按下或按键），用于重置提示的计时 */
+  onActivity?(): void;
 }
 
 export class BoardView {
@@ -105,6 +107,28 @@ export class BoardView {
   busy = false;
   /** 道具选格模式；null 为普通的交换与点燃 */
   private pick: 'cell' | 'pair' | null = null;
+  /** 弱引导：停手一会儿后提示的一步，两格朝对方轻轻顶一顶 */
+  private hint: { a: Pos; b: Pos; t: number } | null = null;
+
+  showHint(a: Pos, b: Pos): void {
+    if (REDUCED) return;
+    this.hint = { a, b, t: 0 };
+  }
+
+  clearHint(): void {
+    this.hint = null;
+  }
+
+  /** 提示中某格的偏移（以格为单位）：每 1.8 秒朝对方顶两下 */
+  private hintOffset(p: Pos): { x: number; y: number } {
+    const h = this.hint;
+    if (!h) return { x: 0, y: 0 };
+    const other = p.r === h.a.r && p.c === h.a.c ? h.b : p.r === h.b.r && p.c === h.b.c ? h.a : null;
+    if (!other) return { x: 0, y: 0 };
+    const phase = (h.t % 1800) / 1800;
+    const k = phase < 0.36 ? Math.abs(Math.sin((phase / 0.36) * Math.PI * 2)) * 0.1 : 0;
+    return { x: (other.c - p.c) * k, y: (other.r - p.r) * k };
+  }
 
   setPick(mode: 'cell' | 'pair' | null): void {
     this.pick = mode;
@@ -470,6 +494,8 @@ export class BoardView {
   private bind(): void {
     const cv = this.canvas;
     cv.addEventListener('pointerdown', (e) => {
+      this.hint = null;
+      this.handlers.onActivity?.();
       const p = this.cellAt(e);
       if (!p) return;
       this.showCursor = false;
@@ -503,6 +529,8 @@ export class BoardView {
     cv.addEventListener('pointercancel', () => (this.drag = null));
     // 键盘：方向键移动光标，回车或空格等同点击
     cv.addEventListener('keydown', (e) => {
+      this.hint = null;
+      this.handlers.onActivity?.();
       const d = ({ ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] } as Record<string, [number, number]>)[e.key];
       if (d) {
         this.cursor = { r: clamp(this.cursor.r + d[0], 0, this.rows - 1), c: clamp(this.cursor.c + d[1], 0, this.cols - 1) };
@@ -587,10 +615,12 @@ export class BoardView {
     }
     this.blasts = this.blasts.filter((b) => b.life < b.max);
 
+    if (this.hint) this.hint.t += dt;
     for (const s of this.sprites.values()) {
       if (s.y < -1 || s.y > this.rows || s.s <= 0.001) continue;
+      const off = this.hint ? this.hintOffset({ r: Math.round(s.y), c: Math.round(s.x) }) : { x: 0, y: 0 };
       ctx.save();
-      ctx.translate((s.x + 0.5) * S, (s.y + 0.5) * S);
+      ctx.translate((s.x + off.x + 0.5) * S, (s.y + off.y + 0.5) * S);
       ctx.rotate(s.rot);
       ctx.scale(s.s * (1 + 0.04 * s.sq), s.s * (1 - 0.08 * s.sq));
       ctx.globalAlpha = clamp(s.a, 0, 1);

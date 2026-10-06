@@ -12,7 +12,7 @@ import { createRng, mixSeed } from './rng';
 import { finishTask, taskOptions, type TaskDef } from './tasks';
 import type { Action } from './types';
 
-export const RUN_RULES_VERSION = 9;
+export const RUN_RULES_VERSION = 10;
 
 export type RunPhase = 'starter' | 'map' | 'battle' | 'artifact' | 'shop' | 'over';
 
@@ -173,7 +173,9 @@ export function pickStarter(prev: RunState, key: ArtifactKey): RunResult {
 /** 从路线页进入下一场战斗；进入后棋盘布局锁定 */
 /** 第 level 关开关前的两条任务候选（一易一难）；按局种子固定，路线页与开关共用 */
 export function levelTasks(run: RunState, level: number, config: EngineConfig = DEFAULT_CONFIG): [TaskDef, TaskDef] {
-  return taskOptions(run.seed, level, scoreTarget(level, config));
+  // 首领规则会让某些任务做不到：“低压”倍率封顶 ×3，不出倍率任务（持有免检章时规则无效，照常）
+  const rule = run.artifacts.includes('exemption') ? null : bossRuleFor(run.seed, level);
+  return taskOptions(run.seed, level, scoreTarget(level, config), rule === 'lowCap' ? ['mult'] : []);
 }
 
 /** 从路线页开始下一关；taskIndex 为选中的任务（0 易、1 难） */

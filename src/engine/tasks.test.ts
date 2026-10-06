@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG } from './config';
 import { useItem } from './battle';
-import { levelTasks, newRun, pickStarter, runAction, runEndTurn, startNextBattle, type RunResult, type RunState } from './run';
+import { levelInfo, levelTasks, newRun, pickStarter, runAction, runEndTurn, startNextBattle, type RunResult, type RunState } from './run';
 import { finishTask, newTaskState, taskOptions, updateTask, type TaskDef } from './tasks';
 import { boardWith } from './test-utils';
 
@@ -54,7 +54,7 @@ describe('任务进度与奖励', () => {
     expect(won.artifacts).toHaveLength(before + 1);
     const full = withTask({ kind: 'detonations', tier: 'hard', goal: 1 });
     full.battle!.goal = { target: 1, turns: 5 };
-    full.artifacts = ['redNose', 'banana', 'loner', 'smallStep', 'hourglass', 'goldWatch'];
+    full.artifacts = ['redNose', 'banana', 'loner', 'smallStep', 'piggyBank', 'goldWatch'];
     const paid = ok(runAction(full, { type: 'ignite', at: { r: 4, c: 0 } }, config));
     expect(paid.taskResult).toMatchObject({ done: true, artifact: null, gold: config.taskFullGold });
   });
@@ -101,3 +101,22 @@ describe('任务进度与奖励', () => {
     expect(ok(startNextBattle(run, config, 1)).battle!.task!.def).toEqual(hard);
   });
 });
+
+describe('任务与首领规则', () => {
+  it('“低压”关不出倍率任务', () => {
+    let checked = 0;
+    for (let seed = 1; seed <= 200; seed++) {
+      const run = newRun(seed, config);
+      for (const level of [3, 6, 9]) {
+        if (levelInfoRule(run, level) !== 'lowCap') continue;
+        checked++;
+        expect(levelTasks(run, level, config).map((t) => t.kind)).not.toContain('mult');
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
+  });
+});
+
+function levelInfoRule(run: RunState, level: number) {
+  return levelInfo(run, level, config).rule;
+}

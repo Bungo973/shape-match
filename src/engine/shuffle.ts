@@ -1,9 +1,9 @@
 // 死局判定与自动重排：只允许可匹配交换，棋盘可能无步可走，见 docs/GAME_RULES.md §1。
 import { cloneBoard, createBoard, createIdGen, getTile, setTile, type TileMove } from './board';
 import type { EngineConfig } from './config';
-import { findLines } from './match';
+import { findGroups, findLines } from './match';
 import type { Rng } from './rng';
-import type { Board, NormalTile, Pos } from './types';
+import type { Board, BombKind, NormalTile, Pos } from './types';
 
 /** 交换 from、to 两格后是否形成匹配（不修改原棋盘） */
 export function swapMakesMatch(board: Board, from: Pos, to: Pos): boolean {
@@ -30,6 +30,43 @@ export function hasLegalMove(board: Board): boolean {
     }
   }
   return false;
+}
+
+/** 提示的一步：交换 from、to；bomb 为这一步亲手能做出的最好的炸弹（普通三消为 null） */
+export interface Hint {
+  from: Pos;
+  to: Pos;
+  bomb: BombKind | null;
+}
+
+const BOMB_RANK: Record<BombKind, number> = { CB: 3, A: 2, H: 1, V: 1 };
+
+/**
+ * 弱引导：找一步可走的交换。优先能亲手做出炸弹的（五连 > 3×3 > 直线），其次普通三消；
+ * 同档取消除格数多的，再按扫描顺序。只看交换当下形成的匹配，不模拟连锁。没有可走的交换时返回 null。
+ */
+export function findHint(board: Board): Hint | null {
+  const rows = board.length;
+  const cols = board[0]!.length;
+  let best: (Hint & { score: number }) | null = null;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      for (const to of [{ r, c: c + 1 }, { r: r + 1, c }]) {
+        if (to.r >= rows || to.c >= cols) continue;
+        const from = { r, c };
+        if (!swapMakesMatch(board, from, to)) continue;
+        const trial = cloneBoard(board);
+        const a = getTile(board, from)!;
+        setTile(trial, from, getTile(board, to)!);
+        setTile(trial, to, a);
+        const groups = findGroups(trial);
+        const bomb = groups.reduce<BombKind | null>((b, g) => (g.product && (!b || BOMB_RANK[g.product] > BOMB_RANK[b]) ? g.product : b), null);
+        const score = (bomb ? BOMB_RANK[bomb] * 1000 : 0) + groups.reduce((n, g) => n + g.cells.length, 0);
+        if (!best || score > best.score) best = { from, to, bomb, score };
+      }
+    }
+  }
+  return best && { from: best.from, to: best.to, bomb: best.bomb };
 }
 
 /** 重排的尝试上限；超出后改为按新颜色重新生成普通方块 */

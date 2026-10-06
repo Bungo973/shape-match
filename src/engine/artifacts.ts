@@ -26,8 +26,6 @@ export type ArtifactKey =
   | 'marathon' // A41 长跑
   | 'ruler' // A42 尺规
   // 2026-10-06 第三批：节奏、金币与规则
-  | 'hourglass' // A43 沙漏
-  | 'freeHand' // A44 自由手
   | 'piggyBank' // A45 存钱罐
   | 'defuser' // A46 拆弹工
   | 'goldWatch' // A47 金怀表
@@ -83,8 +81,6 @@ export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
   fission: { key: 'fission', id: 'A39', name: '裂变', rarity: 'uncommon', text: '这一步有五连炸弹爆炸时，步末随机 2 个方块变成直线炸弹。' },
   hoarder: { key: 'hoarder', id: 'A40', name: '囤积者', rarity: 'uncommon', text: '结算时棋盘上每留着 1 枚炸弹，倍率 +0.2。' },
   marathon: { key: 'marathon', id: 'A41', name: '长跑', rarity: 'uncommon', text: '连续几步没有炸弹爆炸，每步倍率累加 +0.4；有炸弹爆炸就清零。' },
-  hourglass: { key: 'hourglass', id: 'A43', name: '沙漏', rarity: 'common', text: '每关第一回合 +1 步。' },
-  freeHand: { key: 'freeHand', id: 'A44', name: '自由手', rarity: 'common', text: '每回合第一次交换不要求能消除（仍算一步）。' },
   piggyBank: { key: 'piggyBank', id: 'A45', name: '存钱罐', rarity: 'common', text: '每关结束时，手上每有 10 金币，利息 +1（最多 +5）。' },
   defuser: { key: 'defuser', id: 'A46', name: '拆弹工', rarity: 'common', text: '每关结束时，棋盘上每剩 1 枚炸弹 +1 金币（最多 +3）。' },
   goldWatch: { key: 'goldWatch', id: 'A47', name: '金怀表', rarity: 'common', text: '每关结束时 +2 金币。' },
@@ -129,7 +125,6 @@ export const ARTIFACT_PARAMS = {
   hoarderTenths: 2,
   marathonTenths: 4,
   rulerEvery: 10,
-  hourglassAp: 1,
   piggyPer: 10,
   piggyMax: 5,
   defuserMax: 3,

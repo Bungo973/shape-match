@@ -109,7 +109,7 @@ export interface BattleState {
   /** 敌人本回合成功施加、从下一玩家回合起生效的状态 */
   pending: { erosion: boolean; suppressId: string | null; gravity: boolean; sealColor: Color | null; shatter?: boolean };
   /** 本玩家回合生效中的状态；shattered 为碎甲（护盾上限降低） */
-  current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null; shattered?: boolean; fuseBoxFired?: boolean; freeSwapUsed?: boolean };
+  current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null; shattered?: boolean; fuseBoxFired?: boolean };
   outcome: 'ongoing' | 'won' | 'lost';
   totalScore: number;
   /** 本关已经走的步数（道具不算），积分卡按它计 */
@@ -166,8 +166,6 @@ export interface ActionLog {
   counterTriggers: CounterTrigger[];
   /** 本步结算时生效的计分神器，供界面闪亮 */
   scoringArtifacts: ArtifactKey[];
-  /** 自由手让这次不能消除的交换照样成立 */
-  freeSwap?: boolean;
   /** 逐件结算明细：start 为未计神器时的倍率，之后每件神器生效后的倍率（先加后乘），供界面一件件播放 */
   tally: Tally | null;
 }
@@ -255,7 +253,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
   };
   if (config.scoreMode && input.enemy.targetScore) state.goal = { target: input.enemy.targetScore, turns: config.scoreTurns };
   if (input.rule) applyBossRule(state, input.rule, config);
-  state.ap = turnAp(state, config) + (state.artifacts.includes('hourglass') ? ARTIFACT_PARAMS.hourglassAp : 0);
+  state.ap = turnAp(state, config);
   applyTurnStartArtifacts(state);
   if (input.deck) {
     // 洗牌与抽牌沿用同一个种子随机数，保证复现
@@ -317,15 +315,8 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     mutedColor: state.rule?.key === 'sealed' ? (state.rule.color ?? null) : null,
     bombLevels: Object.fromEntries(BOMB_UPGRADES.map((k) => [k, state.bombHeat[k].level])) as Record<BombUpgrade, number>,
   };
-  let result = resolveAction(state.board, action, resolveCtx);
-  // 自由手：每回合第一次不能消除的交换照样成立（与手套同一入口），仍算一步
-  let freeSwap = false;
-  if (!result.valid && result.reason === 'noMatch' && action.type === 'swap' && !opts.item && state.artifacts.includes('freeHand') && !state.current.freeSwapUsed) {
-    result = resolveAction(state.board, { ...action, free: true }, resolveCtx);
-    freeSwap = result.valid;
-  }
+  const result = resolveAction(state.board, action, resolveCtx);
   if (!result.valid) return { ok: false, state: prev, reason: result.reason! };
-  if (freeSwap) state.current.freeSwapUsed = true;
 
   state.board = result.board;
   state.rngState = rng.state;
@@ -351,7 +342,6 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     counterTriggers: [],
     scoringArtifacts: [],
     tally: null,
-    ...(freeSwap ? { freeSwap } : {}),
   };
 
   // 爆破等级：本步的引爆在结算完之后计入，新等级从下一次行动起生效

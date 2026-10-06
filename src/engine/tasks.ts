@@ -50,12 +50,13 @@ const EASY_ONLY: TaskKind[] = [];
 const RETIRED: TaskKind[] = ['noItem'];
 const KINDS = (Object.keys(TASK_GOALS) as TaskKind[]).filter((k) => !RETIRED.includes(k));
 
-/** 第 level 关的两条候选：一易一难，类别不同；按局种子固定 */
-export function taskOptions(seed: number, level: number, target: number): [TaskDef, TaskDef] {
+/** 第 level 关的两条候选：一易一难，类别不同；按局种子固定。exclude 为本关做不到的类别（如“低压”下的倍率） */
+export function taskOptions(seed: number, level: number, target: number, exclude: TaskKind[] = []): [TaskDef, TaskDef] {
   const rng = createRng(mixSeed(seed, 0x7a5c, level));
   const pick = (pool: TaskKind[]) => pool[rng.int(pool.length)]!;
-  const hardKind = pick(KINDS.filter((k) => !EASY_ONLY.includes(k)));
-  const easyKind = pick(KINDS.filter((k) => k !== hardKind));
+  const kinds = KINDS.filter((k) => !exclude.includes(k));
+  const hardKind = pick(kinds.filter((k) => !EASY_ONLY.includes(k)));
+  const easyKind = pick(kinds.filter((k) => k !== hardKind));
   return [
     { kind: easyKind, tier: 'easy', goal: TASK_GOALS[easyKind](level, target).easy },
     { kind: hardKind, tier: 'hard', goal: TASK_GOALS[hardKind](level, target).hard },

@@ -67,3 +67,15 @@ describe('匹配识别与归组（SPECIAL_TILES 实例）', () => {
     expect(findLines(boardWith({}))).toHaveLength(0);
   });
 });
+
+describe('弱引导', () => {
+  it('优先提示能做出炸弹的交换，其次普通三消', async () => {
+    const { findHint } = await import('./shuffle');
+    const { boardWith } = await import('./test-utils');
+    // 第 0 行 a a . a a：把 (1,2) 的 a 换上去成五连；另有一处普通三连 (5,0)(5,1)(6,2)
+    const five = boardWith({ '0,0': 'a', '0,1': 'a', '0,3': 'a', '0,4': 'a', '1,2': 'a', '5,0': 's', '5,1': 's', '6,2': 's' });
+    expect(findHint(five)).toMatchObject({ bomb: 'CB', to: { r: 1, c: 2 } });
+    const three = boardWith({ '5,0': 's', '5,1': 's', '6,2': 's' });
+    expect(findHint(three)).toMatchObject({ bomb: null });
+  });
+});

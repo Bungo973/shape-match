@@ -209,22 +209,6 @@ describe('第二批：炸弹类', () => {
 });
 
 describe('第三批：节奏、金币与规则（关内）', () => {
-  it('沙漏：每关第一回合 +1 步', () => {
-    expect(battle(['hourglass'], {}).ap).toBe(config.apPerTurn + ARTIFACT_PARAMS.hourglassAp);
-  });
-
-  it('自由手：每回合第一次不能消除的交换照样成立，第二次不行', () => {
-    // 红、蓝两格互换后周围都是黄、绿交替的填充，换了也成不了线
-    const board = { '5,5': 'a', '5,6': 's' };
-    const noMatch: Action = { type: 'swap', from: { r: 5, c: 5 }, to: { r: 5, c: 6 } };
-    expect(playerAction(battle([], board), noMatch, config).ok).toBe(false);
-    const first = playerAction(battle(['freeHand'], board), noMatch, config);
-    if (!first.ok) throw new Error(first.reason);
-    expect(first.log.freeSwap).toBe(true);
-    expect(first.state.ap).toBe(config.apPerTurn - 1);
-    expect(playerAction(first.state, noMatch, config).ok).toBe(false);
-  });
-
   it('收藏家：每持有 1 件神器 +0.3；空位：每个空栏 +1', () => {
     const c = compare(['collector', 'redNose'], three, swap3);
     expect(c.withIt.settlement!.multiplier).toBeCloseTo(c.plain.settlement!.multiplier + 0.6 + 0.5);
