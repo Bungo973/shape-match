@@ -1,13 +1,19 @@
-/* 构成风格的页面外框：浅纸色底、黑色粗线、红蓝黄三原色点缀，没有阴影和渐变。规格见 docs/VISUAL_STYLE.md */
+/* 瑞士海报风格（2026-10-07，样本见 docs/prototypes/ui-style-lab.html?style=poster）：暖纸色底、粗细两级黑线、
+   原色色块只用在关卡号和计分上；巨型数字、等宽小号双语标签、正文三级字号。没有阴影和渐变。规格见 docs/VISUAL_STYLE.md */
 :root {
-  --paper: #f2f1ec;
-  --ink: #161616;
-  --red: #d6362a;
-  --blue: #1d4e9e;
-  --yellow: #efb622;
-  --muted: #6d6a62;
-  --rule: rgba(22, 22, 22, 0.14);
+  --paper: #f3efe4;
+  --ink: #20231e;
+  --red: #df4935;
+  --blue: #235bc1;
+  --yellow: #e9b936;
+  --gold: #edc649;
+  --green: #29846a;
+  --muted: #75766b;
+  --line: #d8d5c9;
+  --rule: rgba(32, 35, 30, 0.14);
   --frame: 3px;
+  --heavy: 4px;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   /* 棋盘边长：窄屏尽量占满宽度（上下扣掉本关信息约 300px），最宽 760px，最窄 300px；宽屏三栏时另算，见文末 */
   --board: clamp(300px, min(100vw - 32px, 100dvh - 300px), 760px);
   --hud: 250px;
@@ -125,109 +131,9 @@ button {
   color: var(--red);
 }
 
-.lab {
-  white-space: nowrap;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  color: var(--muted);
-}
-
 /* ---------- 顶栏 ---------- */
 
-.top {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  border-bottom: var(--frame) solid var(--ink);
-  padding-bottom: 10px;
-}
-
-.level {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.level b {
-  font-family: var(--font-num);
-  font-weight: 400;
-  font-size: 34px;
-  line-height: 1;
-}
-
-.level .of {
-  font-family: var(--font-num);
-  font-size: 15px;
-  color: var(--muted);
-}
-
-.level .tier {
-  align-self: center;
-  white-space: nowrap;
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 1px 8px;
-  letter-spacing: 0.1em;
-}
-
-.vitals {
-  display: flex;
-  align-items: center;
-  gap: clamp(10px, 3vw, 16px);
-}
-
 /* 很窄的手机：生命条去掉文字标签，给金币和齿轮留位置 */
-@media (max-width: 420px) {
-  .hp .lab {
-    display: none;
-  }
-}
-
-.hp {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.hp .meter {
-  width: clamp(48px, 18vw, 84px);
-  height: 10px;
-  border: 2px solid var(--ink);
-  display: block;
-}
-
-.hp .meter i {
-  display: block;
-  height: 100%;
-  background: var(--red);
-  transform-origin: left;
-  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.hp b,
-.gold {
-  font-family: var(--font-num);
-  font-weight: 400;
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
-}
-
-.gold {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.gold i {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--yellow);
-  display: block;
-}
 
 /* ---------- 分数与倍率 ---------- */
 
@@ -238,72 +144,6 @@ button {
 }
 
 /* 本关面板：窄屏是棋盘上方的几行（分数和倍率一行、进度条、规则与任务、步数和炸弹热度一行） */
-.hud {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-areas:
-    'score mult'
-    'bar bar'
-    'notes notes'
-    'steps steps'
-    'upgrades upgrades';
-  align-items: end;
-  gap: 10px 12px;
-}
-
-.hud .score {
-  grid-area: score;
-}
-
-.hud .bar {
-  grid-area: bar;
-}
-
-.hud .mult {
-  grid-area: mult;
-}
-
-.hud .steps {
-  grid-area: steps;
-}
-
-.hud .upgrades {
-  grid-area: upgrades;
-}
-
-.hud .notes {
-  grid-area: notes;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.score {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0 8px;
-  min-width: 0;
-}
-
-.score .lab {
-  display: none;
-}
-
-.score b {
-  font-family: var(--font-num);
-  font-weight: 400;
-  font-size: clamp(40px, 12vw, 58px);
-  line-height: 0.95;
-  font-variant-numeric: tabular-nums;
-}
-
-.score .target {
-  font-family: var(--font-num);
-  font-size: 18px;
-  color: var(--muted);
-  white-space: nowrap;
-}
 
 .play {
   display: flex;
@@ -312,34 +152,6 @@ button {
 }
 
 /* 这一步的计分：蓝底基数 × 红底倍率（同《小丑牌》的筹码 × 倍率），平涂色块、无阴影 */
-.mult {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-
-.calc {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.calc .cell {
-  min-width: 3.2ch;
-  padding: 4px 10px;
-  color: var(--paper);
-  text-align: center;
-  overflow: hidden;
-}
-
-.calc .base {
-  background: var(--blue);
-}
-
-.calc .rate {
-  background: var(--red);
-}
 
 .calc b {
   display: block;
@@ -350,35 +162,7 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-.calc .times {
-  font-family: var(--font-num);
-  font-size: 18px;
-}
-
-.mult .note {
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
 /* 结算完成：两块描黑边定格，直到下一步 */
-.mult.final .cell {
-  outline: 3px solid var(--ink);
-  outline-offset: -3px;
-}
-
-.bar {
-  height: 14px;
-  border: var(--frame) solid var(--ink);
-}
-
-.bar span {
-  display: block;
-  height: 100%;
-  background: var(--blue);
-  transform-origin: left;
-  transition: transform 0.25s ease-out;
-}
 
 /* ---------- 棋盘 ---------- */
 
@@ -408,7 +192,7 @@ button {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(242, 241, 236, 0.72);
+  background: rgba(243, 239, 228, 0.72);
   /* 延迟 0.7 秒出现：先让最后一步的出分弹字和分数滚动播完 */
   animation: fade 0.2s ease-out 0.7s both;
 }
@@ -467,54 +251,6 @@ button {
 }
 
 /* ---------- 步数与爆破等级 ---------- */
-
-.status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.steps {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.steps .groups {
-  display: flex;
-  gap: 7px;
-}
-
-.steps .group {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-}
-
-.steps .group.now {
-  outline: 2px solid var(--ink);
-}
-
-.steps .group i {
-  width: 9px;
-  height: 9px;
-  border: 2px solid var(--ink);
-  display: block;
-  transition: background 0.15s;
-}
-
-.steps .group i.on {
-  background: var(--ink);
-}
-
-.steps .left {
-  font-family: var(--font-num);
-  font-weight: 400;
-  font-size: 20px;
-  min-width: 2ch;
-}
 
 /* ---------- 关卡之间 ---------- */
 
@@ -698,33 +434,6 @@ button {
   font-size: 12px;
   font-weight: 400;
   color: var(--muted);
-}
-
-.rule {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  border-left: 6px solid var(--red);
-  padding: 2px 0 2px 10px;
-  font-size: 13px;
-}
-
-.rule b {
-  white-space: nowrap;
-}
-
-.rule span {
-  color: var(--muted);
-}
-
-.rule.big {
-  flex-direction: column;
-  gap: 2px;
-  font-size: 15px;
-}
-
-.rule.big b {
-  font-size: 18px;
 }
 
 .best {
@@ -973,136 +682,8 @@ button {
   margin-bottom: 12px;
 }
 
-.side h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.side h2 span {
-  font-family: var(--font-num);
-  font-weight: 400;
-  font-size: 14px;
-  color: var(--muted);
-}
-
 .side .hint {
   margin: 0 0 10px;
-}
-
-.side h3 {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
-
-.side h3 span {
-  margin-left: 6px;
-  font-family: var(--font-num);
-  font-weight: 400;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.side > h3 {
-  margin-top: 22px;
-  border-top: 1px solid var(--rule);
-  padding-top: 14px;
-}
-
-.levels {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.levels li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.levels .what {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  line-height: 1.35;
-}
-
-.levels small {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.levels b {
-  font-family: var(--font-num);
-  font-weight: 400;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.levels b.up {
-  color: var(--red);
-}
-
-.side ol {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.side .card {
-  position: relative;
-  border: 2px solid var(--ink);
-  border-left-width: 8px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.side .card.uncommon {
-  border-left-color: var(--blue);
-}
-
-.side .card.rare {
-  border-left-color: var(--red);
-}
-
-.side .card.empty {
-  border: 2px dashed var(--rule);
-  color: var(--muted);
-  font-size: 12px;
-  padding: 6px 10px;
-}
-
-.side .head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.side .head b {
-  font-size: 15px;
-}
-
-.side .text {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.side .status {
-  margin: 0;
-  font-family: var(--font-num);
-  font-size: 12px;
-  color: var(--red);
 }
 
 .side .ghost.small,
@@ -1176,7 +757,7 @@ button {
 /* 宽屏三栏：左本关面板、中棋盘、右构筑栏常驻；棋盘按窗口高度放大（扣掉顶栏和道具栏约 180px），底栏不再重复列神器 */
 @media (min-width: 1100px) {
   :root {
-    --board: clamp(360px, min(100vw - 48px - var(--hud) - var(--side) - 2 * var(--gap), 100dvh - 180px), 760px);
+    --board: clamp(360px, min(100vw - 48px - var(--hud) - var(--side) - 2 * var(--gap), 100dvh - 210px), 760px);
   }
 
   .shell {
@@ -1193,63 +774,6 @@ button {
 
   .runpanel {
     display: flex;
-  }
-
-  .hud {
-    grid-template-columns: 1fr;
-    grid-template-areas: 'score' 'bar' 'mult' 'steps' 'notes' 'upgrades';
-    align-items: start;
-    align-content: start;
-    gap: 22px;
-    padding-top: 4px;
-  }
-
-  .hud.with-coach {
-    grid-template-areas: 'score' 'bar' 'mult' 'coach' 'steps' 'notes' 'upgrades';
-  }
-
-  .hud .bar {
-    margin-top: -14px;
-  }
-
-  .score .lab {
-    display: block;
-    width: 100%;
-  }
-
-  .score b {
-    font-size: 56px;
-  }
-
-  .hud .mult {
-    align-items: stretch;
-    border-top: 1px solid var(--rule);
-    padding-top: 16px;
-  }
-
-  .hud .calc .cell {
-    flex: 1;
-    padding: 8px 6px;
-  }
-
-  .hud .calc b {
-    font-size: 30px;
-  }
-
-  .hud .steps {
-    flex-wrap: wrap;
-    border-top: 1px solid var(--rule);
-    padding-top: 16px;
-  }
-
-  .hud .steps .lab {
-    flex: 1;
-  }
-
-  .hud .steps .groups {
-    order: 3;
-    width: 100%;
-    flex-wrap: wrap;
   }
 
   .panel {
@@ -1278,34 +802,6 @@ button {
 }
 
 /* 窄屏：侧边栏变成从右侧滑出的抽屉，点底栏的神器条打开 */
-@media (max-width: 1099px) {
-  .side {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 30;
-    width: min(320px, 86vw);
-    padding: 20px 16px 28px;
-    border-left: var(--frame) solid var(--ink);
-    overflow-x: hidden;
-    overflow-y: auto;
-    transform: translateX(105%);
-    transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
-  }
-
-  .side.open {
-    transform: none;
-  }
-
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 29;
-    background: rgba(22, 22, 22, 0.25);
-    animation: fade 0.2s ease-out;
-  }
-}
 
 .ending .lost {
   margin: 0;
@@ -1449,45 +945,16 @@ button {
 
 .tasks .task[aria-checked='true'] {
   border-color: var(--blue);
-  background: #e6ebf3;
+  background: #e2e7f0;
 }
 
 .tasks .task.hard[aria-checked='true'] {
   border-color: var(--red);
-  background: #f6e3e0;
+  background: #f5e2dc;
 }
 
 .tasks .task .badge:not(.rare) {
   background: var(--ink);
-}
-
-.taskline {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  border-left: 6px solid var(--ink);
-  padding: 2px 0 2px 10px;
-  font-size: 13px;
-}
-
-.taskline .prog {
-  margin-left: auto;
-  font-family: var(--font-num);
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.taskline.done {
-  border-left-color: var(--blue);
-  animation: kick 0.42s cubic-bezier(0.34, 1.56, 0.64, 1), flash 0.9s steps(1, end);
-}
-
-.taskline.done .prog {
-  color: var(--blue);
-}
-
-.taskline.failed .prog {
-  color: var(--red);
 }
 
 .ending .taskres {
@@ -1564,163 +1031,17 @@ button {
 
 /* ---------- 升级（左栏）：图标、名字和实际数值、等级；关内炸弹带引爆进度条 ---------- */
 
-.upgrades .lab {
-  display: block;
-  margin-bottom: 8px;
-}
-
-.levels li {
-  flex-wrap: wrap;
-}
-
-.levels .meter {
-  flex-basis: 100%;
-  margin-left: 30px;
-  height: 4px;
-  background: var(--rule);
-}
-
-.levels .meter i {
-  display: block;
-  height: 100%;
-  background: var(--yellow);
-  transform-origin: left;
-  transition: transform 0.3s ease-out;
-}
-
 /* 窄屏关内：升级压成一行图标 + 等级 */
-@media (max-width: 1099px) {
-  .hud .upgrades .lab,
-  .hud .upgrades .what {
-    display: none;
-  }
-
-  .hud .upgrades .levels {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 6px 16px;
-  }
-
-  .hud .upgrades li {
-    flex-wrap: nowrap;
-    gap: 4px;
-  }
-
-  .hud .upgrades .meter {
-    flex: 0 0 22px;
-    margin-left: 2px;
-  }
-}
 
 /* ---------- 道具（宽屏在右栏顶部，窄屏关内在棋盘下方） ---------- */
 
-.bag h3 span {
-  margin-left: 6px;
-  font-family: var(--font-num);
-  font-weight: 400;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.bag ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.item {
-  width: 100%;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  text-align: left;
-  background: var(--paper);
-  border: 2px solid var(--ink);
-  padding: 8px 10px;
-  cursor: pointer;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.item:disabled {
-  cursor: default;
-}
-
-.item:hover:not(:disabled) {
-  transform: translateY(-2px);
-}
-
-.item[aria-pressed='true'] {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-.item .what {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  line-height: 1.4;
-}
-
-.item b {
-  font-size: 14px;
-}
-
-.item small {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.item[aria-pressed='true'] small {
-  color: rgba(242, 241, 236, 0.75);
-}
-
-.bag .empty {
-  border: 2px dashed var(--rule);
-  color: var(--muted);
-  font-size: 12px;
-  padding: 6px 10px;
-}
-
-.bag > .hint {
-  margin-top: 8px;
-  font-size: 13px;
-}
-
 /* 窄屏关内（棋盘下方）：只列名字按钮，说明收起 */
-.play .bag h3,
-.play .bag small {
-  display: none;
-}
-
-.play .bag ul {
-  flex-direction: row;
-  flex-wrap: wrap;
-}
-
-.play .bag .item {
-  width: auto;
-  align-items: center;
-  padding: 4px 10px 4px 6px;
-}
 
 .side .close {
   margin-left: auto;
 }
 
 /* ---------- 新手引导：黑底白字一句话，指向要看的地方 ---------- */
-
-.hud.with-coach {
-  grid-template-areas:
-    'score mult'
-    'bar bar'
-    'coach coach'
-    'notes notes'
-    'steps steps'
-    'upgrades upgrades';
-}
 
 .coach {
   grid-area: coach;
@@ -1758,7 +1079,7 @@ button {
 }
 
 .coach .link {
-  color: rgba(242, 241, 236, 0.7);
+  color: rgba(243, 239, 228, 0.7);
   font-size: 12px;
 }
 
@@ -1823,7 +1144,7 @@ button {
   position: fixed;
   inset: 0;
   z-index: 49;
-  background: rgba(22, 22, 22, 0.25);
+  background: rgba(32, 35, 30, 0.25);
   animation: fade 0.2s ease-out;
 }
 
@@ -1918,5 +1239,817 @@ button {
 .help .ghost.small {
   padding: 4px 14px;
   font-size: 13px;
+}
+
+/* ==================== 瑞士海报（2026-10-07）：标签、顶栏、左栏、右栏 ==================== */
+
+/* 小标签：等宽小号，“中文 / 英文” */
+.lab,
+.cap {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.cap {
+  display: block;
+}
+
+/* ---------- 顶栏：左边黄色关卡块，右边生命、金币；下面一条 4px 粗线 ---------- */
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: var(--heavy) solid var(--ink);
+  padding-bottom: 14px;
+}
+
+.stage-tag {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  background: var(--gold);
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.stage-tag b {
+  font-family: var(--font-num);
+  font-weight: 400;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.stage-tag i {
+  align-self: center;
+  margin-left: 6px;
+  padding: 2px 7px;
+  background: var(--red);
+  color: #fff;
+  font-style: normal;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.vitals {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 3vw, 22px);
+}
+
+.hp,
+.purse {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  column-gap: 8px;
+  row-gap: 4px;
+}
+
+.purse {
+  grid-template-columns: auto;
+}
+
+.hp small,
+.purse small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.hp b,
+.purse b {
+  font-family: var(--font-num);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hp em {
+  margin-left: 2px;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.hp .meter {
+  grid-column: 1 / -1;
+  display: block;
+  width: clamp(56px, 18vw, 92px);
+  height: 4px;
+  background: var(--line);
+}
+
+.hp .meter i {
+  display: block;
+  height: 100%;
+  background: var(--red);
+  transform-origin: left;
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ---------- 左栏：分数、计分、步数、规则与任务、升级 ---------- */
+
+.hud {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'score mult'
+    'notes notes'
+    'steps steps'
+    'upgrades upgrades';
+  align-items: end;
+  gap: 12px;
+}
+
+.hud.with-coach {
+  grid-template-areas:
+    'score mult'
+    'coach coach'
+    'notes notes'
+    'steps steps'
+    'upgrades upgrades';
+}
+
+.hud .score {
+  grid-area: score;
+}
+
+.hud .mult {
+  grid-area: mult;
+}
+
+.hud .steps {
+  grid-area: steps;
+}
+
+.hud .upgrades {
+  grid-area: upgrades;
+}
+
+.hud .notes {
+  grid-area: notes;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 分数：巨型数字、目标、进度条与说明 */
+.score {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.score > b {
+  margin: 4px 0 6px;
+  font-family: var(--font-num);
+  font-weight: 400;
+  font-size: clamp(40px, 12vw, 62px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.score .goal {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.score .goal b {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.bar {
+  height: 7px;
+  margin-top: 12px;
+  background: var(--line);
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+  transform-origin: left;
+  transition: transform 0.25s ease-out;
+}
+
+.bar-cap {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* 计分：蓝底基数 × 红底倍率，块内左上角小字标名 */
+.mult {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calc {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.calc .cell {
+  min-width: 0;
+  padding: 8px 12px 6px;
+  color: #fff;
+}
+
+.calc .cell small {
+  display: block;
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.calc .base {
+  background: var(--blue);
+}
+
+.calc .rate {
+  background: var(--red);
+}
+
+.calc b {
+  display: block;
+  font-family: var(--font-num);
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.calc .times {
+  font-family: var(--font-num);
+  font-size: 16px;
+}
+
+.mult .note {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mult .note b {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+/* 结算完成：两块描黑边定格，直到下一步 */
+.mult.final .cell {
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
+}
+
+/* 步数：大数字 /15，每回合一组方格，下面写第几回合 */
+.steps {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.steps-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.steps .left {
+  font-family: var(--font-num);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.steps .left small {
+  margin-left: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.steps .groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 6px;
+}
+
+.steps .group {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  outline: 1px solid transparent;
+}
+
+.steps .group.now {
+  outline-color: var(--ink);
+}
+
+.steps .group i {
+  display: block;
+  width: 9px;
+  height: 9px;
+  background: var(--line);
+  transition: background 0.15s;
+}
+
+.steps .group i.on {
+  background: var(--ink);
+}
+
+.steps-cap {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 首领规则：左边红线；支线任务：左边蓝线 */
+.rule,
+.taskline {
+  border-left: 2px solid var(--red);
+  padding-left: 10px;
+}
+
+.rule p,
+.taskline p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.rule.big .cap {
+  font-size: 12px;
+}
+
+.rule.big p {
+  font-size: 15px;
+}
+
+.taskline {
+  border-left-color: var(--blue);
+}
+
+.taskline p {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.taskline .prog {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--blue);
+  white-space: nowrap;
+}
+
+.taskline.done {
+  animation: kick 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.taskline.failed .prog {
+  color: var(--red);
+}
+
+/* 升级：图标、名字和实际数值、等级；关内炸弹下面一条黄色引爆进度 */
+.upgrades .cap {
+  margin-bottom: 8px;
+}
+
+.levels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.levels li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.levels .what {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.levels small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.levels b {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.levels b.up {
+  color: var(--red);
+}
+
+.levels .meter {
+  flex-basis: 100%;
+  height: 3px;
+  margin-left: 30px;
+  background: var(--line);
+}
+
+.levels .meter i {
+  display: block;
+  height: 100%;
+  background: var(--yellow);
+  transform-origin: left;
+  transition: transform 0.3s ease-out;
+}
+
+/* ---------- 棋盘上方一行说明 ---------- */
+
+.board-cap {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.board-cap span:last-child {
+  font-family: var(--font-mono);
+}
+
+/* ---------- 右栏：道具与神器 ---------- */
+
+.phead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.phead h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.phead span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.side .arts-head {
+  margin-top: 26px;
+}
+
+.side .hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.arts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-left: 4px solid var(--ink);
+}
+
+.side .card.uncommon {
+  border-left-color: var(--blue);
+}
+
+.side .card.rare {
+  border-left-color: var(--red);
+}
+
+.side .card.empty {
+  border: 1px dashed var(--line);
+  padding: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.side .head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.side .head .idx {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.side .head b {
+  font-size: 14px;
+}
+
+.side .head .rar {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.side .head .rar.uncommon {
+  color: var(--blue);
+}
+
+.side .head .rar.rare {
+  color: var(--red);
+}
+
+.side .text,
+.side .status {
+  margin: 0 0 0 24px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.side .text {
+  color: var(--muted);
+}
+
+.side .status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--red);
+}
+
+.side .card .ghost.small,
+.side .card .sell {
+  margin-left: 24px;
+}
+
+/* 道具：两列卡片（图标、名字、一句话），空位虚线框 */
+.bag ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.item {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px 9px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.item b {
+  font-size: 13px;
+}
+
+.item small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.item:disabled {
+  cursor: default;
+}
+
+.item:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.item[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.item[aria-pressed='true'] small {
+  color: rgba(243, 239, 228, 0.75);
+}
+
+.bag .empty {
+  min-height: 84px;
+  border: 1px dashed var(--line);
+}
+
+.bag > .hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+
+/* 窄屏关内（棋盘下方）：一排小按钮，不写说明 */
+.play .bag .phead,
+.play .bag small,
+.play .bag .empty {
+  display: none;
+}
+
+.play .bag ul {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.play .bag .item {
+  width: auto;
+  flex-direction: row;
+  padding: 4px 10px 4px 6px;
+}
+
+/* 商店底部的大号金币 */
+.gold.big {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.gold.big i {
+  display: block;
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+/* ---------- 窄屏：左栏压成棋盘上方几行；右栏是从右侧滑出的抽屉 ---------- */
+
+@media (max-width: 1099px) {
+  .score .cap,
+  .steps .cap,
+  .upgrades .cap,
+  .bar-cap,
+  .steps-cap,
+  .mult .note {
+    display: none;
+  }
+
+  .score > b {
+    font-size: 44px;
+  }
+
+  .bar {
+    margin-top: 8px;
+  }
+
+  .calc .cell {
+    padding: 4px 10px;
+  }
+
+  .calc .cell small {
+    display: none;
+  }
+
+  .calc b {
+    font-size: 22px;
+  }
+
+  .steps {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .steps-head {
+    order: 2;
+  }
+
+  .steps .groups {
+    margin: 0;
+  }
+
+  .hud .upgrades .what {
+    display: none;
+  }
+
+  .hud .levels {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+  }
+
+  .hud .levels li {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .hud .levels .meter {
+    flex: 0 0 22px;
+    margin-left: 2px;
+  }
+
+  .side {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(320px, 86vw);
+    padding: 20px 16px 28px;
+    border-left: var(--frame) solid var(--ink);
+    overflow-x: hidden;
+    overflow-y: auto;
+    transform: translateX(105%);
+    transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
+  }
+
+  .side.open {
+    transform: none;
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgba(32, 35, 30, 0.25);
+    animation: fade 0.2s ease-out;
+  }
+}
+
+/* 宽屏三栏：左栏纵向堆叠，分数下面一条 4px 粗线（放在文件末尾，盖过上面的窄屏默认） */
+@media (min-width: 1100px) {
+  .hud {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'score' 'mult' 'steps' 'notes' 'upgrades';
+    align-items: start;
+    align-content: start;
+    gap: 22px;
+  }
+
+  .hud.with-coach {
+    grid-template-areas: 'score' 'mult' 'coach' 'steps' 'notes' 'upgrades';
+  }
+
+  .hud .score {
+    border-bottom: var(--heavy) solid var(--ink);
+    padding-bottom: 16px;
+  }
+}
+
+/* 很窄的手机：生命、金币去掉文字标签，关卡块去掉“STAGE”，给按钮留位置 */
+@media (max-width: 420px) {
+  .hp small,
+  .purse small,
+  .stage-tag > span:first-child {
+    display: none;
+  }
+
+  .stage-tag {
+    padding: 5px 8px;
+  }
+
+  .stage-tag b {
+    font-size: 22px;
+  }
 }
 

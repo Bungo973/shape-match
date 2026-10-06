@@ -1,15 +1,16 @@
 // 构成风格的调色与图形，规格见 docs/VISUAL_STYLE.md。所有图形以格心为原点、以格宽 S 为尺度绘制。
 import type { BombKind, Color } from '../../engine';
 
-export const INK = '#161616';
-export const PAPER = '#F2F1EC';
-export const GRID_LINE = 'rgba(22,22,22,0.10)';
+// 2026-10-07 换成瑞士海报配色（略暖、略亮），见 docs/prototypes/ui-style-lab.html?style=poster
+export const INK = '#20231E';
+export const PAPER = '#F3EFE4';
+export const GRID_LINE = 'rgba(32,35,30,0.09)';
 
 export const COLOR_HEX: Record<Color, string> = {
-  attack: '#D6362A',
-  shield: '#1D4E9E',
-  poison: '#EFB622',
-  catalyst: '#1F8A5B',
+  attack: '#DF4935',
+  shield: '#235BC1',
+  poison: '#E9B936',
+  catalyst: '#29846A',
 };
 
 export type ShapeKind = 'circle' | 'square' | 'tri' | 'diamond';

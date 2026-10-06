@@ -154,17 +154,17 @@ export function Game() {
   return (
     <div className="shell">
       <header className="top">
-        <div className="level">
-          <span className="lab">关卡</span>
+        <div className="stage-tag">
+          <span>{run.endless ? 'ENDLESS' : 'STAGE'}</span>
           <b>{String(shownLevel).padStart(2, '0')}</b>
-          <span className="of">{run.endless ? '无尽' : `/${String(run.route.length).padStart(2, '0')}`}</span>
-          {boss && <span className="tier">首领</span>}
+          {!run.endless && <span>/ {String(run.route.length).padStart(2, '0')}</span>}
+          {boss && <i>首领关</i>}
         </div>
         <div className="vitals">
           <Hp hp={run.player.hp} max={run.player.maxHp} />
-          <span className="gold" title="金币">
-            <i />
-            {run.gold}
+          <span className="purse">
+            <small>金币</small>
+            <b>{run.gold}</b>
           </span>
           <button className="help-btn" aria-label="玩法说明" title="玩法说明" onClick={() => setHelp(true)}>
             ?
@@ -504,25 +504,37 @@ function Battle({
       {/* 本关面板：宽屏在棋盘左侧单独一列，窄屏压缩成棋盘上方的几行 */}
       <section className={`hud${tip === 'score' || tip === 'goal' ? ' with-coach' : ''}`} aria-label="本关">
         <div className="score" aria-live="polite">
-          <span className="lab">分数</span>
+          <span className="cap">本关得分 / SCORE</span>
           <b>{fmt(score)}</b>
-          <span className="target">/ {fmt(target)}</span>
+          <span className="goal">
+            目标 <b>{fmt(target)}</b> 分
+          </span>
+          <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={target} aria-valuenow={battle.totalScore}>
+            <span style={{ transform: `scaleX(${progress})` }} />
+          </div>
+          <div className="bar-cap">
+            <span>{Math.floor(progress * 100)}% 达成</span>
+            <span>{score >= target ? '已达标' : `还差 ${fmt(target - score)}`}</span>
+          </div>
         </div>
-        <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={target} aria-valuenow={battle.totalScore}>
-          <span style={{ transform: `scaleX(${progress})` }} />
-        </div>
-        <Calc {...mult} armed={!!battle.magnify} />
+        <Calc {...mult} armed={!!battle.magnify} last={battle.lastScore ?? 0} />
         {(tip === 'score' || tip === 'goal') && <Coach tip={tip} onClose={closeTip} onSkip={skipTips} />}
         <Steps battle={battle} />
         <Upgrades levels={run.levels} heat={battle.bombHeat} />
         {(battle.rule || battle.task) && (
           <div className="notes">
             {battle.rule && <RuleBadge rule={battle.rule.key} color={battle.rule.color} />}
-            {battle.task && <TaskLine task={battle.task} />}
+            {battle.task && <TaskLine task={battle.task} boss={levelInfo(run, run.battleIndex, config).boss} />}
           </div>
         )}
       </section>
       <div className="play">
+        <div className="board-cap">
+          <span>连成三个，让连锁发生。</span>
+          <span>
+            {config.rows} × {config.cols}
+          </span>
+        </div>
         <div className="stage">
           <canvas ref={canvasRef} tabIndex={0} aria-label="棋盘：拖动或点选相邻方块交换，点两下炸弹引爆" />
           {ending && <EndingCard ending={ending} onNext={() => setEnding(null)} />}
@@ -642,33 +654,42 @@ function useWide(): boolean {
   );
 }
 
-/** 道具：每件写名字和说明；关内可点（选中反白），关卡之间只读。空格合成一行，写明怎样掉落 */
+/** 道具的一句话简介（卡片上用；完整说明在悬停提示和说明页） */
+const ITEM_SHORT: Record<ItemKey, string> = {
+  glove: '任意两格互换',
+  dropper: '取色染相邻一格',
+  shuffle: '整盘重新排列',
+  magnifier: '下一步倍率 ×2',
+  echo: '再得上一步的分',
+};
+
+/** 道具：两列卡片（图标、名字、一句话），关内可点（选中反白），关卡之间只读；空位是虚线框 */
 function ItemBag({ items, picking, onPick, hint }: { items: ItemKey[]; picking?: number | null; onPick?: (slot: number) => void; hint?: string }) {
-  const free = config.itemSlots - items.length;
   return (
     <section className="bag" aria-label="道具">
-      <h3>
-        道具 <span>{items.length}/{config.itemSlots}</span>
-      </h3>
+      <div className="phead">
+        <h3>随身道具 / ITEMS</h3>
+        <span>
+          {items.length} / {config.itemSlots}
+        </span>
+      </div>
       <ul>
-        {items.map((k, i) => (
-          <li key={i}>
-            <button className="item" aria-pressed={picking === i} disabled={!onPick} onClick={() => onPick?.(i)}>
-              <ItemIcon item={k} size={20} />
-              <span className="what">
+        {Array.from({ length: config.itemSlots }, (_, i) => {
+          const k = items[i];
+          return k ? (
+            <li key={i}>
+              <button className="item" aria-pressed={picking === i} disabled={!onPick} onClick={() => onPick?.(i)} title={ITEMS[k].text}>
+                <ItemIcon item={k} size={28} />
                 <b>{ITEMS[k].name}</b>
-                <small>{ITEMS[k].text}</small>
-              </span>
-            </button>
-          </li>
-        ))}
-        {free > 0 && (
-          <li className="card empty">
-            {items.length ? `还能放 ${free} 件` : '还没有道具'}：做出五连炸弹或一步连锁 {ITEM_PARAMS.dropChain} 层会掉落
-          </li>
-        )}
+                <small>{ITEM_SHORT[k]}</small>
+              </button>
+            </li>
+          ) : (
+            <li key={i} className="empty" aria-hidden="true" />
+          );
+        })}
       </ul>
-      {hint && <p className="hint">{hint}</p>}
+      <p className="hint">{hint || (items.length ? '不消耗步数' : `做出五连炸弹或一步连锁 ${ITEM_PARAMS.dropChain} 层会掉落`)}</p>
     </section>
   );
 }
@@ -677,7 +698,7 @@ function ItemBag({ items, picking, onPick, hint }: { items: ItemKey[]; picking?:
 function Upgrades({ levels, heat }: { levels: Record<UpgradeKey, number>; heat?: BattleState['bombHeat'] | undefined }) {
   return (
     <div className="upgrades">
-      <span className="lab">升级{heat && ' · 本关引爆够数再升一级'}</span>
+      <span className="cap">升级 / UPGRADES</span>
       <ul className="levels">
         {UPGRADE_KEYS.map((k) => {
           const h = k !== 'block' && heat ? heat[k] : null;
@@ -691,7 +712,7 @@ function Upgrades({ levels, heat }: { levels: Record<UpgradeKey, number>; heat?:
                 <small>{levelEffect(k, lv)}</small>
               </span>
               <b className={up ? 'up' : ''}>
-                Lv{lv}
+                Lv.{lv}
                 {up && ' ↑'}
               </b>
               {h && k !== 'block' && (
@@ -730,25 +751,28 @@ function useRolling(value: number): number {
   return shown;
 }
 
-/** 这一步的计分：基数 × 倍率 两个色块（蓝底基数、红底倍率），数值变化时弹一下；下方写连锁层数或放大镜 */
-function Calc({ base, value, chain, final, armed }: { base: number; value: number; chain: number; final: boolean; armed?: boolean }) {
+/** 这一步的计分：蓝底基数 × 红底倍率两大块（块内左上角小字标名），数值变化时弹一下；下方一行写上一步得分和连锁层数 */
+function Calc({ base, value, chain, final, armed, last }: { base: number; value: number; chain: number; final: boolean; armed?: boolean; last: number }) {
   const b = Math.round(base * 10) / 10;
   return (
     <div className={`mult${final ? ' final' : ''}`}>
       <div className="calc" aria-label={`基数 ${b} 乘倍率 ${value.toFixed(1)}`}>
         <span className="cell base">
+          <small>基数</small>
           <b key={b}>{fmt(b)}</b>
         </span>
         <span className="times" aria-hidden="true">
           ×
         </span>
         <span className="cell rate">
+          <small>倍率</small>
           <b key={value.toFixed(1)}>{value.toFixed(1)}</b>
         </span>
       </div>
-      <span className="note">
-        {chain > 0 ? `连锁 ${chain}` : armed ? '放大镜 ×2 待用' : '基数 × 倍率'}
-      </span>
+      <p className="note">
+        <span>{last > 0 ? <>上一步 <b>+{fmt(last)}</b></> : '基数 × 倍率'}</span>
+        <span>{chain > 0 ? `${chain} 层连锁` : armed ? '放大镜 ×2 待用' : ''}</span>
+      </p>
     </div>
   );
 }
@@ -759,7 +783,13 @@ function Steps({ battle }: { battle: BattleState }) {
   const left = (turns - battle.turn) * perTurn + battle.ap;
   return (
     <div className="steps">
-      <span className="lab">剩余步数</span>
+      <div className="steps-head">
+        <span className="cap">剩余步数 / STEPS</span>
+        <b className="left">
+          {left}
+          <small>/{turns * perTurn}</small>
+        </b>
+      </div>
       <div className="groups" aria-label={`还剩 ${left} 步`}>
         {Array.from({ length: turns }, (_, i) => {
           const t = i + 1;
@@ -774,7 +804,9 @@ function Steps({ battle }: { battle: BattleState }) {
           );
         })}
       </div>
-      <b className="left">{left}</b>
+      <span className="steps-cap">
+        第 {battle.turn} 回合 / 共 {turns} 回合
+      </span>
     </div>
   );
 }
@@ -825,11 +857,11 @@ function RunPanel({ run }: { run: RunState }) {
   return (
     <aside className="runpanel" aria-label="本局">
       <div className="score">
-        <span className="lab">本局总分</span>
+        <span className="lab">本局总分 / TOTAL</span>
         <b>{fmt(run.totalScore)}</b>
       </div>
       <div className="route">
-        <span className="lab">{run.endless ? `无尽 · 已过 ${done} 关` : `路线 · 已过 ${done}/${run.route.length} 关`}</span>
+        <span className="lab">{run.endless ? `无尽 / ENDLESS · 已过 ${done} 关` : `路线 / ROUTE · 已过 ${done}/${run.route.length}`}</span>
         {!run.endless && (
           <ol>
             {run.route.map((_, i) => {
@@ -842,7 +874,7 @@ function RunPanel({ run }: { run: RunState }) {
       </div>
       {showNext && (!run.endless ? nextLevel <= run.route.length : true) && (
         <div className="next">
-          <span className="lab">下一关 · 第 {nextLevel} 关{next.boss ? ' · 首领' : ''}</span>
+          <span className="lab">下一关 / NEXT · 第 {nextLevel} 关{next.boss ? ' · 首领' : ''}</span>
           <b>目标 {fmt(next.target)}</b>
           {next.rule && <span className="rule-name">首领规则：{BOSS_RULES[next.rule].name}</span>}
         </div>
@@ -967,30 +999,37 @@ function taskRewardText(t: TaskDef, boss: boolean): string {
   return t.tier === 'easy' ? `奖励 ${boss ? config.taskGoldBoss : config.taskGold} 金币` : `奖励一件随机神器（栏满改给 ${config.taskFullGold} 金币）`;
 }
 
-/** 关内的任务进度：单步类显示最好的一步，累计类显示总数；速通、轻装到达标时才判定 */
-function TaskLine({ task }: { task: TaskState }) {
+/** 关内的任务进度：左边一条蓝线，标题写奖励；单步类显示最好的一步，累计类显示总数；速通、轻装到达标时才判定 */
+function TaskLine({ task, boss }: { task: TaskState; boss: boolean }) {
   const { def, progress, done, failed } = task;
   const shown = def.kind === 'mult' ? `×${Math.max(1, progress).toFixed(1)}` : fmt(Math.floor(progress));
   const goal = def.kind === 'mult' ? `×${def.goal}` : fmt(def.goal);
   const status = done ? '完成' : failed ? '失败' : def.kind === 'speed' || def.kind === 'noItem' ? '达标时判定' : `${shown} / ${goal}`;
   return (
     <div className={`taskline${done ? ' done' : ''}${failed ? ' failed' : ''}`} key={done ? 'done' : 'todo'}>
-      <b>{taskText(def)}</b>
-      <span className="prog">{status}</span>
+      <span className="cap">支线任务 · {taskRewardShort(def, boss)}</span>
+      <p>
+        <span>{taskText(def)}</span>
+        <b className="prog">{status}</b>
+      </p>
     </div>
   );
 }
 
-/** 首领规则：原色方块做标记，说明写在旁边 */
+function taskRewardShort(t: TaskDef, boss: boolean): string {
+  return t.tier === 'easy' ? `奖励 ${boss ? config.taskGoldBoss : config.taskGold} 金币` : '奖励一件神器';
+}
+
+/** 首领规则：左边一条红线，标题“首领规则 / 名字”，下面一句说明；路线页用大号 */
 function RuleBadge({ rule, color, big }: { rule: keyof typeof BOSS_RULES; color?: Color | undefined; big?: boolean }) {
   const r = BOSS_RULES[rule];
   return (
     <div className={`rule${big ? ' big' : ''}`}>
-      <b>首领 · {r.name}</b>
-      <span>
+      <span className="cap">首领规则 / {r.name}</span>
+      <p>
         {r.text}
         {color && `本关不计分的是${COLOR_NAME[color]}。`}
-      </span>
+      </p>
     </div>
   );
 }
@@ -1282,12 +1321,15 @@ function ArtifactPanel({
         <div className="narrow-only">
           <Upgrades levels={levels} heat={heat} />
         </div>
-        <h3>
-          神器 <span>{keys.length}/{config.artifactSlots}</span>
-        </h3>
+        <div className="phead arts-head">
+          <h3>神器构筑 / ARTIFACTS</h3>
+          <span>
+            {keys.length} / {config.artifactSlots}
+          </span>
+        </div>
         {onSell && keys.length > 0 && <p className="hint">点“卖出”得半价金币。</p>}
-        <ol>
-          {keys.map((k) => {
+        <ol className="arts">
+          {keys.map((k, i) => {
             const a = ARTIFACTS[k];
             const p = pings[k];
             const status = artifactStatus(k, counters?.[k] ?? 0, gold, keys.length, ap);
@@ -1299,8 +1341,9 @@ function ArtifactPanel({
                   </span>
                 )}
                 <div className="head">
+                  <span className="idx">{String(i + 1).padStart(2, '0')}</span>
                   <b>{a.name}</b>
-                  <Rarity artifact={k} />
+                  <small className={`rar ${a.rarity}`}>{RARITY_NAME[a.rarity]}</small>
                 </div>
                 <p className="text">{a.text}</p>
                 {status && <p className="status">{status}</p>}
@@ -1318,7 +1361,7 @@ function ArtifactPanel({
             );
           })}
           {keys.length < config.artifactSlots && (
-            <li className="card empty">{keys.length ? `还能装 ${config.artifactSlots - keys.length} 件` : '还没有神器：商店、首领奖励和困难任务都能拿到'}</li>
+            <li className="card empty">{keys.length ? `还有 ${config.artifactSlots - keys.length} 个空位` : '还没有神器：商店、首领奖励和困难任务都能拿到'}</li>
           )}
         </ol>
 
@@ -1359,12 +1402,15 @@ function Progress({ artifact, n, gold, count }: { artifact: ArtifactKey; n: numb
 
 function Hp({ hp, max }: { hp: number; max: number }) {
   return (
-    <span className="hp" title="生命">
-      <span className="lab">生命</span>
+    <span className="hp">
+      <small>生命</small>
+      <b>
+        {hp}
+        <em>/{max}</em>
+      </b>
       <span className="meter">
         <i style={{ transform: `scaleX(${hp / max})` }} />
       </span>
-      <b>{hp}</b>
     </span>
   );
 }

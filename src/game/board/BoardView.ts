@@ -682,7 +682,7 @@ export class BoardView {
       this.shake *= Math.pow(0.02, dt / 1000);
     }
     if (this.hover && !this.busy && !this.drag && !(this.sel && samePos(this.sel, this.hover))) {
-      ctx.fillStyle = 'rgba(22,22,22,0.04)';
+      ctx.fillStyle = 'rgba(32,35,30,0.05)';
       ctx.fillRect(this.hover.c * S, this.hover.r * S, S, S);
     }
     // 选中：格子铺一层浅灰，方块回弹放大后轻轻上下浮动（减少动态效果时只放大）
@@ -691,7 +691,7 @@ export class BoardView {
     let selScale = 1;
     let selLift = 0;
     if (this.sel) {
-      ctx.fillStyle = 'rgba(22,22,22,0.08)';
+      ctx.fillStyle = 'rgba(35,91,193,0.12)';
       ctx.fillRect(this.sel.c * S, this.sel.r * S, S, S);
       this.selT += dt;
       selId = this.grid[this.sel.r]?.[this.sel.c] ?? null;
