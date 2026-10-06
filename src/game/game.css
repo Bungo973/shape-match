@@ -8,8 +8,11 @@
   --muted: #6d6a62;
   --rule: rgba(22, 22, 22, 0.14);
   --frame: 3px;
-  /* 棋盘边长：尽量占满窗口高度（扣掉上下信息约 290px），最宽 760px，最窄 300px */
-  --board: clamp(300px, min(100vw - 32px, 100dvh - 290px), 760px);
+  /* 棋盘边长：窄屏尽量占满宽度（上下扣掉本关信息约 300px），最宽 760px，最窄 300px；宽屏三栏时另算，见文末 */
+  --board: clamp(300px, min(100vw - 32px, 100dvh - 300px), 760px);
+  --hud: 250px;
+  --side: 280px;
+  --gap: 32px;
   --font-num: 'Archivo Black', Impact, sans-serif;
   --font-body: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
   color-scheme: light;
@@ -35,7 +38,8 @@ button {
   color: inherit;
 }
 
-.game {
+/* 页面骨架：顶栏 → 主体（关卡的本关面板 + 棋盘，或关卡之间的页面；宽屏右侧是构筑栏）→ 窄屏底栏 */
+.shell {
   max-width: calc(var(--board) + 32px);
   margin: 0 auto;
   padding: 20px 16px 28px;
@@ -45,7 +49,19 @@ button {
   gap: 14px;
 }
 
+.cols {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap);
+}
+
+.cols > main {
+  flex: 1;
+  min-width: 0;
+}
+
 .lab {
+  white-space: nowrap;
   font-size: 12px;
   letter-spacing: 0.12em;
   color: var(--muted);
@@ -104,7 +120,7 @@ button {
 }
 
 .hp .meter {
-  width: 84px;
+  width: clamp(48px, 18vw, 84px);
   height: 10px;
   border: 2px solid var(--ink);
   display: block;
@@ -145,21 +161,61 @@ button {
 .battle {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.scoreline {
+/* 本关面板：窄屏是棋盘上方的几行（分数和倍率一行、进度条、规则与任务、步数和炸弹热度一行） */
+.hud {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'score mult'
+    'bar bar'
+    'notes notes'
+    'steps steps'
+    'heat heat';
+  align-items: end;
+  gap: 10px 12px;
+}
+
+.hud .score {
+  grid-area: score;
+}
+
+.hud .bar {
+  grid-area: bar;
+}
+
+.hud .mult {
+  grid-area: mult;
+}
+
+.hud .steps {
+  grid-area: steps;
+}
+
+.hud .heat {
+  grid-area: heat;
+}
+
+.hud .notes {
+  grid-area: notes;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .score {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 0 8px;
   min-width: 0;
+}
+
+.score .lab,
+.heat .lab {
+  display: none;
 }
 
 .score b {
@@ -175,6 +231,12 @@ button {
   font-size: 18px;
   color: var(--muted);
   white-space: nowrap;
+}
+
+.play {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .mult {
@@ -395,6 +457,11 @@ button {
   gap: 4px;
 }
 
+.heat-item .name {
+  display: none;
+  font-size: 13px;
+}
+
 .heat-item .lv {
   font-family: var(--font-num);
   font-size: 12px;
@@ -586,6 +653,16 @@ button {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  min-height: 34px;
+}
+
+/* 空的道具格：虚线占位，让道具栏的位置和宽度固定 */
+.item.empty {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 2px dashed var(--rule);
+  cursor: default;
 }
 
 .item {
@@ -601,7 +678,7 @@ button {
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.item:hover {
+.item:hover:not(.empty) {
   transform: translateY(-2px);
 }
 
@@ -884,24 +961,10 @@ button {
   }
 }
 
-.shell {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 24px;
-}
-
-.shell .game {
-  margin: 0;
-  flex: 0 1 calc(var(--board) + 32px);
-  min-width: 0;
-}
-
 .side {
-  width: 280px;
+  width: var(--side);
   flex: none;
   background: var(--paper);
-  padding: 20px 16px 28px 0;
 }
 
 .side header {
@@ -1033,14 +1096,100 @@ button {
   }
 }
 
-/* 宽屏：侧边栏常驻、跟着页面停在顶部，底栏不再重复列神器 */
+/* 宽屏三栏：左本关面板、中棋盘、右构筑栏常驻；棋盘按窗口高度放大（扣掉顶栏和道具栏约 180px），底栏不再重复列神器 */
 @media (min-width: 1100px) {
+  :root {
+    --board: clamp(360px, min(100vw - 48px - var(--hud) - var(--side) - 2 * var(--gap), 100dvh - 180px), 760px);
+  }
+
+  .shell {
+    max-width: calc(var(--hud) + var(--board) + var(--side) + 2 * var(--gap) + 48px);
+    padding: 20px 24px 24px;
+  }
+
+  .battle {
+    display: grid;
+    grid-template-columns: var(--hud) var(--board);
+    gap: var(--gap);
+  }
+
+  .hud {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'score' 'bar' 'mult' 'steps' 'heat' 'notes';
+    align-items: start;
+    align-content: start;
+    gap: 22px;
+    padding-top: 4px;
+  }
+
+  .hud .bar {
+    margin-top: -14px;
+  }
+
+  .score .lab,
+  .heat .lab {
+    display: block;
+    width: 100%;
+  }
+
+  .score b {
+    font-size: 56px;
+  }
+
+  .hud .mult {
+    justify-content: space-between;
+    flex-direction: row-reverse;
+    border-top: 1px solid var(--rule);
+    padding-top: 16px;
+  }
+
+  .hud .mult .val {
+    align-items: flex-start;
+  }
+
+  .hud .mult .val b {
+    font-size: 40px;
+  }
+
+  .hud .steps {
+    flex-wrap: wrap;
+    border-top: 1px solid var(--rule);
+    padding-top: 16px;
+  }
+
+  .hud .steps .lab {
+    flex: 1;
+  }
+
+  .hud .steps .groups {
+    order: 3;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .hud .heat {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .hud .heat-item {
+    gap: 8px;
+  }
+
+  .hud .heat-item .name {
+    display: block;
+    flex: 1;
+  }
+
+  .hud .heat-item .meter {
+    width: 48px;
+  }
+
   .side {
     position: sticky;
     top: 0;
     max-height: 100dvh;
     overflow-y: auto;
-    padding-top: 26px;
   }
 
   .side .close,

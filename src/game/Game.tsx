@@ -145,7 +145,6 @@ export function Game() {
 
   return (
     <div className="shell">
-    <div className="game">
       <header className="top">
         <div className="level">
           <span className="lab">关卡</span>
@@ -163,26 +162,27 @@ export function Game() {
         </div>
       </header>
 
-      {showBattle ? (
-        <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} ping={ping} />
-      ) : (
-        <Between run={run} apply={apply} restart={restart} />
-      )}
+      <div className="cols">
+        {showBattle ? (
+          <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} ping={ping} />
+        ) : (
+          <Between run={run} apply={apply} restart={restart} />
+        )}
+        <ArtifactPanel
+          keys={run.artifacts}
+          counters={counters}
+          gold={run.battle?.gold ?? run.gold}
+          ap={run.phase === 'battle' ? (run.battle?.ap ?? null) : null}
+          pings={pings}
+          open={drawer}
+          onClose={() => setDrawer(false)}
+          onSell={sellable ? (k) => apply(sellArtifact(run, k, config)) : undefined}
+        />
+      </div>
 
       <footer className="bottom">
         <Artifacts keys={run.artifacts} gold={run.battle?.gold ?? run.gold} counters={counters} pings={pings} onOpen={() => setDrawer(true)} />
       </footer>
-    </div>
-      <ArtifactPanel
-        keys={run.artifacts}
-        counters={counters}
-        gold={run.battle?.gold ?? run.gold}
-        ap={run.phase === 'battle' ? (run.battle?.ap ?? null) : null}
-        pings={pings}
-        open={drawer}
-        onClose={() => setDrawer(false)}
-        onSell={sellable ? (k) => apply(sellArtifact(run, k, config)) : undefined}
-      />
     </div>
   );
 }
@@ -418,37 +418,46 @@ function Battle({
 
   return (
     <main className="battle">
-      <section className="scoreline" aria-live="polite">
-        <div className="score">
+      {/* 本关面板：宽屏在棋盘左侧单独一列，窄屏压缩成棋盘上方的几行 */}
+      <section className="hud" aria-label="本关">
+        <div className="score" aria-live="polite">
+          <span className="lab">分数</span>
           <b>{fmt(score)}</b>
           <span className="target">/ {fmt(target)}</span>
         </div>
+        <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={target} aria-valuenow={battle.totalScore}>
+          <span style={{ transform: `scaleX(${progress})` }} />
+        </div>
         <Multiplier {...mult} cap={ruleConfig(battle, config).multiplierSegments.length} armed={!!battle.magnify} />
-      </section>
-      {battle.rule && <RuleBadge rule={battle.rule.key} color={battle.rule.color} />}
-      {battle.task && <TaskLine task={battle.task} />}
-      <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={target} aria-valuenow={battle.totalScore}>
-        <span style={{ transform: `scaleX(${progress})` }} />
-      </div>
-      <div className="stage">
-        <canvas ref={canvasRef} tabIndex={0} aria-label="棋盘：拖动或点选相邻方块交换，点两下炸弹引爆" />
-        {ending && <EndingCard ending={ending} onNext={() => setEnding(null)} />}
-      </div>
-      <section className="status">
         <Steps battle={battle} />
         <BombHeat battle={battle} />
+        {(battle.rule || battle.task) && (
+          <div className="notes">
+            {battle.rule && <RuleBadge rule={battle.rule.key} color={battle.rule.color} />}
+            {battle.task && <TaskLine task={battle.task} />}
+          </div>
+        )}
       </section>
-      {run.items.length > 0 && (
+      <div className="play">
+        <div className="stage">
+          <canvas ref={canvasRef} tabIndex={0} aria-label="棋盘：拖动或点选相邻方块交换，点两下炸弹引爆" />
+          {ending && <EndingCard ending={ending} onNext={() => setEnding(null)} />}
+        </div>
         <section className="items" aria-label="道具">
-          {run.items.map((k, i) => (
-            <button key={i} className="item" aria-pressed={picking === i} onClick={() => pickItem(i)} title={ITEMS[k].text}>
-              <ItemIcon item={k} size={20} />
-              {ITEMS[k].name}
-            </button>
-          ))}
-          <span className="hint">{hint || (picking == null ? '点道具使用' : '')}</span>
+          {Array.from({ length: config.itemSlots }, (_, i) => {
+            const k = run.items[i];
+            return k ? (
+              <button key={i} className="item" aria-pressed={picking === i} onClick={() => pickItem(i)} title={ITEMS[k].text}>
+                <ItemIcon item={k} size={20} />
+                {ITEMS[k].name}
+              </button>
+            ) : (
+              <span key={i} className="item empty" aria-hidden="true" />
+            );
+          })}
+          <span className="hint">{hint || (picking != null ? '' : run.items.length ? '点道具使用' : `做出五连炸弹或一步连锁 ${ITEM_PARAMS.dropChain} 层会掉落道具`)}</span>
         </section>
-      )}
+      </div>
     </main>
   );
 }
@@ -525,12 +534,14 @@ function Steps({ battle }: { battle: BattleState }) {
 function BombHeat({ battle }: { battle: BattleState }) {
   return (
     <div className="heat">
+      <span className="lab">炸弹等级 · 本关引爆够数再升一级</span>
       {BOMB_UPGRADES.map((k) => {
         const h = battle.bombHeat[k];
         const every = config.bombHeatEvery[k];
         return (
           <div key={k} className="heat-item" title={`${BOMB_NAME[k]}：本关每引爆 ${every} 枚升一级`}>
             <UpgradeIcon upgrade={k} size={18} />
+            <span className="name">{BOMB_NAME[k]}</span>
             <span className="lv">Lv{h.level}</span>
             <span className="meter">
               <i style={{ transform: `scaleX(${h.count / every})` }} />
