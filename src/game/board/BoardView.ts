@@ -34,6 +34,8 @@ interface Sprite {
   rot: number;
   /** 落地压扁 0..1 */
   sq: number;
+  /** 鼠标悬停的放大程度 0..1，逐帧趋向目标 */
+  h?: number;
 }
 
 interface Blast {
@@ -684,6 +686,7 @@ export class BoardView {
       ctx.fillRect(this.hover.c * S, this.hover.r * S, S, S);
     }
     // 选中：格子铺一层浅灰，方块回弹放大后轻轻上下浮动（减少动态效果时只放大）
+    const hoverId = this.hover && !this.busy && !this.drag ? (this.grid[this.hover.r]?.[this.hover.c] ?? null) : null;
     let selId: number | null = null;
     let selScale = 1;
     let selLift = 0;
@@ -705,7 +708,10 @@ export class BoardView {
     for (const s of this.sprites.values()) {
       if (s.y < -1 || s.y > this.rows || s.s <= 0.001) continue;
       const off = this.hint ? this.hintOffset({ r: Math.round(s.y), c: Math.round(s.x) }) : { x: 0, y: 0 };
-      const k = s.id === selId ? selScale : s === this.dragged ? 1.08 : 1;
+      // 悬停放大 1.07 倍（约 70 毫秒趋近，移开时同样缩回）；选中、拖动时用各自更大的倍数
+      const h = (s.h ?? 0) + ((s.id === hoverId ? 1 : 0) - (s.h ?? 0)) * (REDUCED ? 1 : Math.min(1, dt / 70));
+      s.h = h;
+      const k = s.id === selId ? selScale : s === this.dragged ? 1.08 : 1 + 0.07 * h;
       ctx.save();
       ctx.translate((s.x + off.x + 0.5) * S, (s.y + off.y + (s.id === selId ? selLift : 0) + 0.5) * S);
       ctx.rotate(s.rot);
