@@ -34,6 +34,25 @@ describe('道具效果', () => {
     expect(out.state.ap).toBe(s.ap);
   });
 
+  it('手套：任意两格都能换，不必相邻；同一格不行', () => {
+    const s = battle({ '5,5': 'a', '0,0': 's' });
+    const a = s.board[5]![5]!;
+    const out = used(useItem(s, { key: 'glove', from: { r: 5, c: 5 }, to: { r: 0, c: 0 } }, config));
+    expect(out.state.board[0]![0]!.id).toBe(a.id);
+    expect(useItem(s, { key: 'glove', from: { r: 5, c: 5 }, to: { r: 5, c: 5 } }, config).ok).toBe(false);
+  });
+
+  it('手套：炸弹只挪位置不引爆，两枚炸弹相换也不合体', () => {
+    const s = battle({ '4,0': 'H', '7,7': 'A' });
+    const h = s.board[4]![0]!;
+    const out = used(useItem(s, { key: 'glove', from: { r: 4, c: 0 }, to: { r: 2, c: 5 } }, config));
+    expect(out.state.board[2]![5]!.id).toBe(h.id);
+    expect(out.events.some((e) => e.type === 'wave')).toBe(false);
+    const both = used(useItem(s, { key: 'glove', from: { r: 4, c: 0 }, to: { r: 7, c: 7 } }, config));
+    expect(both.state.board[7]![7]!.id).toBe(h.id);
+    expect(both.events.some((e) => e.type === 'wave')).toBe(false);
+  });
+
   it('吸管：染完成线就照常消除计分；不成线就只染色', () => {
     const out = used(useItem(battle(row), { key: 'dropper', from: { r: 0, c: 1 }, to: { r: 0, c: 2 } }, config));
     expect(out.events[0]).toMatchObject({ type: 'paint', at: { r: 0, c: 2 } });

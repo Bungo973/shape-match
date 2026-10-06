@@ -125,15 +125,6 @@ button {
   color: var(--red);
 }
 
-.runpanel .items {
-  min-height: 0;
-}
-
-.runpanel .item {
-  cursor: default;
-  font-size: 13px;
-}
-
 .lab {
   white-space: nowrap;
   font-size: 12px;
@@ -255,7 +246,7 @@ button {
     'bar bar'
     'notes notes'
     'steps steps'
-    'heat heat';
+    'upgrades upgrades';
   align-items: end;
   gap: 10px 12px;
 }
@@ -276,8 +267,8 @@ button {
   grid-area: steps;
 }
 
-.hud .heat {
-  grid-area: heat;
+.hud .upgrades {
+  grid-area: upgrades;
 }
 
 .hud .notes {
@@ -295,8 +286,7 @@ button {
   min-width: 0;
 }
 
-.score .lab,
-.heat .lab {
+.score .lab {
   display: none;
 }
 
@@ -528,42 +518,6 @@ button {
   min-width: 2ch;
 }
 
-.heat {
-  display: flex;
-  gap: 12px;
-}
-
-.heat-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.heat-item .name {
-  display: none;
-  font-size: 13px;
-}
-
-.heat-item .lv {
-  font-family: var(--font-num);
-  font-size: 12px;
-}
-
-.heat-item .meter {
-  width: 22px;
-  height: 5px;
-  background: var(--rule);
-  display: block;
-}
-
-.heat-item .meter i {
-  display: block;
-  height: 100%;
-  background: var(--yellow);
-  transform-origin: left;
-  transition: transform 0.3s ease-out;
-}
-
 /* ---------- 关卡之间 ---------- */
 
 /* 关卡之间的页面：在主体区居中成一列，宽度固定，左对齐排内容 */
@@ -732,49 +686,6 @@ button {
 
 .income .total b::before {
   content: '';
-}
-
-.items {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-}
-
-/* 空的道具格：虚线占位，让道具栏的位置和宽度固定 */
-.item.empty {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 2px dashed var(--rule);
-  cursor: default;
-}
-
-.item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--paper);
-  border: 2px solid var(--ink);
-  padding: 4px 10px 4px 6px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.item:hover:not(.empty) {
-  transform: translateY(-2px);
-}
-
-.item[aria-pressed='true'] {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-.items .hint {
-  font-size: 13px;
 }
 
 .sub {
@@ -1091,8 +1002,7 @@ button {
   color: var(--muted);
 }
 
-.side ol + h3,
-.side ul + h3 {
+.side > h3 {
   margin-top: 22px;
   border-top: 1px solid var(--rule);
   padding-top: 14px;
@@ -1265,7 +1175,7 @@ button {
 
   .hud {
     grid-template-columns: 1fr;
-    grid-template-areas: 'score' 'bar' 'mult' 'steps' 'heat' 'notes';
+    grid-template-areas: 'score' 'bar' 'mult' 'steps' 'notes' 'upgrades';
     align-items: start;
     align-content: start;
     gap: 22px;
@@ -1276,8 +1186,7 @@ button {
     margin-top: -14px;
   }
 
-  .score .lab,
-  .heat .lab {
+  .score .lab {
     display: block;
     width: 100%;
   }
@@ -1317,24 +1226,6 @@ button {
     flex-wrap: wrap;
   }
 
-  .hud .heat {
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .hud .heat-item {
-    gap: 8px;
-  }
-
-  .hud .heat-item .name {
-    display: block;
-    flex: 1;
-  }
-
-  .hud .heat-item .meter {
-    width: 48px;
-  }
-
   .panel {
     max-width: none;
     padding-top: 4px;
@@ -1347,7 +1238,8 @@ button {
     overflow-y: auto;
   }
 
-  .side .close,
+  .side header,
+  .narrow-only,
   .backdrop,
   .bottom {
     display: none;
@@ -1636,4 +1528,152 @@ button {
 .gold.big i {
   width: 18px;
   height: 18px;
+}
+
+/* ---------- 升级（左栏）：图标、名字和实际数值、等级；关内炸弹带引爆进度条 ---------- */
+
+.upgrades .lab {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.levels li {
+  flex-wrap: wrap;
+}
+
+.levels .meter {
+  flex-basis: 100%;
+  margin-left: 30px;
+  height: 4px;
+  background: var(--rule);
+}
+
+.levels .meter i {
+  display: block;
+  height: 100%;
+  background: var(--yellow);
+  transform-origin: left;
+  transition: transform 0.3s ease-out;
+}
+
+/* 窄屏关内：升级压成一行图标 + 等级 */
+@media (max-width: 1099px) {
+  .hud .upgrades .lab,
+  .hud .upgrades .what {
+    display: none;
+  }
+
+  .hud .upgrades .levels {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+  }
+
+  .hud .upgrades li {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .hud .upgrades .meter {
+    flex: 0 0 22px;
+    margin-left: 2px;
+  }
+}
+
+/* ---------- 道具（宽屏在右栏顶部，窄屏关内在棋盘下方） ---------- */
+
+.bag h3 span {
+  margin-left: 6px;
+  font-family: var(--font-num);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bag ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.item:disabled {
+  cursor: default;
+}
+
+.item:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.item[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.item .what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.4;
+}
+
+.item b {
+  font-size: 14px;
+}
+
+.item small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.item[aria-pressed='true'] small {
+  color: rgba(242, 241, 236, 0.75);
+}
+
+.bag .empty {
+  border: 2px dashed var(--rule);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.bag > .hint {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+/* 窄屏关内（棋盘下方）：只列名字按钮，说明收起 */
+.play .bag h3,
+.play .bag small {
+  display: none;
+}
+
+.play .bag ul {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.play .bag .item {
+  width: auto;
+  align-items: center;
+  padding: 4px 10px 4px 6px;
+}
+
+.side .close {
+  margin-left: auto;
 }

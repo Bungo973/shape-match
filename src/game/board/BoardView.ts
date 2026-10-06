@@ -107,7 +107,8 @@ export class BoardView {
   /** 播放或等待引擎时为 true，期间不接受输入 */
   busy = false;
   /** 道具选格模式；null 为普通的交换与点燃 */
-  private pick: 'cell' | 'pair' | null = null;
+  /** 道具选格：cell 选一格，pair 选相邻两格（吸管），any 选任意两格（手套） */
+  private pick: 'cell' | 'pair' | 'any' | null = null;
   /** 弱引导：停手一会儿后提示的一步，两格朝对方轻轻顶一顶 */
   private hint: { a: Pos; b: Pos; t: number } | null = null;
 
@@ -131,7 +132,7 @@ export class BoardView {
     return { x: (other.c - p.c) * k, y: (other.r - p.r) * k };
   }
 
-  setPick(mode: 'cell' | 'pair' | null): void {
+  setPick(mode: 'cell' | 'pair' | 'any' | null): void {
     this.pick = mode;
     this.sel = null;
     this.canvas.style.cursor = mode ? 'crosshair' : '';
@@ -539,7 +540,7 @@ export class BoardView {
       this.drag = null;
       if (to.r >= 0 && to.r < this.rows && to.c >= 0 && to.c < this.cols) {
         this.sel = null;
-        if (this.pick === 'pair') this.handlers.onPickPair?.({ r, c }, to);
+        if (this.pick === 'pair' || this.pick === 'any') this.handlers.onPickPair?.({ r, c }, to);
         else if (!this.pick) this.handlers.onSwap({ r, c }, to);
       }
     });
@@ -575,8 +576,8 @@ export class BoardView {
       return;
     }
     const s = this.sel;
-    if (this.pick === 'pair') {
-      if (s && Math.abs(s.r - p.r) + Math.abs(s.c - p.c) === 1) {
+    if (this.pick === 'pair' || this.pick === 'any') {
+      if (s && (this.pick === 'any' ? !samePos(s, p) : Math.abs(s.r - p.r) + Math.abs(s.c - p.c) === 1)) {
         this.sel = null;
         this.handlers.onPickPair?.(s, p);
       } else this.sel = s && samePos(s, p) ? null : p;

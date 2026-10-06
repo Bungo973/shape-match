@@ -1,6 +1,7 @@
 // 冲分模式的整局界面：开局神器 → 关卡（棋盘）→ 结算金币 →（首领后）神器 → 商店 → 下一关。
 // 规则全部由引擎给出；这里只负责展示、发出动作和安排动画的先后。
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ARTIFACTS,
   ARTIFACT_PARAMS,
@@ -141,6 +142,8 @@ export function Game() {
   const showBattle = (run.phase === 'battle' || ending) && run.battle;
 
   const [drawer, setDrawer] = useState(false);
+  // 宽屏时关卡里的道具栏挂到右栏顶部这个节点上（createPortal），点道具的逻辑仍留在关卡组件里
+  const [dock, setDock] = useState<HTMLElement | null>(null);
   const sellable = run.phase === 'shop' || run.phase === 'artifact';
   const counters = { ...(run.battle?.player.counters ?? run.player.counters), loyaltyCard: (run.battle?.stepsTaken ?? 0) % ARTIFACT_PARAMS.loyaltyEvery };
 
@@ -165,7 +168,7 @@ export function Game() {
 
       <div className="cols">
         {showBattle ? (
-          <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} ping={ping} />
+          <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} ping={ping} dock={dock} />
         ) : (
           <div className="between">
             <RunPanel run={run} />
@@ -183,6 +186,7 @@ export function Game() {
           open={drawer}
           onClose={() => setDrawer(false)}
           onSell={sellable ? (k) => apply(sellArtifact(run, k, config)) : undefined}
+          itemDock={showBattle ? <div className="dock-slot" ref={setDock} /> : <ItemBag items={run.items} />}
         />
       </div>
 
@@ -201,12 +205,14 @@ function Battle({
   ending,
   setEnding,
   ping,
+  dock,
 }: {
   run: RunState;
   setRun: (r: RunState) => void;
   ending: Ending | null;
   setEnding: (e: Ending | null) => void;
   ping: (key: ArtifactKey, label: string) => void;
+  dock: HTMLElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<BoardView | null>(null);
@@ -346,8 +352,8 @@ function Battle({
     setPicking(slot);
     const key = slot == null ? null : runRef.current.items[slot];
     const target = key ? ITEMS[key].target : null;
-    viewRef.current?.setPick(target === 'pair' ? 'pair' : null);
-    setHint(key === 'dropper' ? '先点取色的一格，再点相邻要染的一格' : key ? `选相邻两格使用${ITEMS[key].name}` : '');
+    viewRef.current?.setPick(target === 'pair' || target === 'any' ? target : null);
+    setHint(key === 'dropper' ? '先点取色的一格，再点相邻要染的一格' : key === 'glove' ? '先点一格，再点任意另一格互换（炸弹也行）' : '');
   };
 
   const applyItem = useCallback(async (slot: number, use: ItemUse) => {
@@ -420,6 +426,8 @@ function Battle({
 
   const target = battle.goal?.target ?? 0;
   const score = useRolling(battle.totalScore);
+  const wide = useWide();
+  const bag = <ItemBag items={run.items} picking={picking} onPick={pickItem} hint={hint || (picking == null && run.items.length ? '点道具使用' : '')} />;
   const progress = target ? Math.min(1, score / target) : 0;
 
   return (
@@ -436,7 +444,7 @@ function Battle({
         </div>
         <Multiplier {...mult} cap={ruleConfig(battle, config).multiplierSegments.length} armed={!!battle.magnify} />
         <Steps battle={battle} />
-        <BombHeat battle={battle} />
+        <Upgrades levels={run.levels} heat={battle.bombHeat} />
         {(battle.rule || battle.task) && (
           <div className="notes">
             {battle.rule && <RuleBadge rule={battle.rule.key} color={battle.rule.color} />}
@@ -449,22 +457,88 @@ function Battle({
           <canvas ref={canvasRef} tabIndex={0} aria-label="棋盘：拖动或点选相邻方块交换，点两下炸弹引爆" />
           {ending && <EndingCard ending={ending} onNext={() => setEnding(null)} />}
         </div>
-        <section className="items" aria-label="道具">
-          {Array.from({ length: config.itemSlots }, (_, i) => {
-            const k = run.items[i];
-            return k ? (
-              <button key={i} className="item" aria-pressed={picking === i} onClick={() => pickItem(i)} title={ITEMS[k].text}>
-                <ItemIcon item={k} size={20} />
-                {ITEMS[k].name}
-              </button>
-            ) : (
-              <span key={i} className="item empty" aria-hidden="true" />
-            );
-          })}
-          <span className="hint">{hint || (picking != null ? '' : run.items.length ? '点道具使用' : `做出五连炸弹或一步连锁 ${ITEM_PARAMS.dropChain} 层会掉落道具`)}</span>
-        </section>
+        {!(wide && dock) && bag}
       </div>
+      {wide && dock && createPortal(bag, dock)}
     </main>
+  );
+}
+
+const WIDE_QUERY = '(min-width: 1100px)';
+/** 是否为宽屏三栏（与 game.css 的断点一致） */
+function useWide(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const m = window.matchMedia(WIDE_QUERY);
+      m.addEventListener('change', cb);
+      return () => m.removeEventListener('change', cb);
+    },
+    () => window.matchMedia(WIDE_QUERY).matches,
+  );
+}
+
+/** 道具：每件写名字和说明；关内可点（选中反白），关卡之间只读。空格合成一行，写明怎样掉落 */
+function ItemBag({ items, picking, onPick, hint }: { items: ItemKey[]; picking?: number | null; onPick?: (slot: number) => void; hint?: string }) {
+  const free = config.itemSlots - items.length;
+  return (
+    <section className="bag" aria-label="道具">
+      <h3>
+        道具 <span>{items.length}/{config.itemSlots}</span>
+      </h3>
+      <ul>
+        {items.map((k, i) => (
+          <li key={i}>
+            <button className="item" aria-pressed={picking === i} disabled={!onPick} onClick={() => onPick?.(i)}>
+              <ItemIcon item={k} size={20} />
+              <span className="what">
+                <b>{ITEMS[k].name}</b>
+                <small>{ITEMS[k].text}</small>
+              </span>
+            </button>
+          </li>
+        ))}
+        {free > 0 && (
+          <li className="card empty">
+            {items.length ? `还能放 ${free} 件` : '还没有道具'}：做出五连炸弹或一步连锁 {ITEM_PARAMS.dropChain} 层会掉落
+          </li>
+        )}
+      </ul>
+      {hint && <p className="hint">{hint}</p>}
+    </section>
+  );
+}
+
+/** 升级等级与实际数值；关内的炸弹按本关当前等级显示，并带引爆进度条（够数再升一级） */
+function Upgrades({ levels, heat }: { levels: Record<UpgradeKey, number>; heat?: BattleState['bombHeat'] | undefined }) {
+  return (
+    <div className="upgrades">
+      <span className="lab">升级{heat && ' · 本关引爆够数再升一级'}</span>
+      <ul className="levels">
+        {UPGRADE_KEYS.map((k) => {
+          const h = k !== 'block' && heat ? heat[k] : null;
+          const lv = h ? h.level : levels[k];
+          const up = lv > levels[k];
+          return (
+            <li key={k} title={upgradeEffectText(k, levels[k], config)}>
+              <UpgradeIcon upgrade={k} size={20} />
+              <span className="what">
+                {upgradeName(k)}
+                <small>{levelEffect(k, lv)}</small>
+              </span>
+              <b className={up ? 'up' : ''}>
+                Lv{lv}
+                {up && ' ↑'}
+              </b>
+              {h && k !== 'block' && (
+                <span className="meter" title={`本关再引爆 ${config.bombHeatEvery[k] - h.count} 枚升一级`}>
+                  <i style={{ transform: `scaleX(${h.count / config.bombHeatEvery[k]})` }} />
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -537,28 +611,6 @@ function Steps({ battle }: { battle: BattleState }) {
   );
 }
 
-function BombHeat({ battle }: { battle: BattleState }) {
-  return (
-    <div className="heat">
-      <span className="lab">炸弹等级 · 本关引爆够数再升一级</span>
-      {BOMB_UPGRADES.map((k) => {
-        const h = battle.bombHeat[k];
-        const every = config.bombHeatEvery[k];
-        return (
-          <div key={k} className="heat-item" title={`${BOMB_NAME[k]}：本关每引爆 ${every} 枚升一级`}>
-            <UpgradeIcon upgrade={k} size={18} />
-            <span className="name">{BOMB_NAME[k]}</span>
-            <span className="lv">Lv{h.level}</span>
-            <span className="meter">
-              <i style={{ transform: `scaleX(${h.count / every})` }} />
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function EndingCard({ ending, onNext }: { ending: Ending; onNext: () => void }) {
   const short = ending.target - ending.score;
   return (
@@ -596,7 +648,7 @@ function EndingCard({ ending, onNext }: { ending: Ending; onNext: () => void }) 
 
 // ---------- 关卡之间 ----------
 
-/** 关卡之间的左栏：本局总分、九关路线（已过、下一关、首领）、下一关预告和道具背包。宽屏才显示，保持三栏不变 */
+/** 关卡之间的左栏：本局总分、九关路线（已过、下一关、首领）、下一关预告和升级等级。宽屏才显示，保持三栏不变 */
 function RunPanel({ run }: { run: RunState }) {
   const done = run.phase === 'over' && run.outcome !== 'won' ? run.battleIndex - 1 : run.battleIndex;
   const nextLevel = run.battleIndex + 1;
@@ -627,24 +679,7 @@ function RunPanel({ run }: { run: RunState }) {
           {next.rule && <span className="rule-name">首领规则：{BOSS_RULES[next.rule].name}</span>}
         </div>
       )}
-      <div className="bag">
-        <span className="lab">
-          道具 {run.items.length}/{config.itemSlots}
-        </span>
-        <div className="items">
-          {Array.from({ length: config.itemSlots }, (_, i) => {
-            const k = run.items[i];
-            return k ? (
-              <span key={i} className="item" title={ITEMS[k].text}>
-                <ItemIcon item={k} size={18} />
-                {ITEMS[k].name}
-              </span>
-            ) : (
-              <span key={i} className="item empty" aria-hidden="true" />
-            );
-          })}
-        </div>
-      </div>
+      <Upgrades levels={run.levels} />
     </aside>
   );
 }
@@ -976,7 +1011,7 @@ function Artifacts({
   onOpen: () => void;
 }) {
   return (
-    <button className="artifacts" onClick={onOpen} aria-label={`查看构筑：神器 ${keys.length}/${config.artifactSlots} 与升级等级`}>
+    <button className="artifacts" onClick={onOpen} aria-label={`查看道具、神器与升级（神器 ${keys.length}/${config.artifactSlots}）`}>
       {keys.map((k) => {
         const a = ARTIFACTS[k];
         const p = pings[k];
@@ -994,7 +1029,7 @@ function Artifacts({
         );
       })}
       <span className="slots">
-        构筑 · 神器 {keys.length}/{config.artifactSlots} ▸
+        神器 {keys.length}/{config.artifactSlots} ▸
       </span>
     </button>
   );
@@ -1038,7 +1073,7 @@ function artifactStatus(k: ArtifactKey, n: number, gold: number, count: number, 
   }
 }
 
-/** 构筑栏：宽屏常驻在棋盘右侧，窄屏为抽屉。上半是神器（每件写明稀有度、效果、当前状态，商店和领奖时可以卖出），下半是商店升级的等级 */
+/** 右栏：宽屏常驻在棋盘右侧，窄屏为抽屉。上面是道具（带说明），下面是神器（每件写明稀有度、效果、当前状态，商店和领奖时可以卖出）；窄屏抽屉里另列升级等级 */
 function ArtifactPanel({
   keys,
   levels,
@@ -1050,7 +1085,10 @@ function ArtifactPanel({
   open,
   onClose,
   onSell,
+  itemDock,
 }: {
+  /** 道具区：关内是道具栏的挂载点（宽屏时关卡把可点的道具栏放进来），关卡之间是只读的道具列表 */
+  itemDock: ReactNode;
   keys: ArtifactKey[];
   levels: Record<UpgradeKey, number>;
   /** 关内的炸弹等级（引爆够数会临时升级）；关卡之间没有 */
@@ -1067,32 +1105,16 @@ function ArtifactPanel({
   return (
     <>
       {open && <div className="backdrop" onClick={onClose} />}
-      <aside className={`side${open ? ' open' : ''}`} aria-label="构筑">
+      <aside className={`side${open ? ' open' : ''}`} aria-label="道具与神器">
         <header>
-          <h2>构筑</h2>
           <button className="link close" onClick={onClose}>
             关闭
           </button>
         </header>
-        <h3>
-          升级<span>{heat ? '本关当前等级' : '商店里升级'}</span>
-        </h3>
-        <ul className="levels">
-          {UPGRADE_KEYS.map((k) => {
-            const lv = k !== 'block' && heat ? heat[k].level : levels[k];
-            const up = lv > levels[k];
-            return (
-              <li key={k} title={upgradeEffectText(k, levels[k], config)}>
-                <UpgradeIcon upgrade={k} size={20} />
-                <span className="what">
-                  {upgradeName(k)}
-                  <small>{levelEffect(k, lv)}</small>
-                </span>
-                <b className={up ? 'up' : ''}>Lv{lv}{up && ' ↑'}</b>
-              </li>
-            );
-          })}
-        </ul>
+        {itemDock}
+        <div className="narrow-only">
+          <Upgrades levels={levels} heat={heat} />
+        </div>
         <h3>
           神器 <span>{keys.length}/{config.artifactSlots}</span>
         </h3>

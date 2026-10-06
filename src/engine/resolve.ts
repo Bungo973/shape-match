@@ -642,7 +642,8 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
   } else {
     const { from, to } = action;
     if (!inBounds(board, from) || !inBounds(board, to)) return invalid('outOfBounds');
-    if (!isAdjacent(from, to)) return invalid('notAdjacent');
+    // 道具“手套”（free）可以换任意两格，其余交换只能换相邻两格
+    if (action.free ? from.r === to.r && from.c === to.c : !isAdjacent(from, to)) return invalid('notAdjacent');
     const a = getTile(board, from);
     const b = getTile(board, to);
     if (!a || !b) return invalid('emptyCell');
@@ -655,7 +656,11 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     setTile(res.board, from, b);
     res.events.push({ type: 'swap', from, to });
 
-    if (a.kind === 'bomb' && b.kind === 'bomb') {
+    if (action.free && (a.kind === 'bomb' || b.kind === 'bomb')) {
+      // 手套换到炸弹：炸弹只挪位置、不引爆（用户定，2026-10-06）；换过去的普通方块成线照常消除
+      const normals = [a.kind === 'normal' ? to : null, b.kind === 'normal' ? from : null].filter((p): p is Pos => p != null);
+      if (normals.length && res.matchesThenWaves('active', normals)) res.runPassive();
+    } else if (a.kind === 'bomb' && b.kind === 'bomb') {
       const first: Detonation = { id: a.id, pos: to, bomb: a.bomb };
       const second: Detonation = { id: b.id, pos: from, bomb: b.bomb };
       res.runWaves('active', comboWave(first, second, to, rows, cols, res, cloneBoard(res.board)));
