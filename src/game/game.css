@@ -55,9 +55,83 @@ button {
   gap: var(--gap);
 }
 
-.cols > main {
+.cols > main,
+.cols > .between {
   flex: 1;
   min-width: 0;
+}
+
+/* 关卡之间的左栏（本局）：只在宽屏三栏时出现 */
+.runpanel {
+  display: none;
+  flex-direction: column;
+  gap: 22px;
+  padding-top: 4px;
+}
+
+.runpanel > * + * {
+  border-top: 1px solid var(--rule);
+  padding-top: 16px;
+}
+
+.runpanel .lab {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.runpanel .route ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.runpanel .route li {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--ink);
+}
+
+.runpanel .route li.boss {
+  border-color: var(--red);
+}
+
+.runpanel .route li.done {
+  background: var(--ink);
+}
+
+.runpanel .route li.done.boss {
+  background: var(--red);
+}
+
+.runpanel .route li.next {
+  background: var(--yellow);
+}
+
+.runpanel .next {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.runpanel .next b {
+  font-size: 20px;
+}
+
+.runpanel .rule-name {
+  font-size: 13px;
+  color: var(--red);
+}
+
+.runpanel .items {
+  min-height: 0;
+}
+
+.runpanel .item {
+  cursor: default;
+  font-size: 13px;
 }
 
 .lab {
@@ -99,6 +173,7 @@ button {
 
 .level .tier {
   align-self: center;
+  white-space: nowrap;
   background: var(--ink);
   color: var(--paper);
   font-size: 12px;
@@ -110,7 +185,14 @@ button {
 .vitals {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: clamp(10px, 3vw, 16px);
+}
+
+/* 很窄的手机：生命条去掉文字标签，给金币和齿轮留位置 */
+@media (max-width: 420px) {
+  .hp .lab {
+    display: none;
+  }
 }
 
 .hp {
@@ -1002,13 +1084,15 @@ button {
 }
 
 .side h3 span {
+  margin-left: 6px;
   font-family: var(--font-num);
   font-weight: 400;
   font-size: 12px;
   color: var(--muted);
 }
 
-.side ol + h3 {
+.side ol + h3,
+.side ul + h3 {
   margin-top: 22px;
   border-top: 1px solid var(--rule);
   padding-top: 14px;
@@ -1027,17 +1111,30 @@ button {
 .levels li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.levels span {
+.levels .what {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.levels small {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .levels b {
   font-family: var(--font-num);
   font-weight: 400;
   font-size: 13px;
+  white-space: nowrap;
+}
+
+.levels b.up {
+  color: var(--red);
 }
 
 .side ol {
@@ -1155,10 +1252,15 @@ button {
     padding: 20px 24px 24px;
   }
 
-  .battle {
+  .battle,
+  .between {
     display: grid;
     grid-template-columns: var(--hud) var(--board);
     gap: var(--gap);
+  }
+
+  .runpanel {
+    display: flex;
   }
 
   .hud {
@@ -1234,7 +1336,8 @@ button {
   }
 
   .panel {
-    padding-top: 5vh;
+    max-width: none;
+    padding-top: 4px;
   }
 
   .side {
@@ -1484,7 +1587,7 @@ button {
 
 /* ---------- 商店：分组与底部常驻栏 ---------- */
 
-.group {
+.shop-group {
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -1493,7 +1596,7 @@ button {
   padding-top: 16px;
 }
 
-.group .sub {
+.shop-group .sub {
   margin: 0;
 }
 

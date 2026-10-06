@@ -13,6 +13,7 @@ import {
   turnAp,
   BOMB_NAME,
   BOMB_UPGRADES,
+  bombBlockBonus,
   buyHeal,
   ITEMS,
   ITEM_PARAMS,
@@ -166,11 +167,15 @@ export function Game() {
         {showBattle ? (
           <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} ping={ping} />
         ) : (
-          <Between run={run} apply={apply} restart={restart} />
+          <div className="between">
+            <RunPanel run={run} />
+            <Between run={run} apply={apply} restart={restart} />
+          </div>
         )}
         <ArtifactPanel
           keys={run.artifacts}
           levels={run.levels}
+          heat={run.phase === 'battle' ? run.battle?.bombHeat : undefined}
           counters={counters}
           gold={run.battle?.gold ?? run.gold}
           ap={run.phase === 'battle' ? (run.battle?.ap ?? null) : null}
@@ -591,6 +596,59 @@ function EndingCard({ ending, onNext }: { ending: Ending; onNext: () => void }) 
 
 // ---------- 关卡之间 ----------
 
+/** 关卡之间的左栏：本局总分、九关路线（已过、下一关、首领）、下一关预告和道具背包。宽屏才显示，保持三栏不变 */
+function RunPanel({ run }: { run: RunState }) {
+  const done = run.phase === 'over' && run.outcome !== 'won' ? run.battleIndex - 1 : run.battleIndex;
+  const nextLevel = run.battleIndex + 1;
+  const next = levelInfo(run, nextLevel, config);
+  const showNext = run.phase === 'shop' || run.phase === 'artifact';
+  return (
+    <aside className="runpanel" aria-label="本局">
+      <div className="score">
+        <span className="lab">本局总分</span>
+        <b>{fmt(run.totalScore)}</b>
+      </div>
+      <div className="route">
+        <span className="lab">{run.endless ? `无尽 · 已过 ${done} 关` : `路线 · 已过 ${done}/${run.route.length} 关`}</span>
+        {!run.endless && (
+          <ol>
+            {run.route.map((_, i) => {
+              const lv = i + 1;
+              const cls = [lv <= done ? 'done' : '', lv === nextLevel && run.phase !== 'over' ? 'next' : '', levelInfo(run, lv, config).boss ? 'boss' : ''].join(' ');
+              return <li key={i} className={cls} title={`第 ${lv} 关${levelInfo(run, lv, config).boss ? ' · 首领' : ''}`} />;
+            })}
+          </ol>
+        )}
+      </div>
+      {showNext && (!run.endless ? nextLevel <= run.route.length : true) && (
+        <div className="next">
+          <span className="lab">下一关 · 第 {nextLevel} 关{next.boss ? ' · 首领' : ''}</span>
+          <b>目标 {fmt(next.target)}</b>
+          {next.rule && <span className="rule-name">首领规则：{BOSS_RULES[next.rule].name}</span>}
+        </div>
+      )}
+      <div className="bag">
+        <span className="lab">
+          道具 {run.items.length}/{config.itemSlots}
+        </span>
+        <div className="items">
+          {Array.from({ length: config.itemSlots }, (_, i) => {
+            const k = run.items[i];
+            return k ? (
+              <span key={i} className="item" title={ITEMS[k].text}>
+                <ItemIcon item={k} size={18} />
+                {ITEMS[k].name}
+              </span>
+            ) : (
+              <span key={i} className="item empty" aria-hidden="true" />
+            );
+          })}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult) => void; restart: () => void }) {
   switch (run.phase) {
     case 'starter':
@@ -781,7 +839,7 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
   const full = run.artifacts.length >= config.artifactSlots;
   return (
     <Panel eyebrow={`第 ${run.battleIndex} 关之后`} title="商店">
-      <section className="group">
+      <section className="shop-group">
         <h2 className="sub">
           升级<span>可以买多次；同一项每升一级涨价 {config.upgradePriceStep}</span>
         </h2>
@@ -794,7 +852,7 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
           })}
         </div>
       </section>
-      <section className="group">
+      <section className="shop-group">
         <h2 className="sub">
           神器
           <span>
@@ -826,7 +884,7 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
           <p className="hint">神器已经买空了。</p>
         )}
       </section>
-      <section className="group">
+      <section className="shop-group">
         <h2 className="sub">补给</h2>
         <div className="supply">
           <button className="rest" disabled={!hurt || run.gold < config.healPrice} onClick={() => apply(buyHeal(run, config))}>
@@ -942,6 +1000,12 @@ function Artifacts({
   );
 }
 
+/** 升级等级换算成的实际数值：方块基数是每块的基数；炸弹 n 级时炸掉的每块多计 n−1 基数，这一步引爆过该类炸弹时倍率再加 0.1×(n−1) */
+function levelEffect(k: UpgradeKey, lv: number): string {
+  if (k === 'block') return `每块 ${lv} 基数`;
+  return `每块 +${bombBlockBonus(lv)} 基数 · 引爆时倍率 +${(((lv - 1) * config.bombLevelMultTenths) / 10).toFixed(1)}`;
+}
+
 /** 神器在侧边栏里的当前状态：进度、已累计的加成、下一步是否生效 */
 function artifactStatus(k: ArtifactKey, n: number, gold: number, count: number, ap: number | null): string | null {
   const P = ARTIFACT_PARAMS;
@@ -978,6 +1042,7 @@ function artifactStatus(k: ArtifactKey, n: number, gold: number, count: number, 
 function ArtifactPanel({
   keys,
   levels,
+  heat,
   counters,
   gold,
   ap,
@@ -988,6 +1053,8 @@ function ArtifactPanel({
 }: {
   keys: ArtifactKey[];
   levels: Record<UpgradeKey, number>;
+  /** 关内的炸弹等级（引爆够数会临时升级）；关卡之间没有 */
+  heat: BattleState['bombHeat'] | undefined;
   counters: Partial<Record<ArtifactKey, number>> | undefined;
   gold: number;
   ap: number | null;
@@ -1007,6 +1074,25 @@ function ArtifactPanel({
             关闭
           </button>
         </header>
+        <h3>
+          升级<span>{heat ? '本关当前等级' : '商店里升级'}</span>
+        </h3>
+        <ul className="levels">
+          {UPGRADE_KEYS.map((k) => {
+            const lv = k !== 'block' && heat ? heat[k].level : levels[k];
+            const up = lv > levels[k];
+            return (
+              <li key={k} title={upgradeEffectText(k, levels[k], config)}>
+                <UpgradeIcon upgrade={k} size={20} />
+                <span className="what">
+                  {upgradeName(k)}
+                  <small>{levelEffect(k, lv)}</small>
+                </span>
+                <b className={up ? 'up' : ''}>Lv{lv}{up && ' ↑'}</b>
+              </li>
+            );
+          })}
+        </ul>
         <h3>
           神器 <span>{keys.length}/{config.artifactSlots}</span>
         </h3>
@@ -1046,16 +1132,7 @@ function ArtifactPanel({
             <li className="card empty">{keys.length ? `还能装 ${config.artifactSlots - keys.length} 件` : '还没有神器：商店、首领奖励和困难任务都能拿到'}</li>
           )}
         </ol>
-        <h3>升级</h3>
-        <ul className="levels">
-          {UPGRADE_KEYS.map((k) => (
-            <li key={k} title={upgradeEffectText(k, levels[k], config)}>
-              <UpgradeIcon upgrade={k} size={18} />
-              <span>{upgradeName(k)}</span>
-              <b>Lv{levels[k]}</b>
-            </li>
-          ))}
-        </ul>
+
       </aside>
     </>
   );
