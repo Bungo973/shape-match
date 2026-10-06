@@ -5,6 +5,8 @@ import { posKey, samePos, type Board, type Explosion, type Pos, type ResolutionE
 import { sfx } from '../audio';
 import { COLOR_HEX, drawBomb, drawNormal, drawStone, drawTri, GRID_LINE, INK, PAPER } from './paint';
 
+/** 拖过这么多格就算交换（拖动跟手在此之前） */
+const DRAG_SWAP = 0.35;
 const REDUCED = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 // 减少动态效果：所有时长乘 0.35
 if (REDUCED) gsap.globalTimeline.timeScale(1 / 0.35);
@@ -99,7 +101,13 @@ export class BoardView {
   private raf = 0;
   private last = 0;
   private sel: Pos | null = null;
+  /** 选中后经过的毫秒：选中的方块回弹放大，然后轻轻上下浮动 */
+  private selT = 0;
+  /** 电脑上鼠标悬停的格（触屏不记） */
+  private hover: Pos | null = null;
   private drag: { p: Pos; x: number; y: number } | null = null;
+  /** 拖动中跟着手指挪开的那块方块，松手没交换时弹回原位 */
+  private dragged: Sprite | null = null;
   private cursor: Pos = { r: 0, c: 0 };
   private showCursor = false;
   private readonly ro: ResizeObserver;
@@ -529,26 +537,44 @@ export class BoardView {
       }
     });
     cv.addEventListener('pointermove', (e) => {
-      if (!this.drag || this.busy) return;
+      if (!this.drag) {
+        if (e.pointerType === 'mouse') this.hover = this.cellAt(e);
+        return;
+      }
+      if (this.busy) return;
       const rect = cv.getBoundingClientRect();
       const s = rect.width / this.cols;
       const dx = e.clientX - this.drag.x;
       const dy = e.clientY - this.drag.y;
-      if (Math.hypot(dx, dy) < s * 0.35) return;
       const { r, c } = this.drag.p;
-      const to = Math.abs(dx) > Math.abs(dy) ? { r, c: c + Math.sign(dx) } : { r: r + Math.sign(dy), c };
+      const horiz = Math.abs(dx) > Math.abs(dy);
+      const to = horiz ? { r, c: c + Math.sign(dx) } : { r: r + Math.sign(dy), c };
+      const inside = to.r >= 0 && to.r < this.rows && to.c >= 0 && to.c < this.cols;
+      const dist = Math.hypot(dx, dy) / s;
+      if (dist < DRAG_SWAP) {
+        // 拖动跟手：方块沿主方向跟着手指挪开（打个折，有阻尼感）；朝棋盘外拖只挪一点点
+        if (!this.pick) this.follow(this.drag.p, horiz ? Math.sign(dx) : 0, horiz ? 0 : Math.sign(dy), dist * (inside ? 0.8 : 0.3));
+        return;
+      }
       this.drag = null;
-      if (to.r >= 0 && to.r < this.rows && to.c >= 0 && to.c < this.cols) {
+      if (inside) {
         this.sel = null;
+        // 交换动画从手指拖到的位置接着走，不跳回原位
+        this.dragged = null;
         if (this.pick === 'pair' || this.pick === 'any') this.handlers.onPickPair?.({ r, c }, to);
         else if (!this.pick) this.handlers.onSwap({ r, c }, to);
-      }
+      } else this.release();
     });
     cv.addEventListener('pointerup', () => {
       if (this.drag) this.click(this.drag.p);
       this.drag = null;
+      this.release();
     });
-    cv.addEventListener('pointercancel', () => (this.drag = null));
+    cv.addEventListener('pointercancel', () => {
+      this.drag = null;
+      this.release();
+    });
+    cv.addEventListener('pointerleave', () => (this.hover = null));
     // 键盘：方向键移动光标，回车或空格等同点击
     cv.addEventListener('keydown', (e) => {
       this.hint = null;
@@ -567,6 +593,31 @@ export class BoardView {
       if (e.key === 'Escape') this.sel = null;
     });
     cv.addEventListener('blur', () => (this.showCursor = false));
+  }
+
+  /** 拖动中把那块方块挪到 (原位 + 方向 × 距离) */
+  private follow(p: Pos, dc: number, dr: number, d: number): void {
+    const sp = this.spriteAt(p);
+    if (!sp) return;
+    if (this.dragged && this.dragged !== sp) this.release();
+    this.dragged = sp;
+    gsap.killTweensOf(sp, 'x,y');
+    sp.x = p.c + dc * d;
+    sp.y = p.r + dr * d;
+  }
+
+  /** 松手没换成：挪开的方块回弹到原位 */
+  private release(): void {
+    const sp = this.dragged;
+    this.dragged = null;
+    if (!sp) return;
+    const home = this.posOf(sp.id);
+    if (home) gsap.to(sp, { x: home.c, y: home.r, duration: REDUCED ? 0.06 : 0.22, ease: 'back.out(2.2)' });
+  }
+
+  private posOf(id: number): Pos | null {
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.grid[r]?.[c] === id) return { r, c };
+    return null;
   }
 
   private click(p: Pos): void {
@@ -597,6 +648,7 @@ export class BoardView {
       return;
     }
     this.sel = p;
+    this.selT = 0;
     sfx.select();
   }
 
@@ -627,9 +679,21 @@ export class BoardView {
       ctx.translate((Math.random() - 0.5) * 7 * this.shake, (Math.random() - 0.5) * 7 * this.shake);
       this.shake *= Math.pow(0.02, dt / 1000);
     }
+    if (this.hover && !this.busy && !this.drag && !(this.sel && samePos(this.sel, this.hover))) {
+      ctx.fillStyle = 'rgba(22,22,22,0.04)';
+      ctx.fillRect(this.hover.c * S, this.hover.r * S, S, S);
+    }
+    // 选中：格子铺一层浅灰，方块回弹放大后轻轻上下浮动（减少动态效果时只放大）
+    let selId: number | null = null;
+    let selScale = 1;
+    let selLift = 0;
     if (this.sel) {
       ctx.fillStyle = 'rgba(22,22,22,0.08)';
       ctx.fillRect(this.sel.c * S, this.sel.r * S, S, S);
+      this.selT += dt;
+      selId = this.grid[this.sel.r]?.[this.sel.c] ?? null;
+      selScale = REDUCED ? 1.1 : 1 + 0.12 * backOut(Math.min(1, this.selT / 200));
+      selLift = REDUCED ? 0 : -0.05 * (0.5 - 0.5 * Math.cos((this.selT / 900) * Math.PI * 2));
     }
     for (const b of this.blasts) {
       b.life += dt;
@@ -641,10 +705,11 @@ export class BoardView {
     for (const s of this.sprites.values()) {
       if (s.y < -1 || s.y > this.rows || s.s <= 0.001) continue;
       const off = this.hint ? this.hintOffset({ r: Math.round(s.y), c: Math.round(s.x) }) : { x: 0, y: 0 };
+      const k = s.id === selId ? selScale : s === this.dragged ? 1.08 : 1;
       ctx.save();
-      ctx.translate((s.x + off.x + 0.5) * S, (s.y + off.y + 0.5) * S);
+      ctx.translate((s.x + off.x + 0.5) * S, (s.y + off.y + (s.id === selId ? selLift : 0) + 0.5) * S);
       ctx.rotate(s.rot);
-      ctx.scale(s.s * (1 + 0.04 * s.sq), s.s * (1 - 0.08 * s.sq));
+      ctx.scale(k * s.s * (1 + 0.04 * s.sq), k * s.s * (1 - 0.08 * s.sq));
       ctx.globalAlpha = clamp(s.a, 0, 1);
       if (s.tile.kind === 'normal') drawNormal(ctx, s.tile.color, S);
       else if (s.tile.kind === 'bomb') drawBomb(ctx, s.tile.bomb, S, REDUCED ? 0 : performance.now(), (s.id * 1.7) % 6.28);
@@ -813,4 +878,6 @@ function drawBlast(ctx: CanvasRenderingContext2D, e: Explosion, S: number, W: nu
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+/** 回弹缓动：冲过头一点再落回 1 */
+const backOut = (t: number) => 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2);
 
