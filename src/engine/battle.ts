@@ -13,6 +13,7 @@ import type { BossRule } from './levels';
 import { createRng } from './rng';
 import { multiplierFor, settle, type Settlement } from './score';
 import { newTaskState, updateTask, type TaskDef, type TaskState } from './tasks';
+import { ITEM_PARAMS, type ItemKey } from './items';
 import { COLORS, emptyClears, type Action, type BombKind, type Board, type ClearsByType, type Color, type Gravity, type Pos } from './types';
 
 export const RULES_VERSION = 4;
@@ -122,6 +123,12 @@ export interface BattleState {
   spentArtifacts?: ArtifactKey[];
   /** 本关选的可选任务与进度 */
   task?: TaskState;
+  /** 道具“放大镜”已挂上：下一次结算倍率翻倍 */
+  magnify?: boolean;
+  /** 上一次结算的得分（道具“回声”用） */
+  lastScore?: number;
+  /** 本关已掉落的道具件数 */
+  itemDrops?: number;
   /** 嵌片卡模式：抽牌堆、手牌、弃牌堆；交换模式下不存在 */
   cards?: CardPiles;
   /** 冲分模式：在 turns 个回合内让 totalScore 达到 target；敌人不行动 */
@@ -171,7 +178,8 @@ export interface ActionLog {
 }
 
 export interface TallyStep {
-  key: ArtifactKey;
+  /** 生效的神器；放大镜为道具 */
+  key: ArtifactKey | ItemKey;
   /** 卡面弹字，如 “+0.5”“×3”“基数 ×2” */
   label: string;
   /** 这件生效后的倍率 */
@@ -384,7 +392,13 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
       tally.steps.push({ key: part.key, label, value: multiplierFor(P, config, 0, erodeSteps, tenths, factor) });
     }
     log.scoringArtifacts.push(...parts.map((p) => p.key));
-    if (parts.length) log.tally = tally;
+    // 道具“放大镜”：在所有神器之后再乘一次
+    if (state.magnify) {
+      factor *= ITEM_PARAMS.magnifierFactor;
+      state.magnify = false;
+      tally.steps.push({ key: 'magnifier', label: `×${ITEM_PARAMS.magnifierFactor}`, value: multiplierFor(P, config, 0, erodeSteps, tenths, factor) });
+    }
+    if (tally.steps.length) log.tally = tally;
     const s = settle(
       {
         activeClearsByType: result.activeClearsByType,
@@ -406,6 +420,7 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     log.erosionConsumed = erode;
     if (!state.goal) state.player.catalystCharges = s.chargesAfter;
     state.totalScore += s.settlementScore;
+    if (s.settlementScore > 0) state.lastScore = s.settlementScore;
     // 冲分模式只累计结算分，达到目标立即过关；攻击、护盾、毒气不生效
     if (state.goal) {
       if (state.totalScore >= state.goal.target) state.outcome = 'won';
@@ -418,42 +433,43 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
   return { ok: true, state, log };
 }
 
-/** 一次道具使用：锤子与炸药包选一格，手套选相邻两格，洗牌不用选 */
-export type ItemUse = { key: 'hammer' | 'charge'; at: Pos } | { key: 'glove'; from: Pos; to: Pos } | { key: 'detonator' | 'shuffle' };
+/** 一次道具使用：手套、吸管选相邻两格（吸管从 from 取色染 to），其余不用选 */
+export type ItemUse = { key: 'glove' | 'dropper'; from: Pos; to: Pos } | { key: 'shuffle' | 'magnifier' | 'echo' };
 
 export type ItemOutcome =
-  | { ok: true; state: BattleState; log: ActionLog | null; events: ResolutionEvent[] }
+  | { ok: true; state: BattleState; log: ActionLog | null; events: ResolutionEvent[]; gained?: number }
   | { ok: false; state: BattleState; reason: string };
 
 /**
- * 在关内使用道具。锤子、手套走与交换相同的结算（会计分、可能直接达标）；炸药包与洗牌只改棋盘，不结算。
- * 不耗步时仍要求本回合还有步可走，避免在回合交接时插入。
+ * 在关内使用道具（2026-10-06 重做）。手套、吸管走与交换相同的结算（会计分、可能直接达标）；
+ * 洗牌只改棋盘；放大镜挂到下一次结算；回声直接加上一步的分数。都要求本回合还有步可走，避免在回合交接时插入。
  */
 export function useItem(prev: BattleState, use: ItemUse, config: EngineConfig = DEFAULT_CONFIG): ItemOutcome {
   if (prev.outcome !== 'ongoing') return { ok: false, state: prev, reason: 'battleOver' };
   const cost = config.itemCostsStep ? 1 : 0;
   if (prev.ap < 1) return { ok: false, state: prev, reason: 'noAp' };
-  if (use.key === 'hammer' || use.key === 'glove' || use.key === 'detonator') {
-    // 锤子：对一格的一次主动爆炸（与嵌片卡同一入口）；雷管：对所有炸弹格的一次爆炸，炸弹随之接力；手套：不要求能消除的交换
-    const bombs: Pos[] = [];
-    prev.board.forEach((row, r) => row.forEach((t, c) => t?.kind === 'bomb' && bombs.push({ r, c })));
-    if (use.key === 'detonator' && bombs.length === 0) return { ok: false, state: prev, reason: 'noBomb' };
-    const action: Action =
-      use.key === 'glove' ? { type: 'swap', from: use.from, to: use.to, free: true } : { type: 'play', cells: use.key === 'hammer' ? [use.at] : bombs };
+  if (use.key === 'glove' || use.key === 'dropper') {
+    const action: Action = use.key === 'glove' ? { type: 'swap', from: use.from, to: use.to, free: true } : { type: 'paint', from: use.from, to: use.to };
     const out = playerAction(prev, action, config, { item: true });
     if (!out.ok) return { ok: false, state: prev, reason: out.reason };
     // playerAction 按一步扣了行动力；道具不耗步时退回
     if (!cost) out.state.ap = prev.ap;
     return { ok: true, state: out.state, log: out.log, events: out.log.result.events };
   }
+  if (use.key === 'magnifier' && prev.magnify) return { ok: false, state: prev, reason: 'magnifyArmed' };
+  if (use.key === 'echo' && !prev.lastScore) return { ok: false, state: prev, reason: 'noLastScore' };
   const state = clone(prev);
   state.ap -= cost;
   if (state.task) updateTask(state.task, null, true);
-  if (use.key === 'charge') {
-    const t = state.board[use.at.r]?.[use.at.c];
-    if (!t || t.kind !== 'normal') return { ok: false, state: prev, reason: 'notNormal' };
-    state.board[use.at.r]![use.at.c] = { id: state.nextId++, kind: 'bomb', bomb: 'CB' };
+  if (use.key === 'magnifier') {
+    state.magnify = true;
     return { ok: true, state, log: null, events: [] };
+  }
+  if (use.key === 'echo') {
+    const gained = state.lastScore!;
+    state.totalScore += gained;
+    if (state.goal && state.totalScore >= state.goal.target) state.outcome = 'won';
+    return { ok: true, state, log: null, events: [], gained };
   }
   const rng = createRng(state.rngState);
   const shuffled = reshuffle(state.board, rng, ruleConfig(state, config));

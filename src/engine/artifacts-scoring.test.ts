@@ -84,10 +84,10 @@ describe('倍率乘成', () => {
     expect(last.withIt.settlement!.multiplier).toBeCloseTo(Math.round(last.plain.settlement!.multiplier * ARTIFACT_PARAMS.lastCallFactor * 10) / 10);
   });
 
-  it('末班车：道具不算一步，最后一步用锤子不触发', () => {
-    const s = battle(['lastCall'], bomb);
+  it('末班车：道具不算一步，最后一步用吸管不触发', () => {
+    const s = battle(['lastCall'], three);
     s.ap = 1;
-    const out = useItem(s, { key: 'hammer', at: { r: 4, c: 0 } }, config);
+    const out = useItem(s, { key: 'dropper', from: { r: 0, c: 1 }, to: { r: 0, c: 2 } }, config);
     if (!out.ok) throw new Error(out.reason);
     expect(out.log!.scoringArtifacts).toEqual([]);
     expect(out.state.ap).toBe(1);

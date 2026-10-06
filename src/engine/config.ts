@@ -79,7 +79,7 @@ export interface EngineConfig {
   upgradePriceStep: number;
   healPrice: number;
   healAmount: number;
-  /** 道具：背包格数、每次商店随机上架的种数、使用时是否消耗 1 步（2026-10-06 定为不耗步，保留参数供模拟对比） */
+  /** 道具：背包格数、每次商店随机上架的种数（2026-10-06 起道具改为关内掉落，商店不卖，为 0）、使用时是否消耗 1 步（定为不耗步，保留参数供模拟对比） */
   itemSlots: number;
   itemsPerShop: number;
   itemCostsStep: boolean;
@@ -138,7 +138,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   healPrice: 6,
   healAmount: 10,
   itemSlots: 3,
-  itemsPerShop: 3,
+  itemsPerShop: 0,
   itemCostsStep: false,
   artifactSlots: 6,
   artifactsPerShop: 2,

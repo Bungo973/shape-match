@@ -46,7 +46,9 @@ export type Action =
    * 嵌片卡模式：以卡片形状作为一次主动爆炸清除 cells。
    * bonus 为属性卡的颜色词条：覆盖该颜色的普通方块时额外加基数（催化剂为额外计数）。
    */
-  | { type: 'play'; cells: Pos[]; bonus?: { color: Color; perTile: number } };
+  | { type: 'play'; cells: Pos[]; bonus?: { color: Color; perTile: number } }
+  /** 道具“吸管”：把 to 染成 from 的颜色（相邻两格、都是普通方块）；染完成线就照常结算，不成线就到此为止 */
+  | { type: 'paint'; from: Pos; to: Pos };
 
 export type ClearsByType = Record<Color, number>;
 

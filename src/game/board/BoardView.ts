@@ -103,6 +103,7 @@ export class BoardView {
   private cursor: Pos = { r: 0, c: 0 };
   private showCursor = false;
   private readonly ro: ResizeObserver;
+  private readonly listeners = new AbortController();
   /** 播放或等待引擎时为 true，期间不接受输入 */
   busy = false;
   /** 道具选格模式；null 为普通的交换与点燃 */
@@ -156,6 +157,8 @@ export class BoardView {
   }
 
   destroy(): void {
+    // 解绑画布上的输入：开发模式下 React 会把棋盘挂载两次，旧视图不解绑就会继续收点击，和新视图抢着处理
+    this.listeners.abort();
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
     for (const s of this.sprites.values()) gsap.killTweensOf(s);
@@ -243,6 +246,17 @@ export class BoardView {
           master.call(() => sfx.swap(), [], cursor);
           master.add(this.swapTl(ev.from, ev.to), cursor);
           cursor += SWAP;
+          settled.fill(cursor);
+          clearEnd.fill(cursor);
+          break;
+        }
+        case 'paint': {
+          // 吸管：那一格就地换成新颜色并脉冲一下
+          master.call(() => sfx.select(), [], cursor);
+          this.morph(master, ev.at, ev.id, ev.tile, cursor);
+          const sp = this.sprites.get(ev.id);
+          if (sp) master.fromTo(sp, { s: 0.6 }, { s: 1, duration: 0.24, ease: 'back.out(3)' }, cursor);
+          cursor += 0.22;
           settled.fill(cursor);
           clearEnd.fill(cursor);
           break;
@@ -492,7 +506,14 @@ export class BoardView {
   }
 
   private bind(): void {
-    const cv = this.canvas;
+    const canvas = this.canvas;
+    const signal = this.listeners.signal;
+    // 所有监听都挂在同一个 AbortController 上，destroy 时一并解绑
+    const cv = {
+      addEventListener: <K extends keyof HTMLElementEventMap>(type: K, fn: (e: HTMLElementEventMap[K]) => void) => canvas.addEventListener(type, fn, { signal }),
+      setPointerCapture: (id: number) => canvas.setPointerCapture(id),
+      getBoundingClientRect: () => canvas.getBoundingClientRect(),
+    };
     cv.addEventListener('pointerdown', (e) => {
       this.hint = null;
       this.handlers.onActivity?.();

@@ -119,13 +119,15 @@ export type ResolutionEvent =
       insertTriggers: InsertTrigger[];
     }
   | { type: 'gravity'; gravity: Gravity; moves: TileMove[]; spawns: TileSpawn[] }
+  /** 道具“吸管”把一格染色：该格换成新的方块（新 ID） */
+  | { type: 'paint'; at: Pos; id: number; tile: Tile }
   /** 死局自动重排；moves 为空表示重新上色，界面直接同步棋盘 */
   | { type: 'shuffle'; moves: TileMove[] };
 
 export interface ActionResult {
   valid: boolean;
   /** 无效时的原因，供界面提示 */
-  reason?: 'outOfBounds' | 'notAdjacent' | 'sameColor' | 'notBomb' | 'emptyCell' | 'stone' | 'noMatch';
+  reason?: 'outOfBounds' | 'notAdjacent' | 'sameColor' | 'notBomb' | 'emptyCell' | 'stone' | 'noMatch' | 'notNormal';
   apSpent: 0 | 1;
   board: Board;
   events: ResolutionEvent[];
@@ -624,6 +626,19 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     res.events.push({ type: 'ignite', at: action.at, bomb: t.bomb });
     res.runWaves('active', waveOf([{ id: t.id, pos: action.at, bomb: t.bomb }]));
     res.runPassive();
+  } else if (action.type === 'paint') {
+    // 吸管：与交换同一主动阶段入口；染出的格若成线就照常消除、连锁，否则棋盘仍稳定（这一格不成线，别处不变）
+    const { from, to } = action;
+    if (!inBounds(board, from) || !inBounds(board, to)) return invalid('outOfBounds');
+    if (!isAdjacent(from, to)) return invalid('notAdjacent');
+    const src = getTile(board, from);
+    const dst = getTile(board, to);
+    if (src?.kind !== 'normal' || dst?.kind !== 'normal') return invalid('notNormal');
+    if (src.color === dst.color) return invalid('sameColor');
+    const tile: Tile = { id: ctx.ids.next(), kind: 'normal', color: src.color };
+    setTile(res.board, to, tile);
+    res.events.push({ type: 'paint', at: to, id: tile.id, tile });
+    if (res.matchesThenWaves('active', [to])) res.runPassive();
   } else {
     const { from, to } = action;
     if (!inBounds(board, from) || !inBounds(board, to)) return invalid('outOfBounds');

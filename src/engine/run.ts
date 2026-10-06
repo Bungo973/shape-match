@@ -3,7 +3,7 @@
 import { ARTIFACT_PARAMS, ARTIFACTS, artifactPrice, artifactSellPrice, offeredArtifacts, type ArtifactKey, type ArtifactRarity } from './artifacts';
 import { defaultLevels, UPGRADE_KEYS, type UpgradeKey, type UpgradeLevels } from './upgrades';
 import { endTurn, playerAction, startBattle, stepsLeft, useItem, type ActionLog, type BattleState, type EnemyTurnLog, type ItemUse, type PlayerState } from './battle';
-import { ITEM_KEYS, ITEMS, type ItemKey } from './items';
+import { ITEM_KEYS, ITEM_PARAMS, type ItemKey } from './items';
 import type { ResolutionEvent } from './resolve';
 import { DEFAULT_CONFIG, type EngineConfig } from './config';
 import { FULL_ROUTE, type RouteNode } from './content/enemies';
@@ -206,14 +206,32 @@ export function startNextBattle(prev: RunState, config: EngineConfig = DEFAULT_C
   return { ok: true, run };
 }
 
-export function runAction(prev: RunState, action: Action, config: EngineConfig = DEFAULT_CONFIG): RunResult & { log?: ActionLog } {
+export function runAction(prev: RunState, action: Action, config: EngineConfig = DEFAULT_CONFIG): RunResult & { log?: ActionLog; drop?: ItemKey } {
   if (prev.phase !== 'battle' || !prev.battle) return fail(prev, '当前不在战斗中');
   const out = playerAction(prev.battle, action, config);
   if (!out.ok) return fail(prev, out.reason);
   const run = clone(prev);
   run.battle = out.state;
+  const drop = dropItem(run, out.log, config);
   settleBattle(run, config);
-  return { ok: true, run, log: out.log };
+  return { ok: true, run, log: out.log, ...(drop ? { drop } : {}) };
+}
+
+/**
+ * 道具掉落（2026-10-06）：这一步做出了五连炸弹，或连锁达到 8 层以上，步末往背包放一件随机道具。
+ * 每步最多一件、每关最多 ITEM_PARAMS.dropsPerLevel 件，背包满了不掉；在结算之外发生，不影响本步得分。
+ */
+function dropItem(run: RunState, log: ActionLog, config: EngineConfig): ItemKey | null {
+  const b = run.battle!;
+  if (!config.scoreMode || (b.itemDrops ?? 0) >= ITEM_PARAMS.dropsPerLevel || run.items.length >= config.itemSlots) return null;
+  const ev = log.result.events;
+  const madeColor = ev.some((e) => e.type === 'matches' && e.created.some((c) => c.bomb === 'CB'));
+  const chain = ev.filter((e) => e.type === 'matches' && e.phase === 'passive').length;
+  if (!madeColor && chain < ITEM_PARAMS.dropChain) return null;
+  b.itemDrops = (b.itemDrops ?? 0) + 1;
+  const key = sample(ITEM_KEYS, 1, mixSeed(run.seed, 0xd7, run.battleIndex, b.itemDrops, b.stepsTaken ?? 0))[0]!;
+  run.items.push(key);
+  return key;
 }
 
 export function runEndTurn(prev: RunState, config: EngineConfig = DEFAULT_CONFIG): RunResult & { log?: EnemyTurnLog } {
@@ -460,22 +478,13 @@ export function continueEndless(prev: RunState, config: EngineConfig = DEFAULT_C
   return { ok: true, run };
 }
 
-/** 买下商店里第 index 件上架的道具：放进背包，从货架上拿走 */
-export function buyItem(prev: RunState, index: number, config: EngineConfig = DEFAULT_CONFIG): RunResult {
-  if (prev.phase !== 'shop') return fail(prev, '不在商店');
-  const key = prev.shopItems[index];
-  if (!key) return fail(prev, '没有这件道具');
-  if (prev.items.length >= config.itemSlots) return fail(prev, '背包已满');
-  if (prev.gold < ITEMS[key].price) return fail(prev, '金币不足');
-  const run = clone(prev);
-  run.gold -= ITEMS[key].price;
-  run.items.push(key);
-  run.shopItems.splice(index, 1);
-  return { ok: true, run };
-}
-
-/** 关内使用背包第 slot 件道具；用锤子、手套直接达标时和普通一步一样结算本关 */
-export function runUseItem(prev: RunState, slot: number, use: ItemUse, config: EngineConfig = DEFAULT_CONFIG): RunResult & { log?: ActionLog | null; events?: ResolutionEvent[] } {
+/** 关内使用背包第 slot 件道具；用手套、吸管、回声直接达标时和普通一步一样结算本关 */
+export function runUseItem(
+  prev: RunState,
+  slot: number,
+  use: ItemUse,
+  config: EngineConfig = DEFAULT_CONFIG,
+): RunResult & { log?: ActionLog | null; events?: ResolutionEvent[]; gained?: number; drop?: ItemKey } {
   if (prev.phase !== 'battle' || !prev.battle) return fail(prev, '当前不在关卡中');
   if (prev.items[slot] !== use.key) return fail(prev, '背包里没有这件道具');
   const out = useItem(prev.battle, use, config);
@@ -483,8 +492,9 @@ export function runUseItem(prev: RunState, slot: number, use: ItemUse, config: E
   const run = clone(prev);
   run.items.splice(slot, 1);
   run.battle = out.state;
+  const drop = out.log ? dropItem(run, out.log, config) : null;
   settleBattle(run, config);
-  return { ok: true, run, log: out.log, events: out.events };
+  return { ok: true, run, log: out.log, events: out.events, ...(out.gained ? { gained: out.gained } : {}), ...(drop ? { drop } : {}) };
 }
 
 export function leaveShop(prev: RunState): RunResult {

@@ -43,15 +43,8 @@ export function UpgradeIcon({ upgrade, size = 22 }: { upgrade: UpgradeKey; size?
 
 /** 道具图标：同一套平涂几何语言 */
 export function ItemIcon({ item, size = 22 }: { item: ItemKey; size?: number }) {
-  if (item === 'charge') return <BombIcon bomb="CB" size={size} />;
   return (
     <svg width={size} height={size} viewBox="-1 -1 2 2" aria-hidden="true">
-      {item === 'hammer' && (
-        <g>
-          <rect x="-0.75" y="-0.8" width="1.5" height="0.62" rx="0.08" fill={INK} />
-          <rect x="-0.13" y="-0.2" width="0.26" height="1.05" fill={COLOR_HEX.poison} />
-        </g>
-      )}
       {item === 'glove' && (
         <g>
           <rect x="-0.86" y="-0.3" width="0.6" height="0.6" rx="0.06" fill={COLOR_HEX.attack} />
@@ -60,12 +53,14 @@ export function ItemIcon({ item, size = 22 }: { item: ItemKey; size?: number }) 
           <path d="M0.36 -0.62 L0.58 -0.46 L0.62 -0.74 M-0.36 0.62 L-0.58 0.46 L-0.62 0.74" fill="none" stroke={INK} strokeWidth="0.13" strokeLinejoin="round" />
         </g>
       )}
-      {item === 'detonator' && (
+      {item === 'dropper' && (
+        // 吸管：斜放的黑管，尖端滴下一滴红
         <g>
-          <rect x="-0.72" y="-0.1" width="1.44" height="0.9" fill={INK} />
-          <rect x="-0.08" y="-0.72" width="0.16" height="0.62" fill={INK} />
-          <rect x="-0.5" y="-0.86" width="1" height="0.2" fill={COLOR_HEX.attack} />
-          <circle cx="0" cy="0.35" r="0.16" fill={COLOR_HEX.poison} />
+          <g transform="rotate(45)">
+            <rect x="-0.16" y="-0.95" width="0.32" height="0.42" rx="0.08" fill={INK} />
+            <rect x="-0.1" y="-0.55" width="0.2" height="0.95" fill={INK} />
+          </g>
+          <circle cx="-0.52" cy="0.62" r="0.24" fill={COLOR_HEX.attack} />
         </g>
       )}
       {item === 'shuffle' && (
@@ -76,7 +71,21 @@ export function ItemIcon({ item, size = 22 }: { item: ItemKey; size?: number }) 
           <rect x="0.1" y="0.1" width="0.7" height="0.7" fill={COLOR_HEX.shield} />
         </g>
       )}
+      {item === 'magnifier' && (
+        // 放大镜：黄色镜片、黑框、黑柄
+        <g>
+          <circle cx="-0.2" cy="-0.2" r="0.52" fill={COLOR_HEX.poison} stroke={INK} strokeWidth="0.16" />
+          <rect x="0.22" y="0.3" width="0.62" height="0.24" fill={INK} transform="rotate(45 0.22 0.3)" />
+        </g>
+      )}
+      {item === 'echo' && (
+        // 回声：一个实心红圆，外面两圈逐渐变细的黑弧
+        <g>
+          <circle cx="-0.45" cy="0" r="0.3" fill={COLOR_HEX.attack} />
+          <path d="M-0.05 -0.5 A0.62 0.62 0 0 1 -0.05 0.5" fill="none" stroke={INK} strokeWidth="0.16" />
+          <path d="M0.35 -0.78 A0.95 0.95 0 0 1 0.35 0.78" fill="none" stroke={INK} strokeWidth="0.1" />
+        </g>
+      )}
     </svg>
   );
 }
-

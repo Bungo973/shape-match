@@ -14,8 +14,9 @@ import {
   BOMB_NAME,
   BOMB_UPGRADES,
   buyHeal,
-  buyItem,
   ITEMS,
+  ITEM_PARAMS,
+  type ItemKey,
   runUseItem,
   buyUpgrade,
   chainMultiplier,
@@ -72,7 +73,15 @@ function initialRun(): RunState {
 }
 
 const upgradeName = (k: UpgradeKey) => (k === 'block' ? '方块基数' : BOMB_NAME[k]);
-const ITEM_FAIL: Record<string, string> = { noBomb: '棋盘上没有炸弹', notNormal: '只能放在普通方块上', stone: '石块不能交换', sameColor: '同色方块换了也一样', noAp: '这回合没有步了', notAdjacent: '要选相邻的两格' };
+const ITEM_FAIL: Record<string, string> = {
+  notNormal: '只能染普通方块',
+  stone: '石块不能交换',
+  sameColor: '同色的格子不用换',
+  noAp: '这回合没有步了',
+  notAdjacent: '要选相邻的两格',
+  magnifyArmed: '放大镜已经挂上了',
+  noLastScore: '还没有上一步的分数',
+};
 
 const COLOR_NAME: Record<Color, string> = { attack: '红圆', shield: '蓝方', poison: '黄三角', catalyst: '绿菱形' };
 const fmt = (n: number) => n.toLocaleString('zh-CN');
@@ -247,7 +256,8 @@ function Battle({
       setMult((m) => ({ ...m, value: log.tally!.start }));
       await wait(160);
       for (const [i, t] of log.tally.steps.entries()) {
-        ping(t.key, t.label);
+        // 放大镜是道具，不在神器栏里，只靠倍率数字跳动来表现
+        if (t.key in ARTIFACTS) ping(t.key as ArtifactKey, t.label);
         sfx.tally(i);
         setMult((m) => ({ ...m, value: t.value }));
         await wait(240);
@@ -319,6 +329,7 @@ function Battle({
     setBusy(true);
     const at: Pos = action.type === 'swap' ? action.to : action.type === 'ignite' ? action.at : { r: 4, c: 4 };
     await finish(out.run, out.log, out.log.result.events, at);
+    if (out.drop) showDrop(out.drop, at);
     setBusy(false);
     armHint();
   }, [finish, armHint]);
@@ -334,8 +345,8 @@ function Battle({
     setPicking(slot);
     const key = slot == null ? null : runRef.current.items[slot];
     const target = key ? ITEMS[key].target : null;
-    viewRef.current?.setPick(target === 'cell' || target === 'pair' ? target : null);
-    setHint(key ? (target === 'pair' ? `选相邻两格使用${ITEMS[key].name}` : `选一格使用${ITEMS[key].name}`) : '');
+    viewRef.current?.setPick(target === 'pair' ? 'pair' : null);
+    setHint(key === 'dropper' ? '先点取色的一格，再点相邻要染的一格' : key ? `选相邻两格使用${ITEMS[key].name}` : '');
   };
 
   const applyItem = useCallback(async (slot: number, use: ItemUse) => {
@@ -348,19 +359,32 @@ function Battle({
     }
     choose(null);
     sfx.ui();
-    if (use.key === 'charge') sfx.bombMade();
     setBusy(true);
-    const at: Pos = 'at' in use ? use.at : 'to' in use ? use.to : { r: 4, c: 4 };
-    await finish(out.run, out.log ?? null, out.events ?? [], at, use.key === 'charge' ? [use.at] : []);
+    const at: Pos = 'to' in use ? use.to : { r: 4, c: 4 };
+    // 回声直接加分：弹出得分；放大镜只是挂上，倍率旁会出现标记
+    if (out.gained) {
+      sfx.score(out.gained);
+      view.popText(`+${fmt(out.gained)}`, '回声', at, out.gained >= 200);
+    }
+    if (use.key === 'magnifier') sfx.multUp(1);
+    await finish(out.run, out.log ?? null, out.events ?? [], at);
+    if (out.drop) showDrop(out.drop, at);
     setBusy(false);
     armHint();
   }, [finish, armHint]);
+
+  /** 掉落道具：棋盘上弹字，道具栏提示 */
+  function showDrop(key: ItemKey, at: Pos) {
+    sfx.bombMade();
+    viewRef.current?.popText(`+${ITEMS[key].name}`, '获得道具', { r: Math.max(0, at.r - 1), c: at.c });
+    setHint(`获得道具：${ITEMS[key].name}`);
+  }
 
   const pickItem = (slot: number) => {
     if (busyRef.current) return;
     if (pickingRef.current === slot) return choose(null);
     const key = runRef.current.items[slot]!;
-    if (key === 'detonator' || key === 'shuffle') return void applyItem(slot, { key });
+    if (key === 'shuffle' || key === 'magnifier' || key === 'echo') return void applyItem(slot, { key });
     choose(slot);
   };
 
@@ -369,14 +393,10 @@ function Battle({
     const view = new BoardView(canvasRef.current!, {
       onSwap: (from, to) => void doAction({ type: 'swap', from, to }),
       onIgnite: (at) => void doAction({ type: 'ignite', at }),
-      onPickCell: (at) => {
-        const slot = pickingRef.current;
-        const key = slot == null ? null : runRef.current.items[slot];
-        if (slot != null && (key === 'hammer' || key === 'charge')) void applyItem(slot, { key, at });
-      },
       onPickPair: (from, to) => {
         const slot = pickingRef.current;
-        if (slot != null && runRef.current.items[slot] === 'glove') void applyItem(slot, { key: 'glove', from, to });
+        const key = slot == null ? null : runRef.current.items[slot];
+        if (slot != null && (key === 'glove' || key === 'dropper')) void applyItem(slot, { key, from, to });
       },
       onActivity: () => armHint(),
       onChain: (passive, chain) => {
@@ -408,7 +428,7 @@ function Battle({
           <b>{fmt(score)}</b>
           <span className="target">/ {fmt(target)}</span>
         </div>
-        <Multiplier {...mult} cap={ruleConfig(battle, config).multiplierSegments.length} />
+        <Multiplier {...mult} cap={ruleConfig(battle, config).multiplierSegments.length} armed={!!battle.magnify} />
       </section>
       {battle.rule && <RuleBadge rule={battle.rule.key} color={battle.rule.color} />}
       {battle.task && <TaskLine task={battle.task} />}
@@ -461,7 +481,7 @@ function useRolling(value: number): number {
   return shown;
 }
 
-function Multiplier({ value, chain, final, cap }: { value: number; chain: number; final: boolean; cap: number }) {
+function Multiplier({ value, chain, final, cap, armed }: { value: number; chain: number; final: boolean; cap: number; armed?: boolean }) {
   // 倍率槽：每段一格，段内按比例填充；首领规则“低压”时段数变少
   const filled = Math.min(cap, value - 1);
   return (
@@ -475,7 +495,7 @@ function Multiplier({ value, chain, final, cap }: { value: number; chain: number
       </div>
       <div className="val">
         <b key={value.toFixed(1)}>×{value.toFixed(1)}</b>
-        <span>{chain > 0 ? `连锁 ${chain}` : '倍率'}</span>
+        <span>{chain > 0 ? `连锁 ${chain}` : armed ? '放大镜 ×2 待用' : '倍率'}</span>
       </div>
     </div>
   );
@@ -788,33 +808,13 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
       ) : (
         <p className="hint">神器已经买空了。</p>
       )}
-      <h2 className="sub">
-        道具
-        <span>
-          背包 {run.items.length}/{config.itemSlots}
-          {run.items.length > 0 && `：${run.items.map((k) => ITEMS[k].name).join('、')}`}
-        </span>
-      </h2>
-      {run.shopItems.length > 0 ? (
-        <div className="choices grid">
-          {run.shopItems.map((k, i) => (
-            <button key={`${k}-${i}`} className="choice" disabled={run.gold < ITEMS[k].price || run.items.length >= config.itemSlots} onClick={() => apply(buyItem(run, i, config))}>
-              <ItemIcon item={k} size={34} />
-              <b>{ITEMS[k].name}</b>
-              <span className="desc">{ITEMS[k].text}</span>
-              <span className="price">
-                <i />
-                {ITEMS[k].price}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="hint">道具已经买空了。</p>
-      )}
       <button className="ghost reroll" disabled={run.gold < rerollPrice(run, config)} onClick={() => apply(rerollShop(run, config))}>
-        刷新神器和道具 · {rerollPrice(run, config)} 金币
+        刷新神器 · {rerollPrice(run, config)} 金币
       </button>
+      <p className="hint">
+        道具不在商店卖：关内做出五连炸弹或一步连锁 {ITEM_PARAMS.dropChain} 层以上时掉落（每关最多 {ITEM_PARAMS.dropsPerLevel} 件）。背包 {run.items.length}/{config.itemSlots}
+        {run.items.length > 0 && `：${run.items.map((k) => ITEMS[k].name).join('、')}`}
+      </p>
       <button className="rest" disabled={!hurt || run.gold < config.healPrice} onClick={() => apply(buyHeal(run, config))}>
         <b>回血</b>
         <span>
