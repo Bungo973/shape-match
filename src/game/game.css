@@ -1204,6 +1204,10 @@ button {
     padding-top: 4px;
   }
 
+  .hud.with-coach {
+    grid-template-areas: 'score' 'bar' 'mult' 'coach' 'steps' 'notes' 'upgrades';
+  }
+
   .hud .bar {
     margin-top: -14px;
   }
@@ -1705,3 +1709,214 @@ button {
 .side .close {
   margin-left: auto;
 }
+
+/* ---------- 新手引导：黑底白字一句话，指向要看的地方 ---------- */
+
+.hud.with-coach {
+  grid-template-areas:
+    'score mult'
+    'bar bar'
+    'coach coach'
+    'notes notes'
+    'steps steps'
+    'upgrades upgrades';
+}
+
+.coach {
+  grid-area: coach;
+  position: relative;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  transform-origin: top center;
+  animation: pop-in 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 向上的小三角，指向上方的计分块 */
+.coach::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  right: 28px;
+  border: 8px solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--ink);
+}
+
+.coach p {
+  margin: 0;
+}
+
+.coach-act {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.coach .link {
+  color: rgba(242, 241, 236, 0.7);
+  font-size: 12px;
+}
+
+.coach-ok {
+  background: var(--yellow);
+  color: var(--ink);
+  border: none;
+  padding: 3px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.coach-ok:focus-visible,
+.coach .link:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+/* 棋盘上的提示：贴在棋盘底部居中，不挡中间 */
+.coach.on-board {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  max-width: 440px;
+  margin: 0 auto;
+  z-index: 3;
+  transform-origin: bottom center;
+}
+
+.coach.on-board::before {
+  display: none;
+}
+
+/* ---------- 常驻说明：顶栏“?”打开 ---------- */
+
+.help-btn {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-family: var(--font-num);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.help-btn:hover,
+.help-btn:focus-visible {
+  color: var(--ink);
+  border-color: var(--ink);
+  outline: none;
+}
+
+.help-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  background: rgba(22, 22, 22, 0.25);
+  animation: fade 0.2s ease-out;
+}
+
+.help {
+  position: fixed;
+  z-index: 50;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  background: var(--paper);
+  border: var(--frame) solid var(--ink);
+  padding: 18px 22px 22px;
+  animation: pop-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.help header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: var(--frame) solid var(--ink);
+  padding-bottom: 10px;
+}
+
+.help h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.help section {
+  margin-top: 16px;
+}
+
+.help h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.help p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.help .help-calc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-family: var(--font-num);
+}
+
+.help-calc .cell {
+  padding: 2px 12px;
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-weight: 700;
+}
+
+.help-calc .base {
+  background: var(--blue);
+}
+
+.help-calc .rate {
+  background: var(--red);
+}
+
+.help-bombs {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.help-bombs li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.help footer {
+  margin-top: 20px;
+  border-top: 1px solid var(--rule);
+  padding-top: 14px;
+}
+
+.help .ghost.small {
+  padding: 4px 14px;
+  font-size: 13px;
+}
+

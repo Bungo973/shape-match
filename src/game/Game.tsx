@@ -59,7 +59,8 @@ import {
 } from '../engine';
 import { getKit, getShepard, KIT_NAMES, setKit, setShepard, sfx, type SoundKit } from './audio';
 import { BoardView } from './board/BoardView';
-import { GearIcon, ItemIcon, UpgradeIcon } from './icons';
+import { markTip, nextTip, resetGuide, seenTips, skipGuide, tipSeen, TIPS, type TipKey } from './guide';
+import { BombIcon, GearIcon, ItemIcon, UpgradeIcon } from './icons';
 import { clearRun, loadBest, loadRun, recordBest, saveRun } from './save';
 
 const config = DEFAULT_CONFIG;
@@ -142,6 +143,9 @@ export function Game() {
   const showBattle = (run.phase === 'battle' || ending) && run.battle;
 
   const [drawer, setDrawer] = useState(false);
+  const [help, setHelp] = useState(false);
+  // 说明页里点“重新看引导”时加一，关卡据此重新开始提示
+  const [guideEpoch, setGuideEpoch] = useState(0);
   // 宽屏时关卡里的道具栏挂到右栏顶部这个节点上（createPortal），点道具的逻辑仍留在关卡组件里
   const [dock, setDock] = useState<HTMLElement | null>(null);
   const sellable = run.phase === 'shop' || run.phase === 'artifact';
@@ -162,13 +166,16 @@ export function Game() {
             <i />
             {run.gold}
           </span>
+          <button className="help-btn" aria-label="玩法说明" title="玩法说明" onClick={() => setHelp(true)}>
+            ?
+          </button>
           <Menu restart={restart} />
         </div>
       </header>
 
       <div className="cols">
         {showBattle ? (
-          <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} ping={ping} dock={dock} />
+          <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} ping={ping} dock={dock} guideEpoch={guideEpoch} />
         ) : (
           <div className="between">
             <RunPanel run={run} />
@@ -190,6 +197,17 @@ export function Game() {
         />
       </div>
 
+      {help && (
+        <Help
+          onClose={() => setHelp(false)}
+          onReplay={() => {
+            resetGuide();
+            setGuideEpoch((n) => n + 1);
+            setHelp(false);
+          }}
+        />
+      )}
+
       <footer className="bottom">
         <Artifacts keys={run.artifacts} gold={run.battle?.gold ?? run.gold} counters={counters} pings={pings} onOpen={() => setDrawer(true)} />
       </footer>
@@ -206,6 +224,7 @@ function Battle({
   setEnding,
   ping,
   dock,
+  guideEpoch,
 }: {
   run: RunState;
   setRun: (r: RunState) => void;
@@ -213,6 +232,7 @@ function Battle({
   setEnding: (e: Ending | null) => void;
   ping: (key: ArtifactKey, label: string) => void;
   dock: HTMLElement | null;
+  guideEpoch: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<BoardView | null>(null);
@@ -326,6 +346,45 @@ function Battle({
     }
   }, [setRun, setEnding, ping]);
 
+  // ---- 新手引导：第一次玩时随情境弹一句提示，每句只出一次 ----
+  const [tip, setTipState] = useState<TipKey | null>(() => (tipSeen('swap') ? null : 'swap'));
+  const tipRef = useRef(tip);
+  const setTip = useCallback((k: TipKey | null) => {
+    tipRef.current = k;
+    setTipState(k);
+  }, []);
+  const closeTip = () => {
+    if (tipRef.current) markTip(tipRef.current);
+    setTip(null);
+  };
+  const skipTips = () => {
+    skipGuide();
+    setTip(null);
+  };
+  /** 交换提示：立刻示范一步（平时要停手 5 秒才提示） */
+  const demoSwap = useCallback(() => {
+    const b = runRef.current.battle;
+    const h = b && findHint(b.board);
+    if (h) viewRef.current?.showHint(h.from, h.to);
+  }, []);
+  /** 一步走完：正在显示的提示算看过，再按情境挑下一句（这一步得了分讲计分，棋盘上有炸弹讲炸弹，最后讲过关） */
+  const advanceGuide = useCallback(
+    (scored: boolean) => {
+      if (tipRef.current) markTip(tipRef.current);
+      const b = runRef.current.battle;
+      const hasBomb = !!b?.board.some((row) => row.some((t) => t?.kind === 'bomb'));
+      setTip(nextTip(seenTips(), { scored, hasBomb, ongoing: b?.outcome === 'ongoing' }));
+    },
+    [setTip],
+  );
+  // 说明页里“重新看引导”
+  const firstEpoch = useRef(guideEpoch);
+  useEffect(() => {
+    if (guideEpoch === firstEpoch.current) return;
+    setTip('swap');
+    demoSwap();
+  }, [guideEpoch, setTip, demoSwap]);
+
   const doAction = useCallback(async (action: Action) => {
     const view = viewRef.current;
     if (busyRef.current || !view) return;
@@ -344,7 +403,8 @@ function Battle({
     if (out.drop) showDrop(out.drop, at);
     setBusy(false);
     armHint();
-  }, [finish, armHint]);
+    advanceGuide((out.log.settlement?.settlementScore ?? 0) > 0);
+  }, [finish, armHint, advanceGuide]);
 
   // ---- 道具 ----
   const [picking, setPicking] = useState<number | null>(null);
@@ -383,7 +443,8 @@ function Battle({
     if (out.drop) showDrop(out.drop, at);
     setBusy(false);
     armHint();
-  }, [finish, armHint]);
+    advanceGuide((out.log?.settlement?.settlementScore ?? 0) > 0 || !!out.gained);
+  }, [finish, armHint, advanceGuide]);
 
   /** 掉落道具：棋盘上弹字，道具栏提示 */
   function showDrop(key: ItemKey, at: Pos) {
@@ -425,11 +486,12 @@ function Battle({
     view.sync(runRef.current.battle!.board, true);
     canvasRef.current!.focus({ preventScroll: true });
     armHint();
+    if (tipRef.current === 'swap') demoSwap();
     return () => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [doAction, applyItem, armHint]);
+  }, [doAction, applyItem, armHint, demoSwap]);
 
   const target = battle.goal?.target ?? 0;
   const score = useRolling(battle.totalScore);
@@ -440,7 +502,7 @@ function Battle({
   return (
     <main className="battle">
       {/* 本关面板：宽屏在棋盘左侧单独一列，窄屏压缩成棋盘上方的几行 */}
-      <section className="hud" aria-label="本关">
+      <section className={`hud${tip === 'score' || tip === 'goal' ? ' with-coach' : ''}`} aria-label="本关">
         <div className="score" aria-live="polite">
           <span className="lab">分数</span>
           <b>{fmt(score)}</b>
@@ -450,6 +512,7 @@ function Battle({
           <span style={{ transform: `scaleX(${progress})` }} />
         </div>
         <Calc {...mult} armed={!!battle.magnify} />
+        {(tip === 'score' || tip === 'goal') && <Coach tip={tip} onClose={closeTip} onSkip={skipTips} />}
         <Steps battle={battle} />
         <Upgrades levels={run.levels} heat={battle.bombHeat} />
         {(battle.rule || battle.task) && (
@@ -463,11 +526,106 @@ function Battle({
         <div className="stage">
           <canvas ref={canvasRef} tabIndex={0} aria-label="棋盘：拖动或点选相邻方块交换，点两下炸弹引爆" />
           {ending && <EndingCard ending={ending} onNext={() => setEnding(null)} />}
+          {!ending && (tip === 'swap' || tip === 'bomb') && <Coach tip={tip} onClose={closeTip} onSkip={skipTips} onBoard />}
         </div>
         {!(wide && dock) && bag}
       </div>
       {wide && dock && createPortal(bag, dock)}
     </main>
+  );
+}
+
+/** 引导提示：黑底白字一句话，箭头指向要看的地方；“知道了”关掉这一句，“跳过引导”全部不再出现 */
+function Coach({ tip, onClose, onSkip, onBoard }: { tip: TipKey; onClose: () => void; onSkip: () => void; onBoard?: boolean }) {
+  return (
+    <div className={`coach${onBoard ? ' on-board' : ''}`} role="status" key={tip}>
+      <p>{TIPS[tip]}</p>
+      <div className="coach-act">
+        <button className="link" onClick={onSkip}>
+          跳过引导
+        </button>
+        <button className="coach-ok" onClick={onClose}>
+          知道了
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 常驻说明：顶栏“?”打开，分几小节讲清一局怎么玩；底部可以重新看引导 */
+function Help({ onClose, onReplay }: { onClose: () => void; onReplay: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const steps = config.scoreTurns * config.apPerTurn;
+  return (
+    <>
+      <div className="help-backdrop" onClick={onClose} />
+      <div className="help" role="dialog" aria-label="玩法说明">
+        <header>
+          <h2>怎么玩</h2>
+          <button className="link" onClick={onClose}>
+            关闭
+          </button>
+        </header>
+        <section>
+          <h3>目标</h3>
+          <p>
+            一共 {config.scoreTargets.length} 关，打完还可以挑战无尽模式。每关有 {steps} 步（{config.scoreTurns} 回合 × {config.apPerTurn} 步），分数凑够目标就立即过关，剩下的每一步换 {config.goldPerStep} 金币。步数用完还没凑够，按差距扣生命；生命（{config.playerMaxHp}）扣完，这一局结束。
+          </p>
+        </section>
+        <section>
+          <h3>消除</h3>
+          <p>拖动或先后点选，交换相邻两块；同色连成 3 个就消除，只有能消除的交换才算数。消除后上面的方块落下来，又连上就继续消除，这叫连锁。</p>
+        </section>
+        <section>
+          <h3>计分</h3>
+          <p className="help-calc">
+            <span className="cell base">基数</span>×<span className="cell rate">倍率</span>
+          </p>
+          <p>每一步得分 = 基数 × 倍率。清掉的每一块都计基数（方块基数几级就算几）；消除后掉下来又连上的越多，倍率越高。神器会再加基数或倍率。</p>
+        </section>
+        <section>
+          <h3>炸弹</h3>
+          <ul className="help-bombs">
+            <li>
+              <BombIcon bomb="H" size={22} />
+              <span>连成 4 个：清一整行或一整列</span>
+            </li>
+            <li>
+              <BombIcon bomb="A" size={22} />
+              <span>T 形或 L 形：清周围 3×3</span>
+            </li>
+            <li>
+              <BombIcon bomb="CB" size={22} />
+              <span>连成 5 个：清掉棋盘上某一种颜色</span>
+            </li>
+          </ul>
+          <p>点两下炸弹原地引爆，或和旁边一块交换引爆；两枚炸弹交换会合体，范围更大。</p>
+        </section>
+        <section>
+          <h3>关卡之间</h3>
+          <p>
+            过关得金币，在商店买升级（方块基数、三类炸弹的等级）和神器；神器最多带 {config.artifactSlots} 件，可以半价卖出。第 3、6、9 关是首领关，各有一条特殊规则，开打前会写明。每关开打前可以选一个任务，完成有奖励。
+          </p>
+        </section>
+        <section>
+          <h3>道具</h3>
+          <p>
+            关内做出五连炸弹或一步连锁 {ITEM_PARAMS.dropChain} 层以上时掉落，最多带 {config.itemSlots} 件，跨关保留，用了不扣步。点道具再按提示点棋盘。
+          </p>
+        </section>
+        <footer>
+          <button className="ghost small" onClick={onReplay}>
+            重新看新手引导
+          </button>
+        </footer>
+      </div>
+    </>
   );
 }
 
