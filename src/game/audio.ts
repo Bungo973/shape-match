@@ -298,6 +298,11 @@ export const sfx = {
     note(degree(-2), 0.25, 0, 0.6);
     note(degree(0), 0.25, 0.06, 0.6);
   },
+  /** 神器逐件结算：每件升一级，像《小丑牌》的计分一样越来越高 */
+  tally(i: number) {
+    note(degree(5 + i * 2), 0.5, 0, 1.1);
+    note(degree(9 + i * 2), 0.25, 0.03, 1.1);
+  },
   /** 神器在棋盘上放下炸弹、触发效果 */
   artifact() {
     note(degree(7), 0.45, 0, 1);

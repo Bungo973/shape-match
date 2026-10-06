@@ -119,3 +119,16 @@ describe('倍率乘成', () => {
     expect(multiplierFor(0, capped, 0, 0, 5, 2)).toBe(3);
   });
 });
+
+describe('逐件结算明细', () => {
+  it('先加后乘逐件记录倍率，最后一件等于结算倍率；没有神器生效时为空', () => {
+    const s = battle(['glassCannon', 'loner', 'redNose'], three);
+    s.ap = 1;
+    const log = act(s, swap3);
+    expect(log.tally!.steps.map((t) => t.key)).toEqual(['redNose', 'loner', 'glassCannon']);
+    expect(log.tally!.steps.map((t) => t.label)).toEqual(['+0.5', '基数 ×2', `×${ARTIFACT_PARAMS.glassCannonFactor}`]);
+    expect(log.tally!.steps[0]!.value).toBeCloseTo(log.tally!.start + 0.5);
+    expect(log.tally!.steps.at(-1)!.value).toBe(log.settlement!.multiplier);
+    expect(act(battle([], three), swap3).tally).toBeNull();
+  });
+});

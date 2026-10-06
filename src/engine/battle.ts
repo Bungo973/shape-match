@@ -11,7 +11,7 @@ import { resolveAction, type ActionResult, type ResolutionEvent } from './resolv
 import { hasLegalMove, reshuffle } from './shuffle';
 import type { BossRule } from './levels';
 import { createRng } from './rng';
-import { settle, type Settlement } from './score';
+import { multiplierFor, settle, type Settlement } from './score';
 import { COLORS, emptyClears, type Action, type BombKind, type Board, type ClearsByType, type Color, type Gravity, type Pos } from './types';
 
 export const RULES_VERSION = 4;
@@ -153,6 +153,21 @@ export interface ActionLog {
   counterTriggers: CounterTrigger[];
   /** 本步结算时生效的计分神器，供界面闪亮 */
   scoringArtifacts: ArtifactKey[];
+  /** 逐件结算明细：start 为未计神器时的倍率，之后每件神器生效后的倍率（先加后乘），供界面一件件播放 */
+  tally: Tally | null;
+}
+
+export interface TallyStep {
+  key: ArtifactKey;
+  /** 卡面弹字，如 “+0.5”“×3”“基数 ×2” */
+  label: string;
+  /** 这件生效后的倍率 */
+  value: number;
+}
+
+export interface Tally {
+  start: number;
+  steps: TallyStep[];
 }
 
 export type CounterTrigger =
@@ -306,6 +321,7 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     bombLevelUps: [],
     counterTriggers: [],
     scoringArtifacts: [],
+    tally: null,
   };
 
   // 爆破等级：本步的引爆在结算完之后计入，新等级从下一次行动起生效
@@ -325,25 +341,39 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     // 倍率修正顺序：不稳定引信修正 P → 基础倍率 → 连锁透镜 → 共振底座 → 敌方倍率侵蚀（GAME_RULES §6）
     const has = (k: ArtifactKey) => state.artifacts.includes(k);
     const P = result.passiveClearCount;
-    const stepDelta = has('chainLens') && P >= 3 ? 1 : 0;
-    if (stepDelta) log.scoringArtifacts.push('chainLens');
+    const lens: ScoringPart[] = has('chainLens') && P >= 3 ? [{ key: 'chainLens', kind: 'add', tenths: 10 }] : [];
     // 爆破等级给倍率：本步引爆过的每类炸弹按引爆时的等级计
-    let bonusTenths = BOMB_UPGRADES.reduce((n, k) => n + (result.detonatedByType[k] > 0 ? (prev.bombHeat[k].level - 1) * config.bombLevelMultTenths : 0), 0);
-    const scoring = scoringArtifacts(prev, state, result, !!opts.item);
-    bonusTenths += scoring.tenths;
-    log.scoringArtifacts.push(...scoring.fired);
+    const bombTenths = BOMB_UPGRADES.reduce((n, k) => n + (result.detonatedByType[k] > 0 ? (prev.bombHeat[k].level - 1) * config.bombLevelMultTenths : 0), 0);
+    // 先加后乘：加成按 ID 顺序，再基数乘成，再倍率乘成
+    const parts = [...lens, ...scoringParts(prev, state, result, !!opts.item)];
+    const order = { add: 0, base: 1, mul: 2 } as const;
+    parts.sort((a, b) => order[a.kind] - order[b.kind]);
+    const erodeSteps = erode ? 1 : 0;
+    let tenths = bombTenths;
+    let factor = 1;
+    let baseFactor = 1;
+    const tally: Tally = { start: multiplierFor(P, config, 0, erodeSteps, tenths, 1), steps: [] };
+    for (const part of parts) {
+      if (part.kind === 'add') tenths += part.tenths;
+      else if (part.kind === 'mul') factor *= part.factor;
+      else baseFactor *= part.factor;
+      const label = part.kind === 'add' ? `+${part.tenths / 10}` : part.kind === 'mul' ? `×${part.factor}` : `基数 ×${part.factor}`;
+      tally.steps.push({ key: part.key, label, value: multiplierFor(P, config, 0, erodeSteps, tenths, factor) });
+    }
+    log.scoringArtifacts.push(...parts.map((p) => p.key));
+    if (parts.length) log.tally = tally;
     const s = settle(
       {
         activeClearsByType: result.activeClearsByType,
-        bonusTenths,
-        multiplierFactor: scoring.factor,
-        baseFactor: scoring.baseFactor,
+        bonusTenths: tenths,
+        multiplierFactor: factor,
+        baseFactor,
         passiveClearCount: P,
         hadActiveColorClear: result.hadActiveColorClear,
         // 冲分模式没有催化剂充能（颜色不再有各自的作用）
         chargesBefore: state.goal ? 0 : state.player.catalystCharges,
         socketBonuses: result.socketBonuses,
-        multiplierStepDelta: stepDelta,
+        multiplierStepDelta: 0,
         erosionSteps: erode ? 1 : 0,
       },
       config,
@@ -406,35 +436,28 @@ export function useItem(prev: BattleState, use: ItemUse, config: EngineConfig = 
   return { ok: true, state, log: null, events: [{ type: 'shuffle', moves: shuffled.moves }] };
 }
 
+type ScoringPart = { key: ArtifactKey; kind: 'add'; tenths: number } | { key: ArtifactKey; kind: 'mul' | 'base'; factor: number };
+
 /**
  * 计分神器（2026-10-06 第一批）：加成以十分位相加，乘成相乘，因此持有顺序不影响结果。
- * prev 是这一步之前的状态，用来判断“本回合最后一步”和“第几步”。
+ * prev 是这一步之前的状态，用来判断“本回合最后一步”和“第几步”。按 ID 顺序返回。
  */
-function scoringArtifacts(prev: BattleState, state: BattleState, result: ActionResult, item: boolean): { tenths: number; factor: number; baseFactor: number; fired: ArtifactKey[] } {
+function scoringParts(prev: BattleState, state: BattleState, result: ActionResult, item: boolean): ScoringPart[] {
   const has = (k: ArtifactKey) => state.artifacts.includes(k);
   const P = ARTIFACT_PARAMS;
-  const out = { tenths: 0, factor: 1, baseFactor: 1, fired: [] as ArtifactKey[] };
-  const add = (k: ArtifactKey, tenths: number) => {
-    out.tenths += tenths;
-    out.fired.push(k);
-  };
-  const mul = (k: ArtifactKey, f: number) => {
-    out.factor *= f;
-    out.fired.push(k);
-  };
-  if (has('redNose')) add('redNose', P.redNoseTenths);
-  if (has('banana')) add('banana', P.bananaTenths);
+  const out: ScoringPart[] = [];
+  if (has('redNose')) out.push({ key: 'redNose', kind: 'add', tenths: P.redNoseTenths });
   if (has('smallStep')) {
     const own = activeTileCount(result.events);
-    if (own > 0 && own <= P.smallStepMax) add('smallStep', P.smallStepTenths);
+    if (own > 0 && own <= P.smallStepMax) out.push({ key: 'smallStep', kind: 'add', tenths: P.smallStepTenths });
   }
+  if (has('banana')) out.push({ key: 'banana', kind: 'add', tenths: P.bananaTenths });
   if (has('loner') && result.detonatedByType.line + result.detonatedByType.area + result.detonatedByType.color === 0) {
-    out.baseFactor *= P.lonerBaseFactor;
-    out.fired.push('loner');
+    out.push({ key: 'loner', kind: 'base', factor: P.lonerBaseFactor });
   }
-  if (has('lastCall') && !item && prev.ap === 1) mul('lastCall', P.lastCallFactor);
-  if (has('loyaltyCard') && !item && (state.stepsTaken ?? 0) % P.loyaltyEvery === 0) mul('loyaltyCard', P.loyaltyFactor);
-  if (has('glassCannon')) mul('glassCannon', P.glassCannonFactor);
+  if (has('lastCall') && !item && prev.ap === 1) out.push({ key: 'lastCall', kind: 'mul', factor: P.lastCallFactor });
+  if (has('loyaltyCard') && !item && (state.stepsTaken ?? 0) % P.loyaltyEvery === 0) out.push({ key: 'loyaltyCard', kind: 'mul', factor: P.loyaltyFactor });
+  if (has('glassCannon')) out.push({ key: 'glassCannon', kind: 'mul', factor: P.glassCannonFactor });
   return out;
 }
 

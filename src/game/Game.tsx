@@ -69,6 +69,7 @@ const ITEM_FAIL: Record<string, string> = { noBomb: '棋盘上没有炸弹', not
 
 const COLOR_NAME: Record<Color, string> = { attack: '红圆', shield: '蓝方', poison: '黄三角', catalyst: '绿菱形' };
 const fmt = (n: number) => n.toLocaleString('zh-CN');
+const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
 /** 一关结束时的结算信息，关掉后才进入下一个界面 */
 interface Ending {
@@ -85,13 +86,11 @@ interface Ending {
 export function Game() {
   const [run, setRunState] = useState(initialRun);
   const [ending, setEnding] = useState<Ending | null>(null);
-  // 刚在结算里生效的神器，在神器栏里亮一下
-  const [lit, setLitState] = useState<ArtifactKey[]>([]);
-  const litTimer = useRef(0);
-  const setLit = useCallback((keys: ArtifactKey[]) => {
-    window.clearTimeout(litTimer.current);
-    setLitState(keys);
-    if (keys.length) litTimer.current = window.setTimeout(() => setLitState([]), 900);
+  // 神器触发：神器栏里那一件抖一下、弹出数值；n 每次递增，让动画重新播放
+  const [pings, setPings] = useState<Partial<Record<ArtifactKey, { label: string; n: number }>>>({});
+  const pingCount = useRef(0);
+  const ping = useCallback((key: ArtifactKey, label: string) => {
+    setPings((p) => ({ ...p, [key]: { label, n: ++pingCount.current } }));
   }, []);
 
   const setRun = useCallback((r: RunState) => {
@@ -138,7 +137,7 @@ export function Game() {
       </header>
 
       {showBattle ? (
-        <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} setLit={setLit} />
+        <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} ping={ping} />
       ) : (
         <Between run={run} apply={apply} restart={restart} />
       )}
@@ -147,7 +146,7 @@ export function Game() {
         <Artifacts
           keys={run.artifacts}
           counters={{ ...(run.battle?.player.counters ?? run.player.counters), loyaltyCard: (run.battle?.stepsTaken ?? 0) % ARTIFACT_PARAMS.loyaltyEvery }}
-          lit={lit}
+          pings={pings}
           onSell={run.phase === 'shop' || run.phase === 'artifact' ? (k) => apply(sellArtifact(run, k, config)) : undefined}
         />
         <div className="tools">
@@ -168,13 +167,13 @@ function Battle({
   setRun,
   ending,
   setEnding,
-  setLit,
+  ping,
 }: {
   run: RunState;
   setRun: (r: RunState) => void;
   ending: Ending | null;
   setEnding: (e: Ending | null) => void;
-  setLit: (keys: ArtifactKey[]) => void;
+  ping: (key: ArtifactKey, label: string) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<BoardView | null>(null);
@@ -200,13 +199,26 @@ function Battle({
     else view.sync(b.board);
     if (pulseAt.length) view.pulse(pulseAt);
     const s = log?.settlement;
+    // 神器逐件结算：倍率从连锁的值开始，每件神器抖一下、倍率跳一档，最后才出分
+    if (s && log?.tally) {
+      setMult((m) => ({ ...m, value: log.tally!.start }));
+      await wait(160);
+      for (const [i, t] of log.tally.steps.entries()) {
+        ping(t.key, t.label);
+        sfx.tally(i);
+        setMult((m) => ({ ...m, value: t.value }));
+        await wait(240);
+      }
+    }
     if (s && s.settlementScore > 0) {
       sfx.score(s.settlementScore);
       view.popText(`+${fmt(s.settlementScore)}`, s.multiplier > 1 ? `×${s.multiplier.toFixed(1)}` : '', at, s.settlementScore >= 200);
       setMult((m) => ({ ...m, value: s.multiplier, final: true }));
     }
-    const fired = [...(log?.scoringArtifacts ?? []), ...(log?.counterTriggers ?? []).map((t) => t.key)];
-    if (fired.length) setLit(fired);
+    for (const t of log?.counterTriggers ?? []) {
+      ping(t.key, t.key === 'fuseBox' ? `+${t.ap} 步` : '3×3');
+      sfx.artifact();
+    }
     for (const t of log?.counterTriggers ?? []) if ('at' in t && t.at) view.pulse([t.at]);
     runRef.current = next;
     setRun(next);
@@ -223,7 +235,12 @@ function Battle({
         runRef.current = after.run;
         setRun(after.run);
         view.sync(nb.board);
-        if (after.log?.turnStartBombs?.length) view.pulse(after.log.turnStartBombs);
+        if (after.log?.turnStartBombs?.length) {
+          view.pulse(after.log.turnStartBombs);
+          if (nb.artifacts.includes('powderKeg')) ping('powderKeg', '3×3');
+          if (nb.artifacts.includes('prismOre')) ping('prismOre', '五连');
+          sfx.artifact();
+        }
         if (nb.outcome !== 'ongoing') {
           const won = nb.totalScore >= (nb.goal?.target ?? 0);
           if (won) sfx.win();
@@ -232,7 +249,7 @@ function Battle({
         } else sfx.turn();
       }
     }
-  }, [setRun, setEnding, setLit]);
+  }, [setRun, setEnding, ping]);
 
   const doAction = useCallback(async (action: Action) => {
     const view = viewRef.current;
@@ -397,7 +414,7 @@ function Multiplier({ value, chain, final, cap }: { value: number; chain: number
         ))}
       </div>
       <div className="val">
-        <b>×{value.toFixed(1)}</b>
+        <b key={value.toFixed(1)}>×{value.toFixed(1)}</b>
         <span>{chain > 0 ? `连锁 ${chain}` : '倍率'}</span>
       </div>
     </div>
@@ -722,12 +739,12 @@ function ArtifactChoices({ keys, onPick, full }: { keys: ArtifactKey[]; onPick: 
 function Artifacts({
   keys,
   counters,
-  lit,
+  pings,
   onSell,
 }: {
   keys: ArtifactKey[];
   counters: Partial<Record<ArtifactKey, number>> | undefined;
-  lit: ArtifactKey[];
+  pings: Partial<Record<ArtifactKey, { label: string; n: number }>>;
   onSell: ((k: ArtifactKey) => void) | undefined;
 }) {
   const [selling, setSelling] = useState<ArtifactKey | null>(null);
@@ -736,6 +753,7 @@ function Artifacts({
     <ul className="artifacts" aria-label={`神器 ${keys.length}/${config.artifactSlots}`}>
       {keys.map((k) => {
         const a = ARTIFACTS[k];
+        const p = pings[k];
         const body = (
           <>
             <i className={`dot ${a.rarity}`} />
@@ -748,7 +766,12 @@ function Artifacts({
           </>
         );
         return (
-          <li key={k} title={`${RARITY_NAME[a.rarity]} · ${a.text}`} className={lit.includes(k) ? 'lit' : ''}>
+          <li key={`${k}-${p?.n ?? 0}`} title={`${RARITY_NAME[a.rarity]} · ${a.text}`} className={p ? 'kick' : ''}>
+            {p && (
+              <span className="tag" aria-hidden="true">
+                {p.label}
+              </span>
+            )}
             {onSell ? (
               selling === k ? (
                 <button className="sell" onClick={() => (onSell(k), setSelling(null))} onBlur={() => setSelling(null)} autoFocus>
