@@ -95,6 +95,6 @@
 | [SCORE_MODE](SCORE_MODE.md#任务) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 每关可选任务：开关前一易一难二选一，易给金币、难给神器；第 3–9 关目标上调约 10% | 现行（原型数值） |
 | [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [SCORE_MODE](SCORE_MODE.md) | 删去自由手、沙漏；弱引导（停手 5 秒提示一步，优先做炸弹）；“低压”关不出倍率任务 | 现行 |
 | [SCORE_MODE](SCORE_MODE.md) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) | 商店付费刷新（3 起每次 +1）；道具待重新设计 | 现行 |
-| [SCORE_MODE](SCORE_MODE.md#道具) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [VISUAL_STYLE](VISUAL_STYLE.md) | 道具重做：关内掉落（五连或连锁 ≥ 8 层），手套、吸管、洗牌、放大镜、回声；商店不再卖道具 | 原型，待试玩 |
+| [SCORE_MODE](SCORE_MODE.md#道具) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [VISUAL_STYLE](VISUAL_STYLE.md) | 道具重做：关内掉落（五连或连锁 ≥ 8 层），手套、吸管、洗牌、放大镜、回声；商店不再卖道具。试玩认可 | 现行 |
 
 **2026-09-30 起停用**：[ART_DIRECTION](ART_DIRECTION.md)、[ASSET_PLAN](ASSET_PLAN.md)、[ASSET_BATCH2](ASSET_BATCH2.md)、[ASSET_BATCH3](ASSET_BATCH3.md)、[BOARD_INSERT_VISUAL](BOARD_INSERT_VISUAL.md)（美术素材不再使用，视觉以 VISUAL_STYLE 为准）；[THEME_STORY](THEME_STORY.md) 中的敌人与故事线随打怪模式搁置。
