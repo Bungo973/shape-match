@@ -484,7 +484,11 @@ button {
 
 /* ---------- 关卡之间 ---------- */
 
+/* 关卡之间的页面：在主体区居中成一列，宽度固定，左对齐排内容 */
 .panel {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1229,6 +1233,10 @@ button {
     width: 48px;
   }
 
+  .panel {
+    padding-top: 5vh;
+  }
+
   .side {
     position: sticky;
     top: 0;
@@ -1467,7 +1475,62 @@ button {
 }
 
 .ghost.reroll {
-  align-self: flex-start;
+  margin-left: auto;
+  align-self: center;
+  padding: 3px 12px;
   font-size: 13px;
   font-weight: 700;
+}
+
+/* ---------- 商店：分组与底部常驻栏 ---------- */
+
+.group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--rule);
+  padding-top: 16px;
+}
+
+.group .sub {
+  margin: 0;
+}
+
+.supply {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.supply .hint {
+  flex: 1 1 240px;
+  font-size: 13px;
+}
+
+/* 金币和“下一关”贴在窗口底部，商店再长也不用滚到底才能走 */
+.dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 12px 0 16px;
+  background: var(--paper);
+  border-top: var(--frame) solid var(--ink);
+}
+
+.gold.big {
+  font-size: 26px;
+  gap: 8px;
+}
+
+.gold.big i {
+  width: 18px;
+  height: 18px;
 }

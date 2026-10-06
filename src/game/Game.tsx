@@ -774,63 +774,82 @@ function IncomeLines({ income }: { income: Income }) {
   );
 }
 
+/** 商店：升级 / 神器 / 补给三组，底部常驻金币和“下一关” */
 function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) {
   const hurt = run.player.hp < run.player.maxHp;
+  const reroll = rerollPrice(run, config);
+  const full = run.artifacts.length >= config.artifactSlots;
   return (
-    <Panel eyebrow={`金币 ${run.gold}`} title="商店">
-      <h2 className="sub">
-        升级<span>可以买多次；同一项每升一级涨价 {config.upgradePriceStep}</span>
-      </h2>
-      <div className="choices grid">
-        {UPGRADE_KEYS.map((k) => {
-          const price = upgradePrice(run, k, config);
-          return (
-            <UpgradeCard key={k} upgrade={k} level={run.levels[k]} add={1} price={price} disabled={run.gold < price} onPick={() => apply(buyUpgrade(run, k, config))} />
-          );
-        })}
-      </div>
-      <h2 className="sub">
-        神器
-        <span>
-          神器栏 {run.artifacts.length}/{config.artifactSlots} · 在神器栏里可以半价卖出
-        </span>
-      </h2>
-      {run.shopArtifacts.length > 0 ? (
+    <Panel eyebrow={`第 ${run.battleIndex} 关之后`} title="商店">
+      <section className="group">
+        <h2 className="sub">
+          升级<span>可以买多次；同一项每升一级涨价 {config.upgradePriceStep}</span>
+        </h2>
         <div className="choices grid">
-          {run.shopArtifacts.map((k, i) => {
-            const price = artifactPrice(k, config);
+          {UPGRADE_KEYS.map((k) => {
+            const price = upgradePrice(run, k, config);
             return (
-              <button key={k} className="choice" disabled={run.gold < price || run.artifacts.length >= config.artifactSlots} onClick={() => apply(buyArtifact(run, i, config))}>
-                <Rarity artifact={k} />
-                <b>{ARTIFACTS[k].name}</b>
-                <span className="desc">{ARTIFACTS[k].text}</span>
-                <span className="price">
-                  <i />
-                  {price}
-                </span>
-              </button>
+              <UpgradeCard key={k} upgrade={k} level={run.levels[k]} add={1} price={price} disabled={run.gold < price} onPick={() => apply(buyUpgrade(run, k, config))} />
             );
           })}
         </div>
-      ) : (
-        <p className="hint">神器已经买空了。</p>
-      )}
-      <button className="ghost reroll" disabled={run.gold < rerollPrice(run, config)} onClick={() => apply(rerollShop(run, config))}>
-        刷新神器 · {rerollPrice(run, config)} 金币
-      </button>
-      <p className="hint">
-        道具不在商店卖：关内做出五连炸弹或一步连锁 {ITEM_PARAMS.dropChain} 层以上时掉落（每关最多 {ITEM_PARAMS.dropsPerLevel} 件）。背包 {run.items.length}/{config.itemSlots}
-        {run.items.length > 0 && `：${run.items.map((k) => ITEMS[k].name).join('、')}`}
-      </p>
-      <button className="rest" disabled={!hurt || run.gold < config.healPrice} onClick={() => apply(buyHeal(run, config))}>
-        <b>回血</b>
-        <span>
-          生命 +{config.healAmount} · {config.healPrice} 金币
+      </section>
+      <section className="group">
+        <h2 className="sub">
+          神器
+          <span>
+            {run.artifacts.length}/{config.artifactSlots}
+            {full ? ' · 栏满了，先在构筑栏卖掉一件' : ' · 在构筑栏里可以半价卖出'}
+          </span>
+          <button className="ghost small reroll" disabled={run.gold < reroll} onClick={() => apply(rerollShop(run, config))}>
+            刷新 · {reroll}
+          </button>
+        </h2>
+        {run.shopArtifacts.length > 0 ? (
+          <div className="choices">
+            {run.shopArtifacts.map((k, i) => {
+              const price = artifactPrice(k, config);
+              return (
+                <button key={k} className="choice" disabled={run.gold < price || full} onClick={() => apply(buyArtifact(run, i, config))}>
+                  <Rarity artifact={k} />
+                  <b>{ARTIFACTS[k].name}</b>
+                  <span className="desc">{ARTIFACTS[k].text}</span>
+                  <span className="price">
+                    <i />
+                    {price}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="hint">神器已经买空了。</p>
+        )}
+      </section>
+      <section className="group">
+        <h2 className="sub">补给</h2>
+        <div className="supply">
+          <button className="rest" disabled={!hurt || run.gold < config.healPrice} onClick={() => apply(buyHeal(run, config))}>
+            <b>回血</b>
+            <span>
+              生命 +{config.healAmount} · {config.healPrice} 金币
+            </span>
+          </button>
+          <p className="hint">
+            道具 {run.items.length}/{config.itemSlots}
+            {run.items.length > 0 && `：${run.items.map((k) => ITEMS[k].name).join('、')}`}。道具不在商店卖：关内做出五连炸弹或一步连锁 {ITEM_PARAMS.dropChain} 层以上时掉落（每关最多 {ITEM_PARAMS.dropsPerLevel} 件）。
+          </p>
+        </div>
+      </section>
+      <div className="dock">
+        <span className="gold big">
+          <i />
+          {run.gold}
         </span>
-      </button>
-      <button className="primary big" onClick={() => apply(leaveShop(run))}>
-        {!run.endless && run.battleIndex >= run.route.length ? '结束' : '下一关'}
-      </button>
+        <button className="primary big" onClick={() => apply(leaveShop(run))}>
+          {!run.endless && run.battleIndex >= run.route.length ? '结束' : '下一关'}
+        </button>
+      </div>
     </Panel>
   );
 }
