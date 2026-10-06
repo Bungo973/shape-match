@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARTIFACTS, artifactPrice, offeredArtifacts } from './artifacts';
+import { ARTIFACT_PARAMS, ARTIFACTS, artifactPrice, offeredArtifacts } from './artifacts';
 import { DEFAULT_CONFIG } from './config';
 import {
   buyHeal,
@@ -244,5 +244,64 @@ describe('神器：商店、栏位与出售', () => {
     }
     expect(rotted).toBeGreaterThan(2);
     expect(rotted).toBeLessThan(25);
+  });
+});
+
+describe('第三批：关卡之间', () => {
+  const config = { ...DEFAULT_CONFIG, scoreMode: true };
+  /** 冲分模式第一关，带上指定神器，用一枚直线炸弹立刻达标（第 1 回合只用 1 步） */
+  function quickWin(artifacts: RunState['artifacts'], gold = 0, prep?: (r: RunState) => void): RunState {
+    let run = newRun(3, config);
+    run = ok(pickStarter(run, run.starterChoices[0]!));
+    run.artifacts = artifacts;
+    run.gold = gold;
+    run = ok(startNextBattle(run, config));
+    run.battle!.goal = { target: 1, turns: 5 };
+    run.battle!.board = boardWith({ '4,0': 'H', '6,6': 'A', '7,7': 'A' });
+    prep?.(run);
+    return ok(runAction(run, { type: 'ignite', at: { r: 4, c: 0 } }, config));
+  }
+
+  it('存钱罐按结算前的金币给利息、拆弹工按剩下的炸弹、金怀表固定给', () => {
+    const won = quickWin(['piggyBank', 'defuser', 'goldWatch'], 37);
+    const by = Object.fromEntries(won.income!.artifacts.map((a) => [a.key, a.amount]));
+    expect(by.piggyBank).toBe(3);
+    expect(by.defuser).toBeGreaterThanOrEqual(1);
+    expect(by.goldWatch).toBe(ARTIFACT_PARAMS.goldWatchGold);
+    expect(won.gold).toBe(37 + won.income!.total);
+  });
+
+  it('冰淇淋每关融化，减到 0 消失', () => {
+    const won = quickWin(['iceCream'], 0, (r) => (r.battle!.player.counters = { iceCream: 8 }));
+    expect(won.artifacts).not.toContain('iceCream');
+    expect(won.lostArtifacts).toEqual(['iceCream']);
+    const half = quickWin(['iceCream']);
+    expect(half.player.counters!.iceCream).toBe(2);
+  });
+
+  it('勋章：提前达标（剩余步数够多），次数 +1', () => {
+    expect(quickWin(['medal']).player.counters!.medal).toBe(1);
+  });
+
+  it('免检章：首领关不带规则', () => {
+    let run = newRun(3, config);
+    run = ok(pickStarter(run, run.starterChoices[0]!));
+    run.battleIndex = 2;
+    expect(ok(startNextBattle(run, config)).battle!.rule).toBeDefined();
+    run.artifacts = ['exemption'];
+    expect(ok(startNextBattle(run, config)).battle!.rule).toBeUndefined();
+  });
+
+  it('替身用掉后从整局移除', () => {
+    let run = newRun(3, config);
+    run = ok(pickStarter(run, run.starterChoices[0]!));
+    run.artifacts = ['standIn'];
+    run = ok(startNextBattle(run, config));
+    run.battle!.turn = 5;
+    run.battle!.player.hp = 1;
+    const after = ok(runEndTurn(run, config));
+    expect(after.phase).toBe('shop');
+    expect(after.artifacts).not.toContain('standIn');
+    expect(after.lostArtifacts).toEqual(['standIn']);
   });
 });

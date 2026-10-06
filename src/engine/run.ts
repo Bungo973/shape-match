@@ -41,7 +41,7 @@ export interface RunState {
   shopItems: ItemKey[];
   /** 本次商店上架的神器（买走即下架） */
   shopArtifacts: ArtifactKey[];
-  /** 上一关结束时烂掉的香蕉等，供结算展示 */
+  /** 上一关结束时消失的神器（香蕉烂掉、冰淇淋化完、替身用掉），供结算展示 */
   lostArtifacts: ArtifactKey[];
 }
 
@@ -51,6 +51,8 @@ export interface Income {
   /** 提前达标时剩下的步数 */
   steps: number;
   fromSteps: number;
+  /** 金币类神器的收入（存钱罐、拆弹工、金怀表） */
+  artifacts: { key: ArtifactKey; amount: number }[];
   total: number;
 }
 
@@ -167,7 +169,9 @@ export function startNextBattle(prev: RunState, config: EngineConfig = DEFAULT_C
       enemy: info ? { ...node.enemy, targetScore: info.target } : node.enemy,
       artifacts: run.artifacts,
       levels: run.levels,
-      ...(info?.rule ? { rule: info.rule } : {}),
+      gold: run.gold,
+      // 免检章：首领规则对你无效
+      ...(info?.rule && !run.artifacts.includes('exemption') ? { rule: info.rule } : {}),
     },
     config,
   );
@@ -199,6 +203,9 @@ function settleBattle(run: RunState, config: EngineConfig): void {
   const b = run.battle!;
   if (b.outcome === 'ongoing') return;
   run.totalScore += b.totalScore;
+  // 关内用掉的神器（替身）从整局里移除
+  const spent = b.spentArtifacts ?? [];
+  run.artifacts = run.artifacts.filter((k) => !spent.includes(k));
   if (b.outcome === 'lost') {
     run.player = b.player;
     run.phase = 'over';
@@ -215,11 +222,21 @@ function settleBattle(run: RunState, config: EngineConfig): void {
     elite: node.tier === 'elite' || node.tier === 'boss' ? config.goldEliteBonus : 0,
     steps,
     fromSteps: steps * config.goldPerStep,
+    artifacts: artifactIncome(run, b),
     total: 0,
   };
-  income.total = income.base + income.elite + income.fromSteps;
+  income.total = income.base + income.elite + income.fromSteps + income.artifacts.reduce((n, a) => n + a.amount, 0);
   run.gold += income.total;
   run.income = income;
+  run.lostArtifacts = [...spent];
+  if (b.rule?.key !== 'silence') {
+    // 勋章：提前 3 步以上达标，永久倍率 +0.2
+    if (run.artifacts.includes('medal') && steps >= ARTIFACT_PARAMS.medalSteps) {
+      const c = (run.player.counters ??= {});
+      c.medal = (c.medal ?? 0) + 1;
+    }
+    meltIceCream(run);
+  }
   rotArtifacts(run, b);
   // 终关：通关，本局结束；冲分模式可以选择继续进入无尽模式（continueEndless）
   if (node.tier === 'boss') {
@@ -237,9 +254,35 @@ function settleBattle(run: RunState, config: EngineConfig): void {
   }
 }
 
+/**
+ * 金币类神器在关卡结束时的收入：存钱罐按结算前手上的金币算利息，拆弹工按棋盘上剩的炸弹，金怀表固定。
+ * “哑火”关里神器失效，不给。
+ */
+function artifactIncome(run: RunState, b: BattleState): Income['artifacts'] {
+  if (b.rule?.key === 'silence') return [];
+  const P = ARTIFACT_PARAMS;
+  const out: Income['artifacts'] = [];
+  const add = (key: ArtifactKey, amount: number) => amount > 0 && out.push({ key, amount });
+  if (run.artifacts.includes('piggyBank')) add('piggyBank', Math.min(P.piggyMax, Math.floor(run.gold / P.piggyPer)));
+  if (run.artifacts.includes('defuser')) add('defuser', Math.min(P.defuserMax, b.board.flat().filter((t) => t?.kind === 'bomb').length));
+  if (run.artifacts.includes('goldWatch')) add('goldWatch', P.goldWatchGold);
+  return out;
+}
+
+/** 冰淇淋每过一关少一截，减到 0 就消失 */
+function meltIceCream(run: RunState): void {
+  if (!run.artifacts.includes('iceCream')) return;
+  const c = (run.player.counters ??= {});
+  c.iceCream = (c.iceCream ?? 0) + ARTIFACT_PARAMS.iceCreamMelt;
+  if (c.iceCream >= ARTIFACT_PARAMS.iceCreamBase) {
+    run.artifacts = run.artifacts.filter((k) => k !== 'iceCream');
+    delete c.iceCream;
+    run.lostArtifacts.push('iceCream');
+  }
+}
+
 /** 关卡结束时会消失的神器：香蕉每关有 1/6 的概率烂掉；“哑火”关里神器失效，不会烂 */
 function rotArtifacts(run: RunState, b: BattleState): void {
-  run.lostArtifacts = [];
   if (!run.artifacts.includes('banana') || b.rule?.key === 'silence') return;
   const rng = createRng(mixSeed(run.seed, 0xba, run.battleIndex));
   if (rng.int(ARTIFACT_PARAMS.bananaOdds) === 0) {

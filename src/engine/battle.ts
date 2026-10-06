@@ -108,11 +108,17 @@ export interface BattleState {
   /** 敌人本回合成功施加、从下一玩家回合起生效的状态 */
   pending: { erosion: boolean; suppressId: string | null; gravity: boolean; sealColor: Color | null; shatter?: boolean };
   /** 本玩家回合生效中的状态；shattered 为碎甲（护盾上限降低） */
-  current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null; shattered?: boolean; fuseBoxFired?: boolean };
+  current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null; shattered?: boolean; fuseBoxFired?: boolean; freeSwapUsed?: boolean };
   outcome: 'ongoing' | 'won' | 'lost';
   totalScore: number;
   /** 本关已经走的步数（道具不算），积分卡按它计 */
   stepsTaken?: number;
+  /** 开关时手上的金币（富翁按它计；关内不会变） */
+  gold?: number;
+  /** 神器栏上限（空位按它计） */
+  artifactSlots?: number;
+  /** 本关被用掉而消失的神器（替身） */
+  spentArtifacts?: ArtifactKey[];
   /** 嵌片卡模式：抽牌堆、手牌、弃牌堆；交换模式下不存在 */
   cards?: CardPiles;
   /** 冲分模式：在 turns 个回合内让 totalScore 达到 target；敌人不行动 */
@@ -134,6 +140,8 @@ export interface StartBattleInput {
   enemyStartShield?: number;
   /** 冲分模式首领关的规则 */
   rule?: BossRule;
+  /** 开关时手上的金币 */
+  gold?: number;
 }
 
 // ---- 日志 ----
@@ -153,6 +161,8 @@ export interface ActionLog {
   counterTriggers: CounterTrigger[];
   /** 本步结算时生效的计分神器，供界面闪亮 */
   scoringArtifacts: ArtifactKey[];
+  /** 自由手让这次不能消除的交换照样成立 */
+  freeSwap?: boolean;
   /** 逐件结算明细：start 为未计神器时的倍率，之后每件神器生效后的倍率（先加后乘），供界面一件件播放 */
   tally: Tally | null;
 }
@@ -189,6 +199,8 @@ export interface EnemyTurnLog {
   reshuffled: boolean;
   /** 冲分模式：回合用完仍未达标时扣的生命（已计入 damageToPlayerHp） */
   scorePenalty?: number;
+  /** 替身挡下了这次致命的扣血 */
+  standIn?: boolean;
   /** 下一玩家回合开始时，神器放到棋盘上的炸弹 */
   turnStartBombs?: Pos[];
   nextIntent: Intent;
@@ -226,6 +238,8 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     turn: 1,
     ap: config.apPerTurn,
     stepsTaken: 0,
+    gold: input.gold ?? 0,
+    artifactSlots: config.artifactSlots,
     gravity: 'down',
     gravityTurnsLeft: 0,
     pending: { erosion: false, suppressId: null, gravity: false, sealColor: null },
@@ -235,7 +249,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
   };
   if (config.scoreMode && input.enemy.targetScore) state.goal = { target: input.enemy.targetScore, turns: config.scoreTurns };
   if (input.rule) applyBossRule(state, input.rule, config);
-  state.ap = turnAp(state, config);
+  state.ap = turnAp(state, config) + (state.artifacts.includes('hourglass') ? ARTIFACT_PARAMS.hourglassAp : 0);
   applyTurnStartArtifacts(state);
   if (input.deck) {
     // 洗牌与抽牌沿用同一个种子随机数，保证复现
@@ -283,7 +297,7 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
   const rng = createRng(state.rngState);
   const ids = createIdGen(state.nextId);
   const inserts = state.inserts.map((i) => (i.id === state.current.suppressedId ? { ...i, suppressed: true } : i));
-  const result = resolveAction(state.board, action, {
+  const resolveCtx = {
     config,
     rng,
     ids,
@@ -296,8 +310,16 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     sealedColor: state.current.sealedColor,
     mutedColor: state.rule?.key === 'sealed' ? (state.rule.color ?? null) : null,
     bombLevels: Object.fromEntries(BOMB_UPGRADES.map((k) => [k, state.bombHeat[k].level])) as Record<BombUpgrade, number>,
-  });
+  };
+  let result = resolveAction(state.board, action, resolveCtx);
+  // 自由手：每回合第一次不能消除的交换照样成立（与手套同一入口），仍算一步
+  let freeSwap = false;
+  if (!result.valid && result.reason === 'noMatch' && action.type === 'swap' && !opts.item && state.artifacts.includes('freeHand') && !state.current.freeSwapUsed) {
+    result = resolveAction(state.board, { ...action, free: true }, resolveCtx);
+    freeSwap = result.valid;
+  }
   if (!result.valid) return { ok: false, state: prev, reason: result.reason! };
+  if (freeSwap) state.current.freeSwapUsed = true;
 
   state.board = result.board;
   state.rngState = rng.state;
@@ -323,6 +345,7 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     counterTriggers: [],
     scoringArtifacts: [],
     tally: null,
+    ...(freeSwap ? { freeSwap } : {}),
   };
 
   // 爆破等级：本步的引爆在结算完之后计入，新等级从下一次行动起生效
@@ -462,6 +485,20 @@ function scoringParts(prev: BattleState, state: BattleState, result: ActionResul
     if (own > 0 && own <= P.smallStepMax) out.push({ key: 'smallStep', kind: 'add', tenths: P.smallStepTenths });
   }
   if (has('banana')) out.push({ key: 'banana', kind: 'add', tenths: P.bananaTenths });
+  if (has('collector')) out.push({ key: 'collector', kind: 'add', tenths: P.collectorTenths * state.artifacts.length });
+  if (has('vacancy')) {
+    const empty = Math.max(0, (state.artifactSlots ?? 5) - state.artifacts.length);
+    if (empty > 0) out.push({ key: 'vacancy', kind: 'add', tenths: P.vacancyTenths * empty });
+  }
+  if (has('medal') && (counters.medal ?? 0) > 0) out.push({ key: 'medal', kind: 'add', tenths: P.medalTenths * counters.medal! });
+  if (has('iceCream')) {
+    const left = P.iceCreamBase - (counters.iceCream ?? 0);
+    if (left > 0) out.push({ key: 'iceCream', kind: 'baseAdd', amount: left });
+  }
+  if (has('tycoon')) {
+    const bonus = Math.floor((state.gold ?? 0) / P.tycoonPer);
+    if (bonus > 0) out.push({ key: 'tycoon', kind: 'baseAdd', amount: bonus });
+  }
   if (has('loner') && detonated === 0) out.push({ key: 'loner', kind: 'base', factor: P.lonerBaseFactor });
   // 囤积者：这一步结算完、棋盘稳定后还留着的炸弹
   if (has('hoarder')) {
@@ -766,7 +803,14 @@ function endScoreTurn(state: BattleState, config: EngineConfig): { state: Battle
   const goal = state.goal!;
   if (state.turn >= goal.turns) {
     const shortfall = Math.max(0, goal.target - state.totalScore) / goal.target;
-    const penalty = Math.ceil(state.player.maxHp * shortfall);
+    let penalty = Math.ceil(state.player.maxHp * shortfall);
+    // 替身：这次扣血会让生命归零时改为不扣，替身消失
+    if (penalty >= state.player.hp && state.artifacts.includes('standIn')) {
+      penalty = 0;
+      state.artifacts = state.artifacts.filter((k) => k !== 'standIn');
+      (state.spentArtifacts ??= []).push('standIn');
+      log.standIn = true;
+    }
     const hurt = damagePlayer(state, penalty);
     log.damageToPlayerHp = hurt.toHp;
     log.scorePenalty = hurt.toHp;

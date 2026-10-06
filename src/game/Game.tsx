@@ -69,6 +69,7 @@ const ITEM_FAIL: Record<string, string> = { noBomb: '棋盘上没有炸弹', not
 
 const COLOR_NAME: Record<Color, string> = { attack: '红圆', shield: '蓝方', poison: '黄三角', catalyst: '绿菱形' };
 const fmt = (n: number) => n.toLocaleString('zh-CN');
+const LOST_TEXT: Partial<Record<ArtifactKey, string>> = { banana: '香蕉烂掉了', iceCream: '冰淇淋化完了', standIn: '替身挡下了致命的扣血，然后消失了' };
 const RANGE_TAG: Partial<Record<ArtifactKey, string>> = { thunderFuse: '闪电', crossFuse: '十字', bigBore: '5×5' };
 const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
@@ -146,6 +147,7 @@ export function Game() {
       <footer className="bottom">
         <Artifacts
           keys={run.artifacts}
+          gold={run.battle?.gold ?? run.gold}
           counters={{ ...(run.battle?.player.counters ?? run.player.counters), loyaltyCard: (run.battle?.stepsTaken ?? 0) % ARTIFACT_PARAMS.loyaltyEvery }}
           pings={pings}
           onSell={run.phase === 'shop' || run.phase === 'artifact' ? (k) => apply(sellArtifact(run, k, config)) : undefined}
@@ -203,6 +205,7 @@ function Battle({
     const shaped = new Set<ArtifactKey>();
     for (const e of events) if (e.type === 'wave') for (const x of e.explosions) if (x.byArtifact) shaped.add(x.byArtifact);
     for (const k of shaped) ping(k, RANGE_TAG[k] ?? '');
+    if (log?.freeSwap) ping('freeHand', '自由');
     const s = log?.settlement;
     // 神器逐件结算：倍率从连锁的值开始，每件神器抖一下、倍率跳一档，最后才出分
     if (s && log?.tally) {
@@ -492,7 +495,7 @@ function EndingCard({ ending, onNext }: { ending: Ending; onNext: () => void }) 
         {ending.income && <IncomeLines income={ending.income} />}
         {ending.lost?.map((k) => (
           <p key={k} className="lost">
-            {ARTIFACTS[k].name}烂掉了
+            {LOST_TEXT[k] ?? `${ARTIFACTS[k].name}消失了`}
           </p>
         ))}
         <button
@@ -525,6 +528,7 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
       return (
         <Panel eyebrow={`第 ${info.level} 关${info.boss ? ' · 首领' : ''}${run.endless ? ' · 无尽' : ''}`} title={`目标 ${fmt(info.target)} 分`}>
           {info.rule && <RuleBadge rule={info.rule} big />}
+          {info.rule && run.artifacts.includes('exemption') && <p className="hint">免检章：这条首领规则对你无效。</p>}
           <p className="hint">
             {config.scoreTurns} 回合，每回合 {turnAp(run, config)} 步。达到目标立即过关，剩下的每一步换 {config.goldPerStep} 金币；步数用完仍未达标，按差距扣生命。
           </p>
@@ -609,6 +613,12 @@ function IncomeLines({ income }: { income: Income }) {
           <b>+{income.elite}</b>
         </li>
       )}
+      {income.artifacts.map((a) => (
+        <li key={a.key}>
+          <span>{ARTIFACTS[a.key].name}</span>
+          <b>+{a.amount}</b>
+        </li>
+      ))}
       {income.steps > 0 && (
         <li>
           <span>剩余 {income.steps} 步</span>
@@ -755,8 +765,10 @@ function Artifacts({
   counters,
   pings,
   onSell,
+  gold,
 }: {
   keys: ArtifactKey[];
+  gold: number;
   counters: Partial<Record<ArtifactKey, number>> | undefined;
   pings: Partial<Record<ArtifactKey, { label: string; n: number }>>;
   onSell: ((k: ArtifactKey) => void) | undefined;
@@ -772,7 +784,7 @@ function Artifacts({
           <>
             <i className={`dot ${a.rarity}`} />
             {a.name}
-            <Progress artifact={k} n={counters?.[k] ?? 0} />
+            <Progress artifact={k} n={counters?.[k] ?? 0} gold={gold} count={keys.length} />
           </>
         );
         return (
@@ -806,8 +818,17 @@ function Artifacts({
 }
 
 /** 神器栏里的进度：累加类显示“进度/门槛”，尺规另显示已得的基数，长跑显示连续步数 */
-function Progress({ artifact, n }: { artifact: ArtifactKey; n: number }) {
+function Progress({ artifact, n, gold, count }: { artifact: ArtifactKey; n: number; gold: number; count: number }) {
   const every = ARTIFACTS[artifact].every;
+  const P = ARTIFACT_PARAMS;
+  const extra: Partial<Record<ArtifactKey, string>> = {
+    iceCream: `基数 +${Math.max(0, P.iceCreamBase - n)}`,
+    medal: n > 0 ? `+${(n * P.medalTenths) / 10}` : '',
+    tycoon: `基数 +${Math.floor(gold / P.tycoonPer)}`,
+    collector: `+${(count * P.collectorTenths) / 10}`,
+    vacancy: `+${(Math.max(0, config.artifactSlots - count) * P.vacancyTenths) / 10}`,
+  };
+  if (artifact in extra) return extra[artifact] ? <span className="count">{extra[artifact]}</span> : null;
   if (artifact === 'ruler') {
     const bonus = Math.floor(n / ARTIFACT_PARAMS.rulerEvery);
     return (

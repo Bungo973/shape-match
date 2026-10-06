@@ -1,7 +1,7 @@
 // 第一批计分神器（2026-10-06）：同一棋盘、同一种子，比较带与不带神器时的倍率与得分。
 import { describe, expect, it } from 'vitest';
 import { ARTIFACT_PARAMS, type ArtifactKey } from './artifacts';
-import { playerAction, startBattle, stepsLeft, turnAp, useItem, type BattleState } from './battle';
+import { endTurn, playerAction, startBattle, stepsLeft, turnAp, useItem, type BattleState } from './battle';
 import { DEFAULT_CONFIG } from './config';
 import { multiplierFor } from './score';
 import { boardWith } from './test-utils';
@@ -205,5 +205,60 @@ describe('第二批：炸弹类', () => {
     const out = playerAction(four, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } }, config);
     if (!out.ok) throw new Error(out.reason);
     expect(out.state.player.counters!.ruler).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('第三批：节奏、金币与规则（关内）', () => {
+  it('沙漏：每关第一回合 +1 步', () => {
+    expect(battle(['hourglass'], {}).ap).toBe(config.apPerTurn + ARTIFACT_PARAMS.hourglassAp);
+  });
+
+  it('自由手：每回合第一次不能消除的交换照样成立，第二次不行', () => {
+    // 红、蓝两格互换后周围都是黄、绿交替的填充，换了也成不了线
+    const board = { '5,5': 'a', '5,6': 's' };
+    const noMatch: Action = { type: 'swap', from: { r: 5, c: 5 }, to: { r: 5, c: 6 } };
+    expect(playerAction(battle([], board), noMatch, config).ok).toBe(false);
+    const first = playerAction(battle(['freeHand'], board), noMatch, config);
+    if (!first.ok) throw new Error(first.reason);
+    expect(first.log.freeSwap).toBe(true);
+    expect(first.state.ap).toBe(config.apPerTurn - 1);
+    expect(playerAction(first.state, noMatch, config).ok).toBe(false);
+  });
+
+  it('收藏家：每持有 1 件神器 +0.3；空位：每个空栏 +1', () => {
+    const c = compare(['collector', 'redNose'], three, swap3);
+    expect(c.withIt.settlement!.multiplier).toBeCloseTo(c.plain.settlement!.multiplier + 0.6 + 0.5);
+    const v = compare(['vacancy'], three, swap3);
+    expect(v.withIt.settlement!.multiplier).toBeCloseTo(v.plain.settlement!.multiplier + ((config.artifactSlots - 1) * ARTIFACT_PARAMS.vacancyTenths) / 10);
+  });
+
+  it('勋章按次数加倍率；冰淇淋按剩余加基数；富翁按开关时的金币加基数', () => {
+    const M = act(battle([], three), swap3).settlement!.multiplier;
+    const medal = battle(['medal'], three);
+    medal.player.counters = { medal: 3 };
+    expect(act(medal, swap3).settlement!.multiplier).toBeCloseTo(M + (3 * ARTIFACT_PARAMS.medalTenths) / 10);
+    const ice = battle(['iceCream'], three);
+    ice.player.counters = { iceCream: 4 };
+    expect(act(ice, swap3).settlement!.settlementScore).toBe(Math.round((3 + ARTIFACT_PARAMS.iceCreamBase - 4) * M));
+    const rich = battle(['tycoon'], three);
+    rich.gold = 23;
+    expect(act(rich, swap3).settlement!.settlementScore).toBe(Math.round((3 + 4) * M));
+  });
+
+  it('替身：致命的扣血改为不扣，替身消失；不致命时不触发', () => {
+    const s = battle(['standIn'], {});
+    s.turn = s.goal!.turns;
+    s.player.hp = 5;
+    const { state, log } = endTurn(s, config);
+    expect(log!.standIn).toBe(true);
+    expect(state.player.hp).toBe(5);
+    expect(state.outcome).toBe('won');
+    expect(state.artifacts).not.toContain('standIn');
+    expect(state.spentArtifacts).toEqual(['standIn']);
+    const healthy = battle(['standIn'], {});
+    healthy.turn = healthy.goal!.turns;
+    healthy.goal!.target = 10;
+    healthy.totalScore = 9;
+    expect(endTurn(healthy, config).state.artifacts).toContain('standIn');
   });
 });
