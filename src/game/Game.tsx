@@ -57,7 +57,7 @@ import {
 } from '../engine';
 import { getKit, getShepard, KIT_NAMES, setKit, setShepard, sfx, type SoundKit } from './audio';
 import { BoardView } from './board/BoardView';
-import { ItemIcon, UpgradeIcon } from './icons';
+import { GearIcon, ItemIcon, UpgradeIcon } from './icons';
 import { clearRun, loadBest, loadRun, recordBest, saveRun } from './save';
 
 const config = DEFAULT_CONFIG;
@@ -159,6 +159,7 @@ export function Game() {
             <i />
             {run.gold}
           </span>
+          <Menu restart={restart} />
         </div>
       </header>
 
@@ -170,12 +171,6 @@ export function Game() {
 
       <footer className="bottom">
         <Artifacts keys={run.artifacts} gold={run.battle?.gold ?? run.gold} counters={counters} pings={pings} onOpen={() => setDrawer(true)} />
-        <div className="tools">
-          <SoundPicker />
-          <button className="link" onClick={restart}>
-            重新开始
-          </button>
-        </div>
       </footer>
     </div>
       <ArtifactPanel
@@ -1066,6 +1061,73 @@ function Hp({ hp, max }: { hp: number; max: number }) {
   );
 }
 
+/** 右上角的设置入口：点 ⚙ 弹出小浮层，放音效、连锁音阶、最好成绩和重新开始；点外面或按 Esc 关掉 */
+function Menu({ restart }: { restart: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => {
+    setOpen(false);
+    setConfirming(false);
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, close]);
+  const best = open ? loadBest() : null;
+  return (
+    <div className="menu" ref={wrapRef}>
+      <button className="gear" aria-label="设置" aria-expanded={open} onClick={() => (open ? close() : setOpen(true))}>
+        <GearIcon size={20} />
+      </button>
+      {open && (
+        <div className="pop" role="dialog" aria-label="设置">
+          <SoundPicker />
+          <div className="pop-row">
+            <span className="lab">最好成绩</span>
+            <span>{best ? `通过 ${best.level} 关 · ${fmt(best.score)} 分` : '还没有'}</span>
+          </div>
+          <div className="pop-row restart">
+            {confirming ? (
+              <>
+                <span>放弃这一局？</span>
+                <button
+                  className="danger"
+                  onClick={() => {
+                    close();
+                    restart();
+                  }}
+                  autoFocus
+                >
+                  放弃并重开
+                </button>
+                <button className="link" onClick={() => setConfirming(false)}>
+                  取消
+                </button>
+              </>
+            ) : (
+              <button className="ghost small" onClick={() => setConfirming(true)}>
+                重新开始
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SoundPicker() {
   const [kit, setKitState] = useState<SoundKit>(getKit);
   const [shep, setShep] = useState(getShepard);
@@ -1084,8 +1146,8 @@ function SoundPicker() {
     demo();
   };
   return (
-    <div className="sound-wrap">
-      <div className="sound" role="group" aria-label="音效">
+    <>
+      <div className="sound pop-row" role="group" aria-label="音效">
         <span className="lab">音效</span>
         {(Object.keys(KIT_NAMES) as SoundKit[]).map((k) => (
           <button key={k} aria-pressed={kit === k} onClick={() => pick(k)}>
@@ -1093,7 +1155,7 @@ function SoundPicker() {
           </button>
         ))}
       </div>
-      <div className="sound" role="group" aria-label="连锁音阶">
+      <div className="sound pop-row" role="group" aria-label="连锁音阶">
         <span className="lab">连锁音阶</span>
         <button aria-pressed={!shep} onClick={() => toggle(false)}>
           普通
@@ -1105,7 +1167,7 @@ function SoundPicker() {
           ▶ 试听
         </button>
       </div>
-    </div>
+    </>
   );
 }
 

@@ -89,3 +89,16 @@ export function ItemIcon({ item, size = 22 }: { item: ItemKey; size?: number }) 
     </svg>
   );
 }
+
+/** 设置入口：平涂齿轮，八个方齿 */
+export function GearIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="-1 -1 2 2" aria-hidden="true">
+      {Array.from({ length: 8 }, (_, i) => (
+        <rect key={i} x="-0.17" y="-0.94" width="0.34" height="0.4" fill="currentColor" transform={`rotate(${i * 45})`} />
+      ))}
+      <circle r="0.62" fill="currentColor" />
+      <circle r="0.24" fill={PAPER} />
+    </svg>
+  );
+}
