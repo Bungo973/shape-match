@@ -34,6 +34,10 @@ export interface SettlementInput {
 
 export interface Settlement {
   multiplier: number;
+  /** 基数：主动清除的方块（含炸弹的爆破等级）在神器之前的值 */
+  rawBase: number;
+  /** 基数：加上神器的基数加成、乘上基数乘成之后的值；结算分 = base × multiplier（四舍五入） */
+  base: number;
   /** 本步消耗的旧充能层数 C */
   chargesUsed: number;
   baseValues: EffectValues;
@@ -95,11 +99,15 @@ export function settle(input: SettlementInput, config: EngineConfig): Settlement
     poison: A.poison + bonus + E.poison,
   };
   // 倍率带小数，效果与结算分四舍五入到整数
-  const settlementScore = Math.round((baseValues.attack + baseValues.shield + baseValues.poison + A.catalyst + (input.baseBonus ?? 0)) * (input.baseFactor ?? 1) * M);
+  const rawBase = baseValues.attack + baseValues.shield + baseValues.poison + A.catalyst;
+  const base = (rawBase + (input.baseBonus ?? 0)) * (input.baseFactor ?? 1);
+  const settlementScore = Math.round(base * M);
   const chargesGained = Math.floor(A.catalyst / config.catalystPerCharge);
   const kept = input.chargesBefore - C;
   return {
     multiplier: M,
+    rawBase,
+    base,
     chargesUsed: C,
     baseValues,
     settlementScore,

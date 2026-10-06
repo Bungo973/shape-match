@@ -219,7 +219,8 @@ function Battle({
   const runRef = useRef(run);
   runRef.current = run;
   const busyRef = useRef(false);
-  const [mult, setMult] = useState({ value: 1, chain: 0, final: false });
+  // 这一步的计算：基数 × 倍率。基数在出手时就定了（主动清除），倍率随连锁和神器逐步上涨
+  const [mult, setMult] = useState({ base: 0, value: 1, chain: 0, final: false });
   const multRef = useRef(1);
   const battle = run.battle!;
 
@@ -248,7 +249,8 @@ function Battle({
   const finish = useCallback(async (next: RunState, log: ActionLog | null, events: ResolutionEvent[], at: Pos, pulseAt: Pos[] = []) => {
     const view = viewRef.current!;
     multRef.current = 1;
-    setMult({ value: 1, chain: 0, final: false });
+    const s = log?.settlement;
+    setMult({ base: s?.rawBase ?? 0, value: 1, chain: 0, final: false });
     const b = next.battle!;
     if (events.length) await view.play(events, b.board);
     else view.sync(b.board);
@@ -257,7 +259,6 @@ function Battle({
     const shaped = new Set<ArtifactKey>();
     for (const e of events) if (e.type === 'wave') for (const x of e.explosions) if (x.byArtifact) shaped.add(x.byArtifact);
     for (const k of shaped) ping(k, RANGE_TAG[k] ?? '');
-    const s = log?.settlement;
     // 神器逐件结算：倍率从连锁的值开始，每件神器抖一下、倍率跳一档，最后才出分
     if (s && log?.tally) {
       setMult((m) => ({ ...m, value: log.tally!.start }));
@@ -266,18 +267,19 @@ function Battle({
         // 放大镜是道具，不在神器栏里，只靠倍率数字跳动来表现
         if (t.key in ARTIFACTS) ping(t.key as ArtifactKey, t.label);
         sfx.tally(i);
-        setMult((m) => ({ ...m, value: t.value }));
+        // 基数类神器（独行、冰淇淋等）生效时基数跟着跳
+        setMult((m) => ({ ...m, value: t.value, base: (s.rawBase + t.baseBonus) * t.baseFactor }));
         await wait(240);
       }
     }
     if (s && s.settlementScore > 0) {
       sfx.score(s.settlementScore);
       view.popText(`+${fmt(s.settlementScore)}`, s.multiplier > 1 ? `×${s.multiplier.toFixed(1)}` : '', at, s.settlementScore >= 200);
-      setMult((m) => ({ ...m, value: s.multiplier, final: true }));
+      setMult((m) => ({ ...m, base: s.base, value: s.multiplier, final: true }));
     } else if (s) {
       // 基数为 0（“色封”下只消了被封的颜色）：倍率再高也是 0 分，照样弹出说明，不让结算看起来卡住
       view.popText('+0', b.rule?.key === 'sealed' ? '色封不计分' : '基数为 0', at);
-      setMult((m) => ({ ...m, value: s.multiplier, final: true }));
+      setMult((m) => ({ ...m, base: s.base, value: s.multiplier, final: true }));
     }
     for (const t of log?.counterTriggers ?? []) {
       ping(t.key, t.key === 'fuseBox' ? `+${t.ap} 步` : t.key === 'fission' ? `直线 ×${t.cells.length}` : '3×3');
@@ -411,7 +413,7 @@ function Battle({
         // 倍率跨过整数档时响一声
         if (Math.floor(value) > Math.floor(multRef.current)) sfx.multUp(Math.floor(value) - 1);
         multRef.current = value;
-        setMult({ value, chain, final: false });
+        setMult((m) => ({ ...m, value, chain, final: false }));
       },
     });
     viewRef.current = view;
@@ -442,7 +444,7 @@ function Battle({
         <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={target} aria-valuenow={battle.totalScore}>
           <span style={{ transform: `scaleX(${progress})` }} />
         </div>
-        <Multiplier {...mult} cap={ruleConfig(battle, config).multiplierSegments.length} armed={!!battle.magnify} />
+        <Calc {...mult} armed={!!battle.magnify} />
         <Steps battle={battle} />
         <Upgrades levels={run.levels} heat={battle.bombHeat} />
         {(battle.rule || battle.task) && (
@@ -565,22 +567,25 @@ function useRolling(value: number): number {
   return shown;
 }
 
-function Multiplier({ value, chain, final, cap, armed }: { value: number; chain: number; final: boolean; cap: number; armed?: boolean }) {
-  // 倍率槽：每段一格，段内按比例填充；首领规则“低压”时段数变少
-  const filled = Math.min(cap, value - 1);
+/** 这一步的计分：基数 × 倍率 两个色块（蓝底基数、红底倍率），数值变化时弹一下；下方写连锁层数或放大镜 */
+function Calc({ base, value, chain, final, armed }: { base: number; value: number; chain: number; final: boolean; armed?: boolean }) {
+  const b = Math.round(base * 10) / 10;
   return (
-    <div className={`mult${value > 1 ? ' hot' : ''}${final ? ' final' : ''}`}>
-      <div className="segs" aria-hidden="true">
-        {Array.from({ length: cap }, (_, i) => (
-          <span key={i}>
-            <i style={{ transform: `scaleY(${Math.max(0, Math.min(1, filled - i))})` }} />
-          </span>
-        ))}
+    <div className={`mult${final ? ' final' : ''}`}>
+      <div className="calc" aria-label={`基数 ${b} 乘倍率 ${value.toFixed(1)}`}>
+        <span className="cell base">
+          <b key={b}>{fmt(b)}</b>
+        </span>
+        <span className="times" aria-hidden="true">
+          ×
+        </span>
+        <span className="cell rate">
+          <b key={value.toFixed(1)}>{value.toFixed(1)}</b>
+        </span>
       </div>
-      <div className="val">
-        <b key={value.toFixed(1)}>×{value.toFixed(1)}</b>
-        <span>{chain > 0 ? `连锁 ${chain}` : armed ? '放大镜 ×2 待用' : '倍率'}</span>
-      </div>
+      <span className="note">
+        {chain > 0 ? `连锁 ${chain}` : armed ? '放大镜 ×2 待用' : '基数 × 倍率'}
+      </span>
     </div>
   );
 }
@@ -807,7 +812,6 @@ function TaskLine({ task }: { task: TaskState }) {
   const status = done ? '完成' : failed ? '失败' : def.kind === 'speed' || def.kind === 'noItem' ? '达标时判定' : `${shown} / ${goal}`;
   return (
     <div className={`taskline${done ? ' done' : ''}${failed ? ' failed' : ''}`} key={done ? 'done' : 'todo'}>
-      <span className={`badge ${def.tier === 'hard' ? 'rare' : ''}`}>{def.tier === 'easy' ? '易' : '难'}</span>
       <b>{taskText(def)}</b>
       <span className="prog">{status}</span>
     </div>

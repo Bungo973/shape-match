@@ -311,62 +311,60 @@ button {
   gap: 12px;
 }
 
+/* 这一步的计分：蓝底基数 × 红底倍率（同《小丑牌》的筹码 × 倍率），平涂色块、无阴影 */
 .mult {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.mult .segs {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 38px;
-}
-
-.mult .segs span {
-  width: 8px;
-  height: 100%;
-  border: 2px solid var(--ink);
-  display: flex;
-  align-items: flex-end;
-}
-
-.mult .segs i {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: var(--ink);
-  transform-origin: bottom;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.mult.hot .segs i {
-  background: var(--red);
-}
-
-.mult .val {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  min-width: 4.4ch;
+  gap: 4px;
 }
 
-.mult .val b {
+.calc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calc .cell {
+  min-width: 3.2ch;
+  padding: 4px 10px;
+  color: var(--paper);
+  text-align: center;
+  overflow: hidden;
+}
+
+.calc .base {
+  background: var(--blue);
+}
+
+.calc .rate {
+  background: var(--red);
+}
+
+.calc b {
+  display: block;
   font-family: var(--font-num);
   font-weight: 400;
-  font-size: 24px;
-  line-height: 1;
+  font-size: 22px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
-.mult .val span {
+.calc .times {
+  font-family: var(--font-num);
+  font-size: 18px;
+}
+
+.mult .note {
   font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
 }
 
-.mult.final .val b {
-  color: var(--red);
+/* 结算完成：两块描黑边定格，直到下一步 */
+.mult.final .cell {
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
 }
 
 .bar {
@@ -811,6 +809,8 @@ button {
 /* ---------- 底栏 ---------- */
 
 .bottom {
+  /* 神器抖动放大时不撑出横向滚动条；纵向不裁，弹字照常露出 */
+  overflow-x: clip;
   margin-top: auto;
   display: flex;
   align-items: flex-start;
@@ -947,8 +947,8 @@ button {
   }
 }
 
-/* 倍率每跳一档，数字回弹一下（以数值为 key 重新挂载） */
-.mult .val b {
+/* 基数、倍率每次变化，数字回弹一下（以数值为 key 重新挂载） */
+.calc b {
   animation: bump 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -1121,6 +1121,28 @@ button {
   font-weight: 700;
 }
 
+/* 右栏的卡片占满栏宽：抖动改成原地小幅晃动，不放大出界，免得冒出滚动条 */
+.side .kick {
+  animation:
+    kick-side 0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
+    flash 0.9s steps(1, end);
+}
+
+@keyframes kick-side {
+  0% {
+    transform: none;
+  }
+  30% {
+    transform: translateX(-4px) rotate(-1.2deg);
+  }
+  60% {
+    transform: translateX(3px) rotate(0.8deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+
 .side .tag {
   left: auto;
   right: 8px;
@@ -1196,18 +1218,18 @@ button {
   }
 
   .hud .mult {
-    justify-content: space-between;
-    flex-direction: row-reverse;
+    align-items: stretch;
     border-top: 1px solid var(--rule);
     padding-top: 16px;
   }
 
-  .hud .mult .val {
-    align-items: flex-start;
+  .hud .calc .cell {
+    flex: 1;
+    padding: 8px 6px;
   }
 
-  .hud .mult .val b {
-    font-size: 40px;
+  .hud .calc b {
+    font-size: 30px;
   }
 
   .hud .steps {
@@ -1235,7 +1257,12 @@ button {
     position: sticky;
     top: 0;
     max-height: 100dvh;
+    overflow-x: hidden;
     overflow-y: auto;
+    /* 留出边距，卡片抖动和弹字不贴边 */
+    padding: 10px 6px 16px;
+    margin: -10px -6px 0;
+    scrollbar-gutter: stable;
   }
 
   .side header,
@@ -1257,6 +1284,7 @@ button {
     width: min(320px, 86vw);
     padding: 20px 16px 28px;
     border-left: var(--frame) solid var(--ink);
+    overflow-x: hidden;
     overflow-y: auto;
     transform: translateX(105%);
     transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);

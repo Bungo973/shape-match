@@ -184,6 +184,9 @@ export interface TallyStep {
   label: string;
   /** 这件生效后的倍率 */
   value: number;
+  /** 这件生效后累计的基数加成与基数乘成；界面用 (原始基数 + baseBonus) × baseFactor 显示当前基数 */
+  baseBonus: number;
+  baseFactor: number;
 }
 
 export interface Tally {
@@ -389,14 +392,14 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
       else baseFactor *= part.factor;
       const label =
         part.kind === 'add' ? `+${part.tenths / 10}` : part.kind === 'baseAdd' ? `基数 +${part.amount}` : part.kind === 'mul' ? `×${part.factor}` : `基数 ×${part.factor}`;
-      tally.steps.push({ key: part.key, label, value: multiplierFor(P, config, 0, erodeSteps, tenths, factor) });
+      tally.steps.push({ key: part.key, label, value: multiplierFor(P, config, 0, erodeSteps, tenths, factor), baseBonus, baseFactor });
     }
     log.scoringArtifacts.push(...parts.map((p) => p.key));
     // 道具“放大镜”：在所有神器之后再乘一次
     if (state.magnify) {
       factor *= ITEM_PARAMS.magnifierFactor;
       state.magnify = false;
-      tally.steps.push({ key: 'magnifier', label: `×${ITEM_PARAMS.magnifierFactor}`, value: multiplierFor(P, config, 0, erodeSteps, tenths, factor) });
+      tally.steps.push({ key: 'magnifier', label: `×${ITEM_PARAMS.magnifierFactor}`, value: multiplierFor(P, config, 0, erodeSteps, tenths, factor), baseBonus, baseFactor });
     }
     if (tally.steps.length) log.tally = tally;
     const s = settle(
