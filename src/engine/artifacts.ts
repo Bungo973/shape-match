@@ -84,14 +84,14 @@ export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
   piggyBank: { key: 'piggyBank', id: 'A45', name: '存钱罐', rarity: 'common', text: '每关结束时，手上每有 10 金币，利息 +1（最多 +5）。' },
   defuser: { key: 'defuser', id: 'A46', name: '拆弹工', rarity: 'common', text: '每关结束时，棋盘上每剩 1 枚炸弹 +1 金币（最多 +3）。' },
   goldWatch: { key: 'goldWatch', id: 'A47', name: '金怀表', rarity: 'common', text: '每关结束时 +2 金币。' },
-  iceCream: { key: 'iceCream', id: 'A48', name: '冰淇淋', rarity: 'common', text: '基数 +10。每过一关少 2，减到 0 就化完了。' },
+  iceCream: { key: 'iceCream', id: 'A48', name: '冰淇淋', rarity: 'common', text: '基数 +20。每过一关少 4，减到 0 就化完了。' },
   collector: { key: 'collector', id: 'A49', name: '收藏家', rarity: 'common', text: '每持有 1 件神器（含自己），倍率 +0.3。' },
-  tycoon: { key: 'tycoon', id: 'A50', name: '富翁', rarity: 'uncommon', text: '开关时手上每有 5 金币，本关基数 +1。' },
+  tycoon: { key: 'tycoon', id: 'A50', name: '富翁', rarity: 'uncommon', text: '开关时手上每有 5 金币，本关基数 +2。' },
   medal: { key: 'medal', id: 'A51', name: '勋章', rarity: 'uncommon', text: '每次提前 2 步以上达标，倍率永久 +0.3。' },
   vacancy: { key: 'vacancy', id: 'A52', name: '空位', rarity: 'uncommon', text: '神器栏每空 1 格，倍率 +0.5。' },
   standIn: { key: 'standIn', id: 'A53', name: '替身', rarity: 'uncommon', text: '未达标扣血会让生命归零时，改为不扣血，然后替身消失。' },
   exemption: { key: 'exemption', id: 'A54', name: '免检章', rarity: 'uncommon', text: '首领规则对你无效。' },
-  ruler: { key: 'ruler', id: 'A42', name: '尺规', rarity: 'uncommon', every: 10, text: '每做出 10 枚直线炸弹，基数永久 +1。' },
+  ruler: { key: 'ruler', id: 'A42', name: '尺规', rarity: 'uncommon', every: 10, text: '每做出 10 枚直线炸弹，基数永久 +2。' },
 };
 
 export const ARTIFACT_PARAMS = {
@@ -125,14 +125,17 @@ export const ARTIFACT_PARAMS = {
   hoarderTenths: 2,
   marathonTenths: 4,
   rulerEvery: 10,
+  /** 尺规每凑够一次给的基数（2026-10-06 连锁计基数转正，固定加基数的神器翻倍） */
+  rulerBase: 2,
   piggyPer: 10,
   piggyMax: 5,
   defuserMax: 3,
   goldWatchGold: 2,
-  iceCreamBase: 10,
-  iceCreamMelt: 2,
+  iceCreamBase: 20,
+  iceCreamMelt: 4,
   collectorTenths: 3,
   tycoonPer: 5,
+  tycoonBase: 2,
   /** 勋章：达标时至少剩这么多步才算“提前” */
   medalSteps: 2,
   medalTenths: 3,

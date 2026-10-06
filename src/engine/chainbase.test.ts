@@ -1,12 +1,12 @@
-// 原型“连锁计基数”（2026-10-06）：连锁清除的普通方块也按方块基数计入基数
+// 连锁计基数（2026-10-06 原型转正）：连锁清除的普通方块也按方块基数计入基数
 import { describe, expect, it } from 'vitest';
 import { playerAction, startBattle } from './battle';
-import { CHAIN_BASE_CONFIG, DEFAULT_CONFIG } from './config';
+import { DEFAULT_CONFIG } from './config';
 import { CRYSTAL_MOLE } from './content/enemies';
 import { candidateActions } from '../sim/bot';
 
-const on = CHAIN_BASE_CONFIG;
-const off = { ...CHAIN_BASE_CONFIG, chainBase: false };
+const on = { ...DEFAULT_CONFIG, scoreMode: true };
+const off = { ...on, chainBase: false };
 
 /** 在固定种子的开局棋盘上找一步带连锁的交换 */
 function chainStep(level: number) {
@@ -21,9 +21,9 @@ function chainStep(level: number) {
   throw new Error('没找到带连锁的一步');
 }
 
-describe('原型：连锁计基数', () => {
-  it('关闭时连锁不计基数，与现行规则一致', () => {
-    expect(DEFAULT_CONFIG.chainBase).toBe(false);
+describe('连锁计基数', () => {
+  it('默认开启；关闭时连锁不计基数（旧规则，模拟对照用）', () => {
+    expect(DEFAULT_CONFIG.chainBase).toBe(true);
     const { b } = chainStep(1);
     expect(b.result.chainBase).toBe(0);
     expect(b.settlement!.chainBase).toBe(0);
@@ -45,8 +45,3 @@ describe('原型：连锁计基数', () => {
   });
 });
 
-describe('原型配置', () => {
-  it('是冲分模式，关卡有目标分', () => {
-    expect(CHAIN_BASE_CONFIG.scoreMode).toBe(true);
-  });
-});

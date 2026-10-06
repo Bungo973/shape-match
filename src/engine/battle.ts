@@ -514,7 +514,7 @@ function scoringParts(prev: BattleState, state: BattleState, result: ActionResul
     if (left > 0) out.push({ key: 'iceCream', kind: 'baseAdd', amount: left });
   }
   if (has('tycoon')) {
-    const bonus = Math.floor((state.gold ?? 0) / P.tycoonPer);
+    const bonus = Math.floor((state.gold ?? 0) / P.tycoonPer) * P.tycoonBase;
     if (bonus > 0) out.push({ key: 'tycoon', kind: 'baseAdd', amount: bonus });
   }
   if (has('loner') && detonated === 0) out.push({ key: 'loner', kind: 'base', factor: P.lonerBaseFactor });
@@ -531,7 +531,7 @@ function scoringParts(prev: BattleState, state: BattleState, result: ActionResul
   // 尺规：先计入这一步做出的直线炸弹（含连锁中产生的），再按累计数给基数
   if (has('ruler')) {
     counters.ruler = (counters.ruler ?? 0) + lineBombsMade(result.events);
-    const bonus = Math.floor(counters.ruler / P.rulerEvery);
+    const bonus = Math.floor(counters.ruler / P.rulerEvery) * P.rulerBase;
     if (bonus > 0) out.push({ key: 'ruler', kind: 'baseAdd', amount: bonus });
   }
   if (has('lastCall') && !item && prev.ap === 1) out.push({ key: 'lastCall', kind: 'mul', factor: P.lastCallFactor });

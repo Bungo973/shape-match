@@ -276,11 +276,11 @@ describe('第三批：关卡之间', () => {
   });
 
   it('冰淇淋每关融化，减到 0 消失', () => {
-    const won = quickWin(['iceCream'], 0, (r) => (r.battle!.player.counters = { iceCream: 8 }));
+    const won = quickWin(['iceCream'], 0, (r) => (r.battle!.player.counters = { iceCream: ARTIFACT_PARAMS.iceCreamBase - ARTIFACT_PARAMS.iceCreamMelt }));
     expect(won.artifacts).not.toContain('iceCream');
     expect(won.lostArtifacts).toEqual(['iceCream']);
     const half = quickWin(['iceCream']);
-    expect(half.player.counters!.iceCream).toBe(2);
+    expect(half.player.counters!.iceCream).toBe(ARTIFACT_PARAMS.iceCreamMelt);
   });
 
   it('勋章：提前达标（剩余步数够多），次数 +1', () => {

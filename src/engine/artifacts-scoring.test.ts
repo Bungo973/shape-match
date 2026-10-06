@@ -70,7 +70,8 @@ describe('基数乘成', () => {
   it('独行：没有炸弹爆炸时基数 ×2；有炸弹爆炸时不触发', () => {
     const quiet = compare(['loner'], three, swap3);
     const M = quiet.plain.settlement!.multiplier;
-    expect(quiet.withIt.settlement!.settlementScore).toBe(Math.round(3 * 2 * M));
+    // 基数含连锁部分（连锁计基数），用不带神器时的基数对照
+    expect(quiet.withIt.settlement!.settlementScore).toBe(Math.round(quiet.plain.settlement!.rawBase * 2 * M));
     const loud = compare(['loner'], bomb, ignite);
     expect(loud.withIt.settlement!.settlementScore).toBe(loud.plain.settlement!.settlementScore);
   });
@@ -194,12 +195,12 @@ describe('第二批：炸弹类', () => {
     expect(loud.log.scoringArtifacts).not.toContain('marathon');
   });
 
-  it('尺规：每做出若干枚直线炸弹，基数永久 +1', () => {
+  it('尺规：每做出若干枚直线炸弹，基数永久增加', () => {
     const s = battle(['ruler'], three);
     s.player.counters = { ruler: ARTIFACT_PARAMS.rulerEvery };
-    const M = act(battle([], three), swap3).settlement!.multiplier;
+    const { multiplier: M, rawBase: B } = act(battle([], three), swap3).settlement!;
     const log = act(s, swap3);
-    expect(log.settlement!.settlementScore).toBe(Math.round((3 + 1) * M));
+    expect(log.settlement!.settlementScore).toBe(Math.round((B + ARTIFACT_PARAMS.rulerBase) * M));
     // 亲手做出四连直线炸弹，计数 +1
     const four = battle(['ruler'], { '0,0': 'a', '0,1': 'a', '0,3': 'a', '1,2': 'a' });
     const out = playerAction(four, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } }, config);
@@ -217,16 +218,16 @@ describe('第三批：节奏、金币与规则（关内）', () => {
   });
 
   it('勋章按次数加倍率；冰淇淋按剩余加基数；富翁按开关时的金币加基数', () => {
-    const M = act(battle([], three), swap3).settlement!.multiplier;
+    const { multiplier: M, rawBase: B } = act(battle([], three), swap3).settlement!;
     const medal = battle(['medal'], three);
     medal.player.counters = { medal: 3 };
     expect(act(medal, swap3).settlement!.multiplier).toBeCloseTo(M + (3 * ARTIFACT_PARAMS.medalTenths) / 10);
     const ice = battle(['iceCream'], three);
     ice.player.counters = { iceCream: 4 };
-    expect(act(ice, swap3).settlement!.settlementScore).toBe(Math.round((3 + ARTIFACT_PARAMS.iceCreamBase - 4) * M));
+    expect(act(ice, swap3).settlement!.settlementScore).toBe(Math.round((B + ARTIFACT_PARAMS.iceCreamBase - 4) * M));
     const rich = battle(['tycoon'], three);
     rich.gold = 23;
-    expect(act(rich, swap3).settlement!.settlementScore).toBe(Math.round((3 + 4) * M));
+    expect(act(rich, swap3).settlement!.settlementScore).toBe(Math.round((B + Math.floor(23 / ARTIFACT_PARAMS.tycoonPer) * ARTIFACT_PARAMS.tycoonBase) * M));
   });
 
   it('替身：致命的扣血改为不扣，替身消失；不致命时不触发', () => {

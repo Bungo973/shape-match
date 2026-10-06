@@ -26,7 +26,6 @@ import {
   chooseArtifact,
   continueEndless,
   DEFAULT_CONFIG,
-  CHAIN_BASE_CONFIG,
   newRun,
   pickStarter,
   leaveShop,
@@ -61,10 +60,9 @@ import {
 import { getKit, getShepard, KIT_NAMES, setKit, setShepard, sfx, type SoundKit } from './audio';
 import { BoardView } from './board/BoardView';
 import { GearIcon, ItemIcon, UpgradeIcon } from './icons';
-import { CHAIN_BASE, clearRun, loadBest, loadRun, recordBest, saveRun } from './save';
+import { clearRun, loadBest, loadRun, recordBest, saveRun } from './save';
 
-// 网址带 ?chainbase=1 时用原型规则“连锁计基数”（目标分另调），否则用现行规则
-const config = CHAIN_BASE ? CHAIN_BASE_CONFIG : DEFAULT_CONFIG;
+const config = DEFAULT_CONFIG;
 
 const newSeed = () => Math.floor(Math.random() * 1e9);
 /** 网址带 ?seed=123 时从该种子开新局，便于复现 */
@@ -157,11 +155,6 @@ export function Game() {
           <b>{String(shownLevel).padStart(2, '0')}</b>
           <span className="of">{run.endless ? '无尽' : `/${String(run.route.length).padStart(2, '0')}`}</span>
           {boss && <span className="tier">首领</span>}
-          {CHAIN_BASE && (
-            <span className="tier proto" title="原型规则：连锁清除的方块也计入基数（去掉网址里的 ?chainbase=1 回到现行规则）">
-              连锁计基数
-            </span>
-          )}
         </div>
         <div className="vitals">
           <Hp hp={run.player.hp} max={run.player.maxHp} />
@@ -229,7 +222,7 @@ function Battle({
   // 这一步的计算：基数 × 倍率。基数在出手时就定了（主动清除），倍率随连锁和神器逐步上涨
   const [mult, setMult] = useState({ base: 0, value: 1, chain: 0, final: false });
   const multRef = useRef(1);
-  // 这一步的基数构成：主动部分出手即定；原型“连锁计基数”下，连锁部分随连锁进度按比例涨上去，结算时对齐精确值
+  // 这一步的基数构成：主动部分出手即定；连锁部分随连锁进度按比例涨上去，结算时对齐精确值
   const stepBase = useRef({ active: 0, chain: 0, passive: 0 });
   const battle = run.battle!;
 
@@ -1069,7 +1062,7 @@ function artifactStatus(k: ArtifactKey, n: number, gold: number, count: number, 
     case 'lastCall':
       return ap == null ? null : ap === 1 ? '下一步生效' : `本回合还剩 ${ap} 步`;
     case 'ruler':
-      return `进度 ${n % P.rulerEvery}/${P.rulerEvery} · 已加基数 +${Math.floor(n / P.rulerEvery)}`;
+      return `进度 ${n % P.rulerEvery}/${P.rulerEvery} · 已加基数 +${Math.floor(n / P.rulerEvery) * P.rulerBase}`;
     case 'marathon':
       return n > 0 ? `已连续 ${n} 步 · 下一步不爆炸则 +${((n + 1) * P.marathonTenths) / 10}` : `下一步不爆炸则 +${P.marathonTenths / 10}`;
     case 'iceCream':
@@ -1077,7 +1070,7 @@ function artifactStatus(k: ArtifactKey, n: number, gold: number, count: number, 
     case 'medal':
       return `已得 ${n} 枚 · 倍率 +${(n * P.medalTenths) / 10}`;
     case 'tycoon':
-      return `当前基数 +${Math.floor(gold / P.tycoonPer)}`;
+      return `当前基数 +${Math.floor(gold / P.tycoonPer) * P.tycoonBase}`;
     case 'collector':
       return `当前倍率 +${(count * P.collectorTenths) / 10}`;
     case 'vacancy':
@@ -1183,13 +1176,13 @@ function Progress({ artifact, n, gold, count }: { artifact: ArtifactKey; n: numb
   const extra: Partial<Record<ArtifactKey, string>> = {
     iceCream: `基数 +${Math.max(0, P.iceCreamBase - n)}`,
     medal: n > 0 ? `+${(n * P.medalTenths) / 10}` : '',
-    tycoon: `基数 +${Math.floor(gold / P.tycoonPer)}`,
+    tycoon: `基数 +${Math.floor(gold / P.tycoonPer) * P.tycoonBase}`,
     collector: `+${(count * P.collectorTenths) / 10}`,
     vacancy: `+${(Math.max(0, config.artifactSlots - count) * P.vacancyTenths) / 10}`,
   };
   if (artifact in extra) return extra[artifact] ? <span className="count">{extra[artifact]}</span> : null;
   if (artifact === 'ruler') {
-    const bonus = Math.floor(n / ARTIFACT_PARAMS.rulerEvery);
+    const bonus = Math.floor(n / ARTIFACT_PARAMS.rulerEvery) * ARTIFACT_PARAMS.rulerBase;
     return (
       <span className="count">
         {n % ARTIFACT_PARAMS.rulerEvery}/{ARTIFACT_PARAMS.rulerEvery}

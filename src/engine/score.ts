@@ -11,7 +11,7 @@ export interface EffectValues {
 export interface SettlementInput {
   activeClearsByType: ClearsByType;
   passiveClearCount: number;
-  /** 原型“连锁计基数”：连锁清除带来的基数，直接加进基数 */
+  /** 连锁清除带来的基数，直接加进基数 */
   chainBase?: number;
   hadActiveColorClear: boolean;
   /** 行动开始前存储的催化剂充能层数 */
@@ -38,7 +38,7 @@ export interface Settlement {
   multiplier: number;
   /** 基数：清除的方块（含炸弹的爆破等级）在神器之前的值；含 chainBase */
   rawBase: number;
-  /** 其中由连锁清除带来的部分（原型“连锁计基数”，关闭时为 0） */
+  /** 其中由连锁清除带来的部分（config.chainBase 关闭时为 0） */
   chainBase: number;
   /** 基数：加上神器的基数加成、乘上基数乘成之后的值；结算分 = base × multiplier（四舍五入） */
   base: number;

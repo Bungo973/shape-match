@@ -133,7 +133,7 @@ export interface ActionResult {
   events: ResolutionEvent[];
   activeClearsByType: ClearsByType;
   passiveClearCount: number;
-  /** 原型“连锁计基数”：连锁清除带来的基数；关闭时为 0 */
+  /** 连锁清除带来的基数（config.chainBase 关闭时为 0） */
   chainBase: number;
   /** 本次行动是否主动清除了至少一枚有色普通方块 */
   hadActiveColorClear: boolean;
@@ -182,7 +182,7 @@ class Resolver {
   readonly socket: EffectValues = { attack: 0, shield: 0, poison: 0 };
   readonly triggeredIds = new Set<string>();
   passiveCount = 0;
-  /** 原型“连锁计基数”：被动阶段清除的普通方块按主动的算法累计的基数 */
+  /** 连锁计基数：被动阶段清除的普通方块按主动的算法累计的基数 */
   passiveBase = 0;
   activeBombsDetonated = 0;
   readonly detonatedByType: Record<BombUpgrade, number> = { line: 0, area: 0, color: 0 };

@@ -1,12 +1,29 @@
 // 本地自动保存冲分一局；规则版本不符时放弃旧存档，开新局。与旧界面的存档分开存放。
 import { RULES_VERSION, RUN_RULES_VERSION, type RunState } from '../engine';
 
-/** 原型“连锁计基数”（网址 ?chainbase=1）单独存档，和现行规则互不覆盖 */
-export const CHAIN_BASE = new URLSearchParams(window.location.search).get('chainbase') === '1';
-const MODE = CHAIN_BASE ? '/chainbase' : '';
-const KEY = `score-chase/run${MODE}`;
+const KEY = 'score-chase/run';
+// 2026-10-06 “连锁计基数”转正：原型期间单独存的存档与最好成绩并回主存档（原型的局按新规则开，可以接着玩）
+const PROTO_KEY = 'score-chase/run/chainbase';
+const PROTO_BEST_KEY = 'score-chase/best/chainbase';
+function migrateChainBase(): void {
+  try {
+    const ls = window.localStorage;
+    for (const [from, to] of [
+      [PROTO_KEY, KEY],
+      [PROTO_BEST_KEY, BEST_KEY],
+    ] as const) {
+      const v = ls.getItem(from);
+      if (v == null) continue;
+      ls.setItem(to, v);
+      ls.removeItem(from);
+    }
+  } catch {
+    // 存储不可用时忽略
+  }
+}
 
 export function loadRun(): RunState | null {
+  migrateChainBase();
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return null;
@@ -38,7 +55,7 @@ export function clearRun(): void {
 }
 
 // 最好成绩：通关与无尽模式都算，按到达的关卡、再按总分比较
-const BEST_KEY = `score-chase/best${MODE}`;
+const BEST_KEY = 'score-chase/best';
 
 export interface Best {
   level: number;

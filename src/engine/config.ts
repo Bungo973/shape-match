@@ -13,7 +13,7 @@ export interface EngineConfig {
   multiplierSegments: number[];
   /** 取消倍率封顶：各段用完后按最后一段的格数继续加（2026-09-30 定） */
   multiplierUncapped: boolean;
-  /** 原型（2026-10-06）：连锁（被动阶段）清除的普通方块也计入基数，算法与主动清除相同；网址 ?chainbase=1 开启 */
+  /** 连锁（被动阶段）清除的普通方块也计入基数，算法与主动清除相同（2026-10-06 原型转正）；关掉即回到只算主动清除，模拟对照用 */
   chainBase: boolean;
   /** 爆破等级给倍率：本步引爆过的每类炸弹，每高出 1 级倍率 +0.1 × 此值（十分位，2026-09-30 定为 1） */
   bombLevelMultTenths: number;
@@ -105,7 +105,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   colorWeights: { attack: 30, shield: 25, poison: 25, catalyst: 20 },
   multiplierSegments: [6, 10, 14, 18, 22],
   multiplierUncapped: true,
-  chainBase: false,
+  chainBase: true,
   bombLevelMultTenths: 1,
   bombHeatEvery: { line: 12, area: 9, color: 3 },
   catalystPerCharge: 3,
@@ -116,7 +116,8 @@ export const DEFAULT_CONFIG: EngineConfig = {
   maxPhases: 200,
   scoreMode: false,
   scoreTurns: 5,
-  scoreTargets: [1100, 1600, 2050, 3650, 4750, 4550, 6600, 7500, 7250],
+  // 2026-10-06 连锁计基数转正：分数约为原来的 2–3 倍，目标分按模拟与试玩重调（原 1100 / 1600 / 2050 / 3650 / 4750 / 4550 / 6600 / 7500 / 7250）
+  scoreTargets: [3600, 5000, 6700, 11100, 14450, 13000, 20450, 23500, 20450],
   endlessGrowth: 1.3,
   stoneRuleCount: 6,
   lowCapSegments: 2,
@@ -153,17 +154,3 @@ export const DEFAULT_CONFIG: EngineConfig = {
   rerollPrice: 3,
   rerollPriceStep: 1,
 };
-
-/**
- * 原型“连锁计基数”（2026-10-06）：连锁清除的方块也按方块基数计入基数。分数约涨到 2–3 倍，
- * 目标分按模拟重调（熟练自动玩家各关达标率与现行规则相当，300 局）。界面网址带 ?chainbase=1 时使用。
- */
-export const CHAIN_BASE_CONFIG: EngineConfig = {
-  ...DEFAULT_CONFIG,
-  // 只用于冲分模式；界面启动时才把 DEFAULT_CONFIG 改成冲分，这里不能靠展开继承
-  scoreMode: true,
-  chainBase: true,
-  // 2026-10-06 试玩：后几关偏简单，第 3 关起逐关上调 5%–20%
-  scoreTargets: [3600, 5000, 6700, 11100, 14450, 13000, 20450, 23500, 20450],
-};
-
