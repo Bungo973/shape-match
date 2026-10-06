@@ -1,6 +1,6 @@
 // 一局的状态与流程：开局神器 → 关卡 → 结算金币 →（精英）神器三选一 → 商店 → 路线页 → 下一关。
 // 2026-09-30 起所有升级都在商店用金币买，取代原来的升级三选一与营地；见 docs/DESIGN_JOURNAL.md。
-import { ARTIFACTS, offeredArtifacts, type ArtifactKey } from './artifacts';
+import { ARTIFACT_PARAMS, ARTIFACTS, artifactPrice, artifactSellPrice, offeredArtifacts, type ArtifactKey, type ArtifactRarity } from './artifacts';
 import { defaultLevels, UPGRADE_KEYS, type UpgradeKey, type UpgradeLevels } from './upgrades';
 import { endTurn, playerAction, startBattle, stepsLeft, useItem, type ActionLog, type BattleState, type EnemyTurnLog, type ItemUse, type PlayerState } from './battle';
 import { ITEM_KEYS, ITEMS, type ItemKey } from './items';
@@ -11,7 +11,7 @@ import { bossRuleFor, isBossLevel, scoreTarget } from './levels';
 import { createRng, mixSeed } from './rng';
 import type { Action } from './types';
 
-export const RUN_RULES_VERSION = 8;
+export const RUN_RULES_VERSION = 9;
 
 export type RunPhase = 'starter' | 'map' | 'battle' | 'artifact' | 'shop' | 'over';
 
@@ -39,6 +39,10 @@ export interface RunState {
   /** 背包里的道具（最多 config.itemSlots 件）与本次商店上架的道具 */
   items: ItemKey[];
   shopItems: ItemKey[];
+  /** 本次商店上架的神器（买走即下架） */
+  shopArtifacts: ArtifactKey[];
+  /** 上一关结束时烂掉的香蕉等，供结算展示 */
+  lostArtifacts: ArtifactKey[];
 }
 
 export interface Income {
@@ -79,6 +83,30 @@ function nodeAt(run: RunState, level: number): RouteNode {
 
 const current = (run: RunState): RouteNode => nodeAt(run, run.battleIndex);
 
+/**
+ * 按稀有度权重不放回地抽 n 件神器：每件先按权重抽稀有度，该稀有度抽空时在剩下的候选里按权重重抽。
+ * 权重为 0 的稀有度不会出现（开局只出普通，首领奖励只出罕见与稀有）。
+ */
+function sampleArtifacts(candidates: ArtifactKey[], n: number, weights: Record<ArtifactRarity, number>, seed: number): ArtifactKey[] {
+  const rng = createRng(seed);
+  const pool = candidates.filter((k) => weights[ARTIFACTS[k].rarity] > 0);
+  const out: ArtifactKey[] = [];
+  while (out.length < n && pool.length > 0) {
+    const rarities = (['common', 'uncommon', 'rare'] as const).filter((r) => pool.some((k) => ARTIFACTS[k].rarity === r));
+    const total = rarities.reduce((t, r) => t + weights[r], 0);
+    let roll = rng.int(total);
+    const rarity = rarities.find((r) => (roll -= weights[r]) < 0)!;
+    const ofRarity = pool.filter((k) => ARTIFACTS[k].rarity === rarity);
+    const pick = ofRarity[rng.int(ofRarity.length)]!;
+    pool.splice(pool.indexOf(pick), 1);
+    out.push(pick);
+  }
+  return out;
+}
+
+const STARTER_WEIGHTS: Record<ArtifactRarity, number> = { common: 1, uncommon: 0, rare: 0 };
+const BOSS_REWARD_WEIGHTS: Record<ArtifactRarity, number> = { common: 0, uncommon: 25, rare: 5 };
+
 export interface LevelInfo {
   level: number;
   target: number;
@@ -92,7 +120,6 @@ export function levelInfo(run: RunState, level: number, config: EngineConfig = D
 }
 
 export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, route: RouteNode[] = FULL_ROUTE): RunState {
-  const starters = offeredArtifacts(config.scoreMode).filter((k) => ARTIFACTS[k].starter);
   return {
     rulesVersion: RUN_RULES_VERSION,
     seed,
@@ -104,7 +131,7 @@ export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, rout
     artifacts: [],
     levels: defaultLevels(),
     battle: null,
-    starterChoices: sample(starters, 3, mixSeed(seed, 0x5)),
+    starterChoices: sampleArtifacts(offeredArtifacts(config.scoreMode), 3, STARTER_WEIGHTS, mixSeed(seed, 0x5)),
     income: null,
     artifactChoices: [],
     outcome: 'ongoing',
@@ -112,6 +139,8 @@ export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, rout
     endless: false,
     items: [],
     shopItems: [],
+    shopArtifacts: [],
+    lostArtifacts: [],
   };
 }
 
@@ -191,6 +220,7 @@ function settleBattle(run: RunState, config: EngineConfig): void {
   income.total = income.base + income.elite + income.fromSteps;
   run.gold += income.total;
   run.income = income;
+  rotArtifacts(run, b);
   // 终关：通关，本局结束；冲分模式可以选择继续进入无尽模式（continueEndless）
   if (node.tier === 'boss') {
     run.phase = 'over';
@@ -199,7 +229,7 @@ function settleBattle(run: RunState, config: EngineConfig): void {
   }
   if (node.tier === 'elite') {
     const pool = offeredArtifacts(config.scoreMode).filter((k) => !run.artifacts.includes(k));
-    run.artifactChoices = sample(pool, 3, mixSeed(run.seed, 0xe, run.battleIndex));
+    run.artifactChoices = sampleArtifacts(pool, 3, BOSS_REWARD_WEIGHTS, mixSeed(run.seed, 0xe, run.battleIndex));
     if (run.artifactChoices.length) run.phase = 'artifact';
     else enterShop(run, config);
   } else {
@@ -207,18 +237,67 @@ function settleBattle(run: RunState, config: EngineConfig): void {
   }
 }
 
-/** 进商店：按局种子与关卡序号随机上架几种道具 */
+/** 关卡结束时会消失的神器：香蕉每关有 1/6 的概率烂掉；“哑火”关里神器失效，不会烂 */
+function rotArtifacts(run: RunState, b: BattleState): void {
+  run.lostArtifacts = [];
+  if (!run.artifacts.includes('banana') || b.rule?.key === 'silence') return;
+  const rng = createRng(mixSeed(run.seed, 0xba, run.battleIndex));
+  if (rng.int(ARTIFACT_PARAMS.bananaOdds) === 0) {
+    run.artifacts = run.artifacts.filter((k) => k !== 'banana');
+    run.lostArtifacts.push('banana');
+  }
+}
+
+/** 进商店：按局种子与关卡序号随机上架几种道具，并按稀有度权重上架没有持有的神器 */
 function enterShop(run: RunState, config: EngineConfig): void {
   run.shopItems = sample(ITEM_KEYS, config.itemsPerShop, mixSeed(run.seed, 0x17e, run.battleIndex));
+  const pool = offeredArtifacts(config.scoreMode).filter((k) => !run.artifacts.includes(k));
+  run.shopArtifacts = sampleArtifacts(pool, config.artifactsPerShop, config.artifactShopWeights, mixSeed(run.seed, 0x5a, run.battleIndex));
   run.phase = 'shop';
 }
 
 export function chooseArtifact(prev: RunState, key: ArtifactKey, config: EngineConfig = DEFAULT_CONFIG): RunResult {
   if (prev.phase !== 'artifact' || !prev.artifactChoices.includes(key)) return fail(prev, '无效的神器候选');
+  if (prev.artifacts.length >= config.artifactSlots) return fail(prev, '神器栏已满');
   const run = clone(prev);
   run.artifacts.push(key);
   run.artifactChoices = [];
   enterShop(run, config);
+  return { ok: true, run };
+}
+
+/** 首领奖励一件都不要（神器栏满了又不想卖时） */
+export function skipArtifact(prev: RunState, config: EngineConfig = DEFAULT_CONFIG): RunResult {
+  if (prev.phase !== 'artifact') return fail(prev, '不在神器选择中');
+  const run = clone(prev);
+  run.artifactChoices = [];
+  enterShop(run, config);
+  return { ok: true, run };
+}
+
+/** 买下商店里第 index 件上架的神器 */
+export function buyArtifact(prev: RunState, index: number, config: EngineConfig = DEFAULT_CONFIG): RunResult {
+  if (prev.phase !== 'shop') return fail(prev, '不在商店');
+  const key = prev.shopArtifacts[index];
+  if (!key) return fail(prev, '没有这件神器');
+  if (prev.artifacts.length >= config.artifactSlots) return fail(prev, '神器栏已满');
+  const price = artifactPrice(key, config);
+  if (prev.gold < price) return fail(prev, '金币不足');
+  const run = clone(prev);
+  run.gold -= price;
+  run.artifacts.push(key);
+  run.shopArtifacts.splice(index, 1);
+  return { ok: true, run };
+}
+
+/** 卖掉持有的一件神器，得半价；在商店和首领奖励时都可以卖 */
+export function sellArtifact(prev: RunState, key: ArtifactKey, config: EngineConfig = DEFAULT_CONFIG): RunResult {
+  if (prev.phase !== 'shop' && prev.phase !== 'artifact') return fail(prev, '只能在商店或领奖时卖神器');
+  if (!prev.artifacts.includes(key)) return fail(prev, '没有这件神器');
+  const run = clone(prev);
+  run.artifacts = run.artifacts.filter((k) => k !== key);
+  run.gold += artifactSellPrice(key, config);
+  if (key in (run.player.counters ?? {})) delete run.player.counters![key];
   return { ok: true, run };
 }
 
@@ -291,6 +370,8 @@ export function leaveShop(prev: RunState): RunResult {
   const run = clone(prev);
   run.income = null;
   run.shopItems = [];
+  run.shopArtifacts = [];
+  run.lostArtifacts = [];
   if (!run.endless && run.battleIndex >= run.route.length) {
     run.phase = 'over';
     run.outcome = 'won';

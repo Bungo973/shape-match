@@ -20,8 +20,12 @@ export interface SettlementInput {
   multiplierStepDelta?: number;
   /** 敌方倍率侵蚀：在神器修正之后再降的档数（每档 = 倍率 −1），最低 ×1 */
   erosionSteps?: number;
-  /** 爆破等级带来的倍率加成（十分位） */
+  /** 爆破等级与神器带来的倍率加成（十分位） */
   bonusTenths?: number;
+  /** 神器的倍率乘成（末班车、积分卡、玻璃炮），在所有加成之后相乘；“低压”的封顶仍限制最终倍率 */
+  multiplierFactor?: number;
+  /** 神器的基数乘成（独行） */
+  baseFactor?: number;
   /** 过载引线的代价：本步护盾效果为 0，结算分不变 */
   zeroShieldEffect?: boolean;
 }
@@ -65,16 +69,21 @@ export function chainMultiplier(P: number, config: EngineConfig): number {
   return 1 + chainTenths(P, config) / 10;
 }
 
-export function multiplierFor(passiveClearCount: number, config: EngineConfig, stepDelta = 0, erosionSteps = 0, bonusTenths = 0): number {
+/**
+ * 最终倍率：连锁 + 各项加成（先加）→ 侵蚀 → 乘成（后乘），每一层都受封顶限制。
+ * 加成彼此相加、乘成彼此相乘，所以神器的先后顺序不影响结果。
+ */
+export function multiplierFor(passiveClearCount: number, config: EngineConfig, stepDelta = 0, erosionSteps = 0, bonusTenths = 0, factor = 1): number {
   const cap = (multiplierCap(config) - 1) * 10;
   const boosted = Math.max(0, Math.min(cap, chainTenths(passiveClearCount, config) + 10 * stepDelta + bonusTenths));
-  return 1 + Math.max(0, boosted - 10 * erosionSteps) / 10;
+  const added = 1 + Math.max(0, boosted - 10 * erosionSteps) / 10;
+  return Math.min(multiplierCap(config), Math.round(added * factor * 10) / 10);
 }
 
 export function settle(input: SettlementInput, config: EngineConfig): Settlement {
   const A = input.activeClearsByType;
   const E = input.socketBonuses ?? { attack: 0, shield: 0, poison: 0 };
-  const M = multiplierFor(input.passiveClearCount, config, input.multiplierStepDelta ?? 0, input.erosionSteps ?? 0, input.bonusTenths ?? 0);
+  const M = multiplierFor(input.passiveClearCount, config, input.multiplierStepDelta ?? 0, input.erosionSteps ?? 0, input.bonusTenths ?? 0, input.multiplierFactor ?? 1);
   // 至少主动清除一枚有色普通方块的行动才消耗旧充能（GAME_RULES §2 第 5 步）
   const C = input.hadActiveColorClear ? input.chargesBefore : 0;
   const bonus = config.chargeBonus * C;
@@ -84,7 +93,7 @@ export function settle(input: SettlementInput, config: EngineConfig): Settlement
     poison: A.poison + bonus + E.poison,
   };
   // 倍率带小数，效果与结算分四舍五入到整数
-  const settlementScore = Math.round((baseValues.attack + baseValues.shield + baseValues.poison + A.catalyst) * M);
+  const settlementScore = Math.round((baseValues.attack + baseValues.shield + baseValues.poison + A.catalyst) * (input.baseFactor ?? 1) * M);
   const chargesGained = Math.floor(A.catalyst / config.catalystPerCharge);
   const kept = input.chargesBefore - C;
   return {

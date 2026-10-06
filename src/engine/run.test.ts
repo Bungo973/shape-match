@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { ARTIFACTS, offeredArtifacts } from './artifacts';
+import { ARTIFACTS, artifactPrice, offeredArtifacts } from './artifacts';
 import { DEFAULT_CONFIG } from './config';
 import {
   buyHeal,
   buyUpgrade,
+  buyArtifact,
   chooseArtifact,
   leaveShop,
+  sellArtifact,
+  skipArtifact,
   newRun,
   pickStarter,
   runAction,
@@ -42,7 +45,7 @@ describe('开局', () => {
     const run = newRun(5);
     expect(run.starterChoices).toHaveLength(3);
     expect(new Set(run.starterChoices).size).toBe(3);
-    expect(run.starterChoices.every((k) => ARTIFACTS[k].starter)).toBe(true);
+    expect(run.starterChoices.every((k) => ARTIFACTS[k].rarity === 'common')).toBe(true);
     expect(newRun(5).starterChoices).toEqual(run.starterChoices);
   });
 
@@ -141,8 +144,8 @@ describe('升级与神器池', () => {
     expect(run.battle!.levels).toEqual(run.levels);
   });
 
-  it('开局三选一只从开局池中抽取', () => {
-    for (let seed = 1; seed <= 20; seed++) expect(newRun(seed).starterChoices.every((k) => ARTIFACTS[k].starter && offeredArtifacts().includes(k))).toBe(true);
+  it('开局三选一只出普通神器', () => {
+    for (let seed = 1; seed <= 20; seed++) expect(newRun(seed).starterChoices.every((k) => ARTIFACTS[k].rarity === 'common' && offeredArtifacts().includes(k))).toBe(true);
   });
 });
 
@@ -171,5 +174,75 @@ describe('完整一局', () => {
     expect(run.gold).toBe(DEFAULT_CONFIG.goldBase * 9 + DEFAULT_CONFIG.goldEliteBonus * 3);
     expect(run.artifacts).toHaveLength(3);
     expect(UPGRADE_KEYS.reduce((sum, k) => sum + run.levels[k] - 1, 0)).toBe(0);
+  });
+});
+
+describe('神器：商店、栏位与出售', () => {
+  const toShop = (gold = 0, seed = 1) => ({ ...winBattle(toFirstBattle(seed)), gold });
+
+  it('商店上架 2 件没有持有的神器；买下进神器栏、扣对应稀有度的价格', () => {
+    const shop = toShop(100);
+    expect(shop.shopArtifacts).toHaveLength(DEFAULT_CONFIG.artifactsPerShop);
+    expect(shop.shopArtifacts.some((k) => shop.artifacts.includes(k))).toBe(false);
+    const key = shop.shopArtifacts[0]!;
+    const bought = ok(buyArtifact(shop, 0));
+    expect(bought.artifacts).toContain(key);
+    expect(bought.gold).toBe(100 - artifactPrice(key, DEFAULT_CONFIG));
+    expect(bought.shopArtifacts).not.toContain(key);
+  });
+
+  it('金币不足或神器栏满了不能买', () => {
+    expect(buyArtifact(toShop(0), 0).ok).toBe(false);
+    const full = toShop(100);
+    full.artifacts = ['chainLens', 'redNose', 'banana', 'loner', 'smallStep'].filter((k) => !full.shopArtifacts.includes(k as never)) as typeof full.artifacts;
+    while (full.artifacts.length < DEFAULT_CONFIG.artifactSlots) full.artifacts.push('powderKeg');
+    expect(buyArtifact(full, 0).ok).toBe(false);
+  });
+
+  it('卖掉神器得半价（向下取整）', () => {
+    const shop = toShop(0);
+    shop.artifacts = ['glassCannon'];
+    const sold = ok(sellArtifact(shop, 'glassCannon'));
+    expect(sold.artifacts).toEqual([]);
+    expect(sold.gold).toBe(Math.floor(DEFAULT_CONFIG.artifactPrices.rare / 2));
+  });
+
+  it('商店的稀有度大致按 70 / 25 / 5', () => {
+    const count = { common: 0, uncommon: 0, rare: 0 };
+    for (let seed = 1; seed <= 150; seed++) for (const k of toShop(0, seed).shopArtifacts) count[ARTIFACTS[k].rarity]++;
+    expect(count.common).toBeGreaterThan(count.uncommon);
+    expect(count.uncommon).toBeGreaterThan(count.rare);
+    expect(count.rare).toBeGreaterThan(0);
+  });
+
+  it('首领奖励只出罕见与稀有；栏满不能选，可以卖掉一件再选或者跳过', () => {
+    let run = toFirstBattle();
+    run = ok(leaveShop(winBattle(run)));
+    run = ok(leaveShop(winBattle(ok(startNextBattle(run)))));
+    run = winBattle(ok(startNextBattle(run)));
+    expect(run.phase).toBe('artifact');
+    expect(run.artifactChoices.every((k) => ARTIFACTS[k].rarity !== 'common')).toBe(true);
+    const full = { ...run, artifacts: ['chainLens', 'redNose', 'banana', 'loner', 'smallStep'] as RunState['artifacts'] };
+    const pick = full.artifactChoices[0]!;
+    expect(chooseArtifact(full, pick).ok).toBe(false);
+    const after = ok(chooseArtifact(ok(sellArtifact(full, 'redNose')), pick));
+    expect(after.artifacts).toContain(pick);
+    expect(after.phase).toBe('shop');
+    expect(ok(skipArtifact(full)).phase).toBe('shop');
+  });
+
+  it('香蕉：每关结束有时会烂掉，同种子结果相同', () => {
+    let rotted = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const b = toFirstBattle(seed);
+      b.artifacts = ['banana'];
+      const won = winBattle(b);
+      if (!won.artifacts.includes('banana')) {
+        rotted++;
+        expect(won.lostArtifacts).toEqual(['banana']);
+      }
+    }
+    expect(rotted).toBeGreaterThan(2);
+    expect(rotted).toBeLessThan(25);
   });
 });

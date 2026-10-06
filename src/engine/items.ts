@@ -1,7 +1,7 @@
 // 道具：商店用金币买、关内随时使用的一次性消耗品（2026-09-30）。只做玩家熟悉的传统道具，不做修饰数值的药剂。
 // 结算复用已有动作：锤子是对一格的一次爆炸，雷管是对所有炸弹格的一次爆炸，手套是不要求能消除的交换，炸药包与洗牌直接改棋盘。
 // 2026-09-30 改版：道具要给棋盘上稀缺的东西（大爆发），关末平均还剩 5.5 枚炸弹没用，所以炸药包改放五连、新增雷管。
-// 是否消耗步数由 config.itemCostsStep 决定（原型阶段两种都试）。设计见 docs/DESIGN_JOURNAL.md 第 16 节。
+// 2026-10-06 定为不消耗步数（config.itemCostsStep 默认 false，仅供模拟对比）。设计见 docs/DESIGN_JOURNAL.md 第 16 节。
 
 export type ItemKey = 'hammer' | 'glove' | 'charge' | 'detonator' | 'shuffle';
 

@@ -3,6 +3,7 @@ import {
   buyHeal,
   buyUpgrade,
   chooseArtifact,
+  skipArtifact,
   DEFAULT_CONFIG,
   leaveShop,
   mixSeed,
@@ -183,7 +184,8 @@ export function simulateRun(seed: number, opts: SimOptions): RunReport {
         }
       }
     } else if (run.phase === 'artifact') {
-      run = ok(chooseArtifact(run, run.artifactChoices[0]!));
+      // 指定了神器时跳过首领奖励，只衡量这几件
+      run = ok(opts.artifacts ? skipArtifact(run, config) : chooseArtifact(run, run.artifactChoices[0]!));
     } else if (run.phase === 'shop') {
       run = autoShop(run, config);
     } else {

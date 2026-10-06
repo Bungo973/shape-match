@@ -1,8 +1,16 @@
-// 冲分模式的整局界面：开局神器 → 关卡（棋盘）→ 升级三选一 →（精英后）神器 → 营地 → 下一关。
+// 冲分模式的整局界面：开局神器 → 关卡（棋盘）→ 结算金币 →（首领后）神器 → 商店 → 下一关。
 // 规则全部由引擎给出；这里只负责展示、发出动作和安排动画的先后。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ARTIFACTS,
+  ARTIFACT_PARAMS,
+  artifactPrice,
+  artifactSellPrice,
+  buyArtifact,
+  RARITY_NAME,
+  sellArtifact,
+  skipArtifact,
+  turnAp,
   BOMB_NAME,
   BOMB_UPGRADES,
   buyHeal,
@@ -70,11 +78,21 @@ interface Ending {
   penalty: number;
   /** 本关的金币收入；终关或失败时没有 */
   income: Income | null;
+  /** 本关结束时消失的神器（香蕉烂掉） */
+  lost?: ArtifactKey[];
 }
 
 export function Game() {
   const [run, setRunState] = useState(initialRun);
   const [ending, setEnding] = useState<Ending | null>(null);
+  // 刚在结算里生效的神器，在神器栏里亮一下
+  const [lit, setLitState] = useState<ArtifactKey[]>([]);
+  const litTimer = useRef(0);
+  const setLit = useCallback((keys: ArtifactKey[]) => {
+    window.clearTimeout(litTimer.current);
+    setLitState(keys);
+    if (keys.length) litTimer.current = window.setTimeout(() => setLitState([]), 900);
+  }, []);
 
   const setRun = useCallback((r: RunState) => {
     setRunState(r);
@@ -120,16 +138,20 @@ export function Game() {
       </header>
 
       {showBattle ? (
-        <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} />
+        <Battle key={run.battleIndex} run={run} setRun={setRun} ending={ending} setEnding={setEnding} setLit={setLit} />
       ) : (
         <Between run={run} apply={apply} restart={restart} />
       )}
 
       <footer className="bottom">
-        <Artifacts keys={run.artifacts} counters={run.battle?.player.counters ?? run.player.counters} />
+        <Artifacts
+          keys={run.artifacts}
+          counters={{ ...(run.battle?.player.counters ?? run.player.counters), loyaltyCard: (run.battle?.stepsTaken ?? 0) % ARTIFACT_PARAMS.loyaltyEvery }}
+          lit={lit}
+          onSell={run.phase === 'shop' || run.phase === 'artifact' ? (k) => apply(sellArtifact(run, k, config)) : undefined}
+        />
         <div className="tools">
           <SoundPicker />
-          <ItemStepToggle />
           <button className="link" onClick={restart}>
             重新开始
           </button>
@@ -141,7 +163,19 @@ export function Game() {
 
 // ---------- 关卡 ----------
 
-function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r: RunState) => void; ending: Ending | null; setEnding: (e: Ending | null) => void }) {
+function Battle({
+  run,
+  setRun,
+  ending,
+  setEnding,
+  setLit,
+}: {
+  run: RunState;
+  setRun: (r: RunState) => void;
+  ending: Ending | null;
+  setEnding: (e: Ending | null) => void;
+  setLit: (keys: ArtifactKey[]) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<BoardView | null>(null);
   const runRef = useRef(run);
@@ -171,12 +205,14 @@ function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r:
       view.popText(`+${fmt(s.settlementScore)}`, s.multiplier > 1 ? `×${s.multiplier.toFixed(1)}` : '', at, s.settlementScore >= 200);
       setMult((m) => ({ ...m, value: s.multiplier, final: true }));
     }
+    const fired = [...(log?.scoringArtifacts ?? []), ...(log?.counterTriggers ?? []).map((t) => t.key)];
+    if (fired.length) setLit(fired);
     for (const t of log?.counterTriggers ?? []) if ('at' in t && t.at) view.pulse([t.at]);
     runRef.current = next;
     setRun(next);
     if (b.outcome !== 'ongoing') {
       sfx.win();
-      setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0, income: next.income });
+      setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0, income: next.income, lost: next.lostArtifacts });
       return;
     }
     // 冲分模式没有敌人：行动力用完就自动进入下一回合
@@ -192,11 +228,11 @@ function Battle({ run, setRun, ending, setEnding }: { run: RunState; setRun: (r:
           const won = nb.totalScore >= (nb.goal?.target ?? 0);
           if (won) sfx.win();
           else sfx.short();
-          setEnding({ won, score: nb.totalScore, target: nb.goal?.target ?? 0, penalty: after.log?.scorePenalty ?? 0, income: after.run.income });
+          setEnding({ won, score: nb.totalScore, target: nb.goal?.target ?? 0, penalty: after.log?.scorePenalty ?? 0, income: after.run.income, lost: after.run.lostArtifacts });
         } else sfx.turn();
       }
     }
-  }, [setRun, setEnding]);
+  }, [setRun, setEnding, setLit]);
 
   const doAction = useCallback(async (action: Action) => {
     const view = viewRef.current;
@@ -370,15 +406,16 @@ function Multiplier({ value, chain, final, cap }: { value: number; chain: number
 
 function Steps({ battle }: { battle: BattleState }) {
   const turns = battle.goal?.turns ?? config.scoreTurns;
-  const left = (turns - battle.turn) * config.apPerTurn + battle.ap;
+  const perTurn = turnAp(battle, config);
+  const left = (turns - battle.turn) * perTurn + battle.ap;
   return (
     <div className="steps">
       <span className="lab">剩余步数</span>
       <div className="groups" aria-label={`还剩 ${left} 步`}>
         {Array.from({ length: turns }, (_, i) => {
           const t = i + 1;
-          const n = t < battle.turn ? 0 : t === battle.turn ? battle.ap : config.apPerTurn;
-          const slots = Math.max(config.apPerTurn, t === battle.turn ? battle.ap : 0);
+          const n = t < battle.turn ? 0 : t === battle.turn ? battle.ap : perTurn;
+          const slots = Math.max(perTurn, t === battle.turn ? battle.ap : 0);
           return (
             <span key={i} className={`group${t === battle.turn ? ' now' : ''}`}>
               {Array.from({ length: slots }, (_, j) => (
@@ -422,6 +459,11 @@ function EndingCard({ ending, onNext }: { ending: Ending; onNext: () => void }) 
         <b>{fmt(ending.score)}</b>
         <p>{ending.won ? `目标 ${fmt(ending.target)}` : `差 ${fmt(short)} 分 · 生命 −${ending.penalty}`}</p>
         {ending.income && <IncomeLines income={ending.income} />}
+        {ending.lost?.map((k) => (
+          <p key={k} className="lost">
+            {ARTIFACTS[k].name}烂掉了
+          </p>
+        ))}
         <button
           className="primary"
           onClick={() => {
@@ -453,7 +495,7 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
         <Panel eyebrow={`第 ${info.level} 关${info.boss ? ' · 首领' : ''}${run.endless ? ' · 无尽' : ''}`} title={`目标 ${fmt(info.target)} 分`}>
           {info.rule && <RuleBadge rule={info.rule} big />}
           <p className="hint">
-            {config.scoreTurns} 回合，每回合 {config.apPerTurn} 步。达到目标立即过关，剩下的每一步换 {config.goldPerStep} 金币；步数用完仍未达标，按差距扣生命。
+            {config.scoreTurns} 回合，每回合 {turnAp(run, config)} 步。达到目标立即过关，剩下的每一步换 {config.goldPerStep} 金币；步数用完仍未达标，按差距扣生命。
           </p>
           <button className="primary big" onClick={() => apply(startNextBattle(run, config))} autoFocus>
             开始
@@ -463,8 +505,12 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
     }
     case 'artifact':
       return (
-        <Panel eyebrow="精英奖励" title="选一件神器">
-          <ArtifactChoices keys={run.artifactChoices} onPick={(k) => apply(chooseArtifact(run, k))} />
+        <Panel eyebrow="首领奖励" title="选一件神器">
+          <ArtifactChoices keys={run.artifactChoices} full={run.artifacts.length >= config.artifactSlots} onPick={(k) => apply(chooseArtifact(run, k, config))} />
+          {run.artifacts.length >= config.artifactSlots && <p className="hint">神器栏满了：点下方神器栏里的一件卖掉，或者跳过。</p>}
+          <button className="ghost" onClick={() => apply(skipArtifact(run, config))}>
+            跳过
+          </button>
         </Panel>
       );
     case 'shop':
@@ -562,6 +608,32 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
         })}
       </div>
       <h2 className="sub">
+        神器
+        <span>
+          神器栏 {run.artifacts.length}/{config.artifactSlots} · 点下方神器栏可以半价卖出
+        </span>
+      </h2>
+      {run.shopArtifacts.length > 0 ? (
+        <div className="choices grid">
+          {run.shopArtifacts.map((k, i) => {
+            const price = artifactPrice(k, config);
+            return (
+              <button key={k} className="choice" disabled={run.gold < price || run.artifacts.length >= config.artifactSlots} onClick={() => apply(buyArtifact(run, i, config))}>
+                <Rarity artifact={k} />
+                <b>{ARTIFACTS[k].name}</b>
+                <span className="desc">{ARTIFACTS[k].text}</span>
+                <span className="price">
+                  <i />
+                  {price}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="hint">神器已经买空了。</p>
+      )}
+      <h2 className="sub">
         道具
         <span>
           背包 {run.items.length}/{config.itemSlots}
@@ -625,14 +697,19 @@ function UpgradeCard({ upgrade, level, add, price, onPick, disabled }: { upgrade
   );
 }
 
-function ArtifactChoices({ keys, onPick }: { keys: ArtifactKey[]; onPick: (k: ArtifactKey) => void }) {
+function Rarity({ artifact }: { artifact: ArtifactKey }) {
+  const r = ARTIFACTS[artifact].rarity;
+  return <span className={`badge ${r}`}>{RARITY_NAME[r]}</span>;
+}
+
+function ArtifactChoices({ keys, onPick, full }: { keys: ArtifactKey[]; onPick: (k: ArtifactKey) => void; full?: boolean }) {
   return (
     <div className="choices">
       {keys.map((k) => {
         const a = ARTIFACTS[k];
         return (
-          <button key={k} className="choice" onClick={() => onPick(k)}>
-            <span className="badge">{a.id}</span>
+          <button key={k} className="choice" onClick={() => onPick(k)} disabled={full}>
+            <Rarity artifact={k} />
             <b>{a.name}</b>
             <span className="desc">{a.text}</span>
           </button>
@@ -642,24 +719,55 @@ function ArtifactChoices({ keys, onPick }: { keys: ArtifactKey[]; onPick: (k: Ar
   );
 }
 
-function Artifacts({ keys, counters }: { keys: ArtifactKey[]; counters: Partial<Record<ArtifactKey, number>> | undefined }) {
+function Artifacts({
+  keys,
+  counters,
+  lit,
+  onSell,
+}: {
+  keys: ArtifactKey[];
+  counters: Partial<Record<ArtifactKey, number>> | undefined;
+  lit: ArtifactKey[];
+  onSell: ((k: ArtifactKey) => void) | undefined;
+}) {
+  const [selling, setSelling] = useState<ArtifactKey | null>(null);
   if (!keys.length) return <span />;
   return (
-    <ul className="artifacts">
+    <ul className="artifacts" aria-label={`神器 ${keys.length}/${config.artifactSlots}`}>
       {keys.map((k) => {
         const a = ARTIFACTS[k];
-        return (
-          <li key={k} title={a.text}>
-            <span className="badge">{a.id}</span>
+        const body = (
+          <>
+            <i className={`dot ${a.rarity}`} />
             {a.name}
             {a.every && (
               <span className="count">
                 {counters?.[k] ?? 0}/{a.every}
               </span>
             )}
+          </>
+        );
+        return (
+          <li key={k} title={`${RARITY_NAME[a.rarity]} · ${a.text}`} className={lit.includes(k) ? 'lit' : ''}>
+            {onSell ? (
+              selling === k ? (
+                <button className="sell" onClick={() => (onSell(k), setSelling(null))} onBlur={() => setSelling(null)} autoFocus>
+                  卖出 +{artifactSellPrice(k, config)}
+                </button>
+              ) : (
+                <button className="held" onClick={() => setSelling(k)}>
+                  {body}
+                </button>
+              )
+            ) : (
+              body
+            )}
           </li>
         );
       })}
+      <li className="slots">
+        {keys.length}/{config.artifactSlots}
+      </li>
     </ul>
   );
 }
@@ -715,38 +823,6 @@ function SoundPicker() {
           ▶ 试听
         </button>
       </div>
-    </div>
-  );
-}
-
-// 原型开关：道具是否消耗 1 步，试玩后再定
-const ITEM_STEP_KEY = 'score-chase/itemCostsStep';
-try {
-  config.itemCostsStep = window.localStorage.getItem(ITEM_STEP_KEY) === '1';
-} catch {
-  // 存储不可用时用默认值
-}
-
-function ItemStepToggle() {
-  const [on, setOn] = useState(config.itemCostsStep);
-  const set = (v: boolean) => {
-    config.itemCostsStep = v;
-    setOn(v);
-    try {
-      window.localStorage.setItem(ITEM_STEP_KEY, v ? '1' : '0');
-    } catch {
-      // 同上
-    }
-  };
-  return (
-    <div className="sound" role="group" aria-label="道具是否耗步">
-      <span className="lab">道具耗步</span>
-      <button aria-pressed={!on} onClick={() => set(false)}>
-        否
-      </button>
-      <button aria-pressed={on} onClick={() => set(true)}>
-        是
-      </button>
     </div>
   );
 }

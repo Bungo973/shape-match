@@ -111,6 +111,8 @@ export interface BattleState {
   current: { erosionArmed: boolean; suppressedId: string | null; sealedColor: Color | null; shattered?: boolean; fuseBoxFired?: boolean };
   outcome: 'ongoing' | 'won' | 'lost';
   totalScore: number;
+  /** 本关已经走的步数（道具不算），积分卡按它计 */
+  stepsTaken?: number;
   /** 嵌片卡模式：抽牌堆、手牌、弃牌堆；交换模式下不存在 */
   cards?: CardPiles;
   /** 冲分模式：在 turns 个回合内让 totalScore 达到 target；敌人不行动 */
@@ -149,6 +151,8 @@ export interface ActionLog {
   bombLevelUps: BombUpgrade[];
   /** 本步结束时触发的累加神器 */
   counterTriggers: CounterTrigger[];
+  /** 本步结算时生效的计分神器，供界面闪亮 */
+  scoringArtifacts: ArtifactKey[];
 }
 
 export type CounterTrigger =
@@ -205,6 +209,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
     },
     turn: 1,
     ap: config.apPerTurn,
+    stepsTaken: 0,
     gravity: 'down',
     gravityTurnsLeft: 0,
     pending: { erosion: false, suppressId: null, gravity: false, sealColor: null },
@@ -214,6 +219,7 @@ export function startBattle(input: StartBattleInput, config: EngineConfig = DEFA
   };
   if (config.scoreMode && input.enemy.targetScore) state.goal = { target: input.enemy.targetScore, turns: config.scoreTurns };
   if (input.rule) applyBossRule(state, input.rule, config);
+  state.ap = turnAp(state, config);
   applyTurnStartArtifacts(state);
   if (input.deck) {
     // 洗牌与抽牌沿用同一个种子随机数，保证复现
@@ -235,7 +241,7 @@ export type PlayerActionOutcome =
   | { ok: false; state: BattleState; reason: 'battleOver' | 'noAp' | 'cardMode' | 'noCard' | 'badShape' | NonNullable<ActionResult['reason']> };
 
 /** 玩家的一次交换或点燃：结算、施加效果、扣 AP。击杀立即结束战斗。 */
-export function playerAction(prev: BattleState, input: BattleAction, baseConfig: EngineConfig = DEFAULT_CONFIG): PlayerActionOutcome {
+export function playerAction(prev: BattleState, input: BattleAction, baseConfig: EngineConfig = DEFAULT_CONFIG, opts: { item?: boolean } = {}): PlayerActionOutcome {
   if (prev.outcome !== 'ongoing') return { ok: false, state: prev, reason: 'battleOver' };
   const config = ruleConfig(prev, baseConfig);
 
@@ -281,6 +287,8 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
   state.rngState = rng.state;
   state.nextId = ids.peek;
   state.ap -= played ? cost : result.apSpent;
+  // 道具不算一步：不推进积分卡，也不算“本回合最后一步”
+  if (!opts.item) state.stepsTaken = (state.stepsTaken ?? 0) + 1;
   if (played && state.cards) {
     state.cards.hand.splice(input.type === 'playCard' ? input.index : 0, 1);
     state.cards.discard.push(played);
@@ -297,6 +305,7 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     erosionConsumed: false,
     bombLevelUps: [],
     counterTriggers: [],
+    scoringArtifacts: [],
   };
 
   // 爆破等级：本步的引爆在结算完之后计入，新等级从下一次行动起生效
@@ -317,12 +326,18 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     const has = (k: ArtifactKey) => state.artifacts.includes(k);
     const P = result.passiveClearCount;
     const stepDelta = has('chainLens') && P >= 3 ? 1 : 0;
+    if (stepDelta) log.scoringArtifacts.push('chainLens');
     // 爆破等级给倍率：本步引爆过的每类炸弹按引爆时的等级计
-    const bonusTenths = BOMB_UPGRADES.reduce((n, k) => n + (result.detonatedByType[k] > 0 ? (prev.bombHeat[k].level - 1) * config.bombLevelMultTenths : 0), 0);
+    let bonusTenths = BOMB_UPGRADES.reduce((n, k) => n + (result.detonatedByType[k] > 0 ? (prev.bombHeat[k].level - 1) * config.bombLevelMultTenths : 0), 0);
+    const scoring = scoringArtifacts(prev, state, result, !!opts.item);
+    bonusTenths += scoring.tenths;
+    log.scoringArtifacts.push(...scoring.fired);
     const s = settle(
       {
         activeClearsByType: result.activeClearsByType,
         bonusTenths,
+        multiplierFactor: scoring.factor,
+        baseFactor: scoring.baseFactor,
         passiveClearCount: P,
         hadActiveColorClear: result.hadActiveColorClear,
         // 冲分模式没有催化剂充能（颜色不再有各自的作用）
@@ -370,7 +385,7 @@ export function useItem(prev: BattleState, use: ItemUse, config: EngineConfig = 
     if (use.key === 'detonator' && bombs.length === 0) return { ok: false, state: prev, reason: 'noBomb' };
     const action: Action =
       use.key === 'glove' ? { type: 'swap', from: use.from, to: use.to, free: true } : { type: 'play', cells: use.key === 'hammer' ? [use.at] : bombs };
-    const out = playerAction(prev, action, config);
+    const out = playerAction(prev, action, config, { item: true });
     if (!out.ok) return { ok: false, state: prev, reason: out.reason };
     // playerAction 按一步扣了行动力；道具不耗步时退回
     if (!cost) out.state.ap = prev.ap;
@@ -389,6 +404,53 @@ export function useItem(prev: BattleState, use: ItemUse, config: EngineConfig = 
   state.board = shuffled.board;
   state.rngState = rng.state;
   return { ok: true, state, log: null, events: [{ type: 'shuffle', moves: shuffled.moves }] };
+}
+
+/**
+ * 计分神器（2026-10-06 第一批）：加成以十分位相加，乘成相乘，因此持有顺序不影响结果。
+ * prev 是这一步之前的状态，用来判断“本回合最后一步”和“第几步”。
+ */
+function scoringArtifacts(prev: BattleState, state: BattleState, result: ActionResult, item: boolean): { tenths: number; factor: number; baseFactor: number; fired: ArtifactKey[] } {
+  const has = (k: ArtifactKey) => state.artifacts.includes(k);
+  const P = ARTIFACT_PARAMS;
+  const out = { tenths: 0, factor: 1, baseFactor: 1, fired: [] as ArtifactKey[] };
+  const add = (k: ArtifactKey, tenths: number) => {
+    out.tenths += tenths;
+    out.fired.push(k);
+  };
+  const mul = (k: ArtifactKey, f: number) => {
+    out.factor *= f;
+    out.fired.push(k);
+  };
+  if (has('redNose')) add('redNose', P.redNoseTenths);
+  if (has('banana')) add('banana', P.bananaTenths);
+  if (has('smallStep')) {
+    const own = activeTileCount(result.events);
+    if (own > 0 && own <= P.smallStepMax) add('smallStep', P.smallStepTenths);
+  }
+  if (has('loner') && result.detonatedByType.line + result.detonatedByType.area + result.detonatedByType.color === 0) {
+    out.baseFactor *= P.lonerBaseFactor;
+    out.fired.push('loner');
+  }
+  if (has('lastCall') && !item && prev.ap === 1) mul('lastCall', P.lastCallFactor);
+  if (has('loyaltyCard') && !item && (state.stepsTaken ?? 0) % P.loyaltyEvery === 0) mul('loyaltyCard', P.loyaltyFactor);
+  if (has('glassCannon')) mul('glassCannon', P.glassCannonFactor);
+  return out;
+}
+
+/** 这一步主动阶段清除的格数（方块与炸弹都算） */
+function activeTileCount(events: ActionResult['events']): number {
+  let n = 0;
+  for (const e of events) {
+    if (e.type === 'matches' && e.phase === 'active') n += e.cleared.length;
+    if (e.type === 'wave' && e.phase === 'active') n += e.cleared.length + e.consumed.length;
+  }
+  return n;
+}
+
+/** 每回合的步数：玻璃炮少 1 步 */
+export function turnAp(state: Pick<BattleState, 'artifacts'>, config: EngineConfig = DEFAULT_CONFIG): number {
+  return config.apPerTurn - (state.artifacts.includes('glassCannon') ? ARTIFACT_PARAMS.glassCannonApLoss : 0);
 }
 
 /**
@@ -487,7 +549,7 @@ export function ruleConfig(state: Pick<BattleState, 'rule'>, config: EngineConfi
 /** 冲分模式里还没用掉的步数（本回合剩余 + 之后各回合）；打怪模式为 0 */
 export function stepsLeft(state: BattleState, config: EngineConfig = DEFAULT_CONFIG): number {
   if (!state.goal) return 0;
-  return Math.max(0, state.ap + (state.goal.turns - state.turn) * config.apPerTurn);
+  return Math.max(0, state.ap + (state.goal.turns - state.turn) * turnAp(state, config));
 }
 
 /** 本玩家回合的护盾上限：碎甲生效时按比例降低 */
@@ -646,7 +708,7 @@ function endScoreTurn(state: BattleState, config: EngineConfig): { state: Battle
     return { state, log };
   }
   state.turn++;
-  state.ap = config.apPerTurn;
+  state.ap = turnAp(state, config);
   log.turnStartBombs = applyTurnStartArtifacts(state);
   return { state, log };
 }

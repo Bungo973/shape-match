@@ -760,6 +760,69 @@ button {
   align-items: center;
   gap: 6px;
   cursor: help;
+  padding: 1px 4px;
+  transition: background 0.12s;
+}
+
+/* 结算里刚生效的神器亮一下 */
+.artifacts li.lit {
+  background: var(--yellow);
+}
+
+.artifacts .dot {
+  width: 9px;
+  height: 9px;
+  display: block;
+  background: var(--ink);
+}
+
+.artifacts .dot.uncommon,
+.badge.uncommon {
+  background: var(--blue);
+}
+
+.artifacts .dot.rare,
+.badge.rare {
+  background: var(--red);
+}
+
+.artifacts .slots {
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--muted);
+  cursor: default;
+}
+
+.artifacts .held,
+.artifacts .sell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.artifacts .held:hover,
+.artifacts .held:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  outline: none;
+}
+
+.artifacts .sell {
+  background: var(--red);
+  color: var(--paper);
+  padding: 0 8px;
+  font-weight: 700;
+}
+
+.ending .lost {
+  margin: 0;
+  font-size: 13px;
+  color: var(--red);
 }
 
 .artifacts .count {

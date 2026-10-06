@@ -79,10 +79,15 @@ export interface EngineConfig {
   upgradePriceStep: number;
   healPrice: number;
   healAmount: number;
-  /** 道具：背包格数、每次商店随机上架的种数、使用时是否消耗 1 步（原型开关） */
+  /** 道具：背包格数、每次商店随机上架的种数、使用时是否消耗 1 步（2026-10-06 定为不耗步，保留参数供模拟对比） */
   itemSlots: number;
   itemsPerShop: number;
   itemCostsStep: boolean;
+  /** 神器（2026-10-06 仿《小丑牌》分级）：栏位上限、每次商店上架件数、各稀有度的价格与商店出现权重；卖出为半价 */
+  artifactSlots: number;
+  artifactsPerShop: number;
+  artifactPrices: Record<'common' | 'uncommon' | 'rare', number>;
+  artifactShopWeights: Record<'common' | 'uncommon' | 'rare', number>;
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
@@ -128,4 +133,8 @@ export const DEFAULT_CONFIG: EngineConfig = {
   itemSlots: 3,
   itemsPerShop: 3,
   itemCostsStep: false,
+  artifactSlots: 5,
+  artifactsPerShop: 2,
+  artifactPrices: { common: 6, uncommon: 10, rare: 15 },
+  artifactShopWeights: { common: 70, uncommon: 25, rare: 5 },
 };
