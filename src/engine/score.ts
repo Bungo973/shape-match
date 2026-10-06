@@ -26,6 +26,8 @@ export interface SettlementInput {
   multiplierFactor?: number;
   /** 神器的基数乘成（独行） */
   baseFactor?: number;
+  /** 神器的基数加成（尺规），在基数乘成之前相加 */
+  baseBonus?: number;
   /** 过载引线的代价：本步护盾效果为 0，结算分不变 */
   zeroShieldEffect?: boolean;
 }
@@ -93,7 +95,7 @@ export function settle(input: SettlementInput, config: EngineConfig): Settlement
     poison: A.poison + bonus + E.poison,
   };
   // 倍率带小数，效果与结算分四舍五入到整数
-  const settlementScore = Math.round((baseValues.attack + baseValues.shield + baseValues.poison + A.catalyst) * (input.baseFactor ?? 1) * M);
+  const settlementScore = Math.round((baseValues.attack + baseValues.shield + baseValues.poison + A.catalyst + (input.baseBonus ?? 0)) * (input.baseFactor ?? 1) * M);
   const chargesGained = Math.floor(A.catalyst / config.catalystPerCharge);
   const kept = input.chargesBefore - C;
   return {

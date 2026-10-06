@@ -415,8 +415,14 @@ class Resolver {
     switch (d.bomb) {
       case 'H':
       case 'V': {
-        const line: Explosion =
+        // 十字引线：直线炸弹同时清除整行和整列（修改范围）
+        const arm = ARTIFACT_PARAMS.crossArm;
+        let line: Explosion =
           d.bomb === 'H' ? { ...base, shape: 'H', cells: rect(rows, cols, r, r, 0, cols - 1) } : { ...base, shape: 'V', cells: rect(rows, cols, 0, rows - 1, c, c) };
+        if (this.has('crossFuse')) {
+          const across = d.bomb === 'H' ? rect(rows, cols, r - arm, r + arm, c, c) : rect(rows, cols, r, r, c - arm, c + arm);
+          line = { ...line, cells: [...line.cells, ...across.filter((p) => p.r !== r || p.c !== c)], byArtifact: 'crossFuse' };
+        }
         const out: Explosion[] = [line];
         // 雷鸣引线：直线两侧的闪电，属于“修改范围”，在同一波内与直线一并清除
         if (this.has('thunderFuse')) out.push({ ...base, shape: 'lightning', cells: this.lightningCells(d.bomb, d.pos, 0), byArtifact: 'thunderFuse' });
@@ -427,6 +433,12 @@ class Resolver {
       }
       case 'A': {
         const quake = this.insertOn(d.pos, 'quakeStone');
+        // 大口径：3×3 炸弹扩为 5×5（修改范围）
+        if (!quake && this.has('bigBore')) {
+          const k = ARTIFACT_PARAMS.bigBoreReach;
+          const cells = rect(rows, cols, r - k, r + k, c - k, c + k).filter((p) => Math.abs(p.r - r) + Math.abs(p.c - c) <= k);
+          return [{ ...base, shape: 'A', cells, byArtifact: 'bigBore' }];
+        }
         if (!quake) return [{ ...base, shape: 'A', cells: rect(rows, cols, r - 1, r + 1, c - 1, c + 1) }];
         this.trigger({ insertId: quake.id, type: quake.type, effect: 'quake', at: [d.pos] });
         return [{ ...base, shape: 'square5', cells: rect(rows, cols, r - 2, r + 2, c - 2, c + 2), byInsert: quake.id }];

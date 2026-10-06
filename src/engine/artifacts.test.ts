@@ -30,9 +30,9 @@ function act(s: BattleState, action: Action) {
 const igniteRow4: Action = { type: 'ignite', at: { r: 4, c: 0 } };
 
 describe('神器池', () => {
-  it('每件都有稀有度；稀有为虹彩原石与玻璃炮', () => {
+  it('每件都有稀有度；ID 不重复', () => {
     const all = Object.values(ARTIFACTS);
-    expect(all.filter((a) => a.rarity === 'rare').map((a) => a.name)).toEqual(['虹彩原石', '玻璃炮']);
+    expect(all.filter((a) => a.rarity === 'rare').map((a) => a.name)).toEqual(['虹彩原石', '玻璃炮', '十字引线', '大口径']);
     expect(new Set(all.map((a) => a.id)).size).toBe(all.length);
   });
 });

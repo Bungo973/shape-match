@@ -17,7 +17,14 @@ export type ArtifactKey =
   | 'loner' // A33 独行
   | 'lastCall' // A34 末班车
   | 'loyaltyCard' // A35 积分卡
-  | 'glassCannon'; // A36 玻璃炮
+  | 'glassCannon' // A36 玻璃炮
+  // 2026-10-06 第二批：炸弹类
+  | 'crossFuse' // A37 十字引线
+  | 'bigBore' // A38 大口径
+  | 'fission' // A39 裂变
+  | 'hoarder' // A40 囤积者
+  | 'marathon' // A41 长跑
+  | 'ruler'; // A42 尺规
 
 /** 稀有度决定价格、商店出现的权重与能从哪里拿到：开局只出普通，首领奖励只出罕见与稀有 */
 export type ArtifactRarity = 'common' | 'uncommon' | 'rare';
@@ -58,6 +65,12 @@ export const ARTIFACTS: Record<ArtifactKey, ArtifactDef> = {
   lastCall: { key: 'lastCall', id: 'A34', name: '末班车', rarity: 'uncommon', text: '每回合的最后一步，倍率 ×1.5。' },
   loyaltyCard: { key: 'loyaltyCard', id: 'A35', name: '积分卡', rarity: 'uncommon', every: 6, text: '每走 6 步，第 6 步倍率 ×3。' },
   glassCannon: { key: 'glassCannon', id: 'A36', name: '玻璃炮', rarity: 'rare', text: '倍率 ×3，但每回合少 1 步。' },
+  crossFuse: { key: 'crossFuse', id: 'A37', name: '十字引线', rarity: 'rare', text: '直线炸弹爆炸时，垂直方向也向两侧各清除 2 格，成十字。' },
+  bigBore: { key: 'bigBore', id: 'A38', name: '大口径', rarity: 'rare', text: '3×3 炸弹的范围扩大为菱形，上下左右多伸出 1 格（共 13 格）。' },
+  fission: { key: 'fission', id: 'A39', name: '裂变', rarity: 'uncommon', text: '这一步有五连炸弹爆炸时，步末随机 2 个方块变成直线炸弹。' },
+  hoarder: { key: 'hoarder', id: 'A40', name: '囤积者', rarity: 'uncommon', text: '结算时棋盘上每留着 1 枚炸弹，倍率 +0.2。' },
+  marathon: { key: 'marathon', id: 'A41', name: '长跑', rarity: 'uncommon', text: '连续几步没有炸弹爆炸，每步倍率累加 +0.4；有炸弹爆炸就清零。' },
+  ruler: { key: 'ruler', id: 'A42', name: '尺规', rarity: 'uncommon', every: 10, text: '每做出 10 枚直线炸弹，基数永久 +1。' },
 };
 
 export const ARTIFACT_PARAMS = {
@@ -83,6 +96,14 @@ export const ARTIFACT_PARAMS = {
   loyaltyFactor: 3,
   glassCannonFactor: 3,
   glassCannonApLoss: 1,
+  /** 十字引线：垂直方向向两侧各延伸的格数 */
+  crossArm: 2,
+  /** 大口径：以炸弹为中心、曼哈顿距离不超过此值的菱形 */
+  bigBoreReach: 2,
+  fissionBombs: 2,
+  hoarderTenths: 2,
+  marathonTenths: 4,
+  rulerEvery: 10,
 };
 
 /** 当前可出现在开局、首领奖励与商店候选中的神器 */

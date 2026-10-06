@@ -69,6 +69,7 @@ const ITEM_FAIL: Record<string, string> = { noBomb: '棋盘上没有炸弹', not
 
 const COLOR_NAME: Record<Color, string> = { attack: '红圆', shield: '蓝方', poison: '黄三角', catalyst: '绿菱形' };
 const fmt = (n: number) => n.toLocaleString('zh-CN');
+const RANGE_TAG: Partial<Record<ArtifactKey, string>> = { thunderFuse: '闪电', crossFuse: '十字', bigBore: '5×5' };
 const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
 /** 一关结束时的结算信息，关掉后才进入下一个界面 */
@@ -198,6 +199,10 @@ function Battle({
     if (events.length) await view.play(events, b.board);
     else view.sync(b.board);
     if (pulseAt.length) view.pulse(pulseAt);
+    // 改变爆炸范围的神器（雷鸣引线、十字引线、大口径）：这一步用到了就抖一下
+    const shaped = new Set<ArtifactKey>();
+    for (const e of events) if (e.type === 'wave') for (const x of e.explosions) if (x.byArtifact) shaped.add(x.byArtifact);
+    for (const k of shaped) ping(k, RANGE_TAG[k] ?? '');
     const s = log?.settlement;
     // 神器逐件结算：倍率从连锁的值开始，每件神器抖一下、倍率跳一档，最后才出分
     if (s && log?.tally) {
@@ -216,10 +221,13 @@ function Battle({
       setMult((m) => ({ ...m, value: s.multiplier, final: true }));
     }
     for (const t of log?.counterTriggers ?? []) {
-      ping(t.key, t.key === 'fuseBox' ? `+${t.ap} 步` : '3×3');
+      ping(t.key, t.key === 'fuseBox' ? `+${t.ap} 步` : t.key === 'fission' ? `直线 ×${t.cells.length}` : '3×3');
       sfx.artifact();
     }
-    for (const t of log?.counterTriggers ?? []) if ('at' in t && t.at) view.pulse([t.at]);
+    for (const t of log?.counterTriggers ?? []) {
+      if ('at' in t && t.at) view.pulse([t.at]);
+      if ('cells' in t && t.cells.length) view.pulse(t.cells);
+    }
     runRef.current = next;
     setRun(next);
     if (b.outcome !== 'ongoing') {
@@ -758,11 +766,7 @@ function Artifacts({
           <>
             <i className={`dot ${a.rarity}`} />
             {a.name}
-            {a.every && (
-              <span className="count">
-                {counters?.[k] ?? 0}/{a.every}
-              </span>
-            )}
+            <Progress artifact={k} n={counters?.[k] ?? 0} />
           </>
         );
         return (
@@ -792,6 +796,27 @@ function Artifacts({
         {keys.length}/{config.artifactSlots}
       </li>
     </ul>
+  );
+}
+
+/** 神器栏里的进度：累加类显示“进度/门槛”，尺规另显示已得的基数，长跑显示连续步数 */
+function Progress({ artifact, n }: { artifact: ArtifactKey; n: number }) {
+  const every = ARTIFACTS[artifact].every;
+  if (artifact === 'ruler') {
+    const bonus = Math.floor(n / ARTIFACT_PARAMS.rulerEvery);
+    return (
+      <span className="count">
+        {n % ARTIFACT_PARAMS.rulerEvery}/{ARTIFACT_PARAMS.rulerEvery}
+        {bonus > 0 && ` · 基数 +${bonus}`}
+      </span>
+    );
+  }
+  if (artifact === 'marathon') return n > 0 ? <span className="count">连 {n}</span> : null;
+  if (!every) return null;
+  return (
+    <span className="count">
+      {n}/{every}
+    </span>
   );
 }
 

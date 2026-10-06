@@ -172,7 +172,8 @@ export interface Tally {
 
 export type CounterTrigger =
   | { key: 'fuseBox'; ap: number }
-  | { key: 'aftershockCore'; at: Pos | null };
+  | { key: 'aftershockCore'; at: Pos | null }
+  | { key: 'fission'; cells: Pos[] };
 
 export interface EnemyTurnLog {
   cancelledByStun: boolean;
@@ -346,18 +347,21 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
     const bombTenths = BOMB_UPGRADES.reduce((n, k) => n + (result.detonatedByType[k] > 0 ? (prev.bombHeat[k].level - 1) * config.bombLevelMultTenths : 0), 0);
     // 先加后乘：加成按 ID 顺序，再基数乘成，再倍率乘成
     const parts = [...lens, ...scoringParts(prev, state, result, !!opts.item)];
-    const order = { add: 0, base: 1, mul: 2 } as const;
+    const order = { add: 0, baseAdd: 1, base: 2, mul: 3 } as const;
     parts.sort((a, b) => order[a.kind] - order[b.kind]);
     const erodeSteps = erode ? 1 : 0;
     let tenths = bombTenths;
     let factor = 1;
     let baseFactor = 1;
+    let baseBonus = 0;
     const tally: Tally = { start: multiplierFor(P, config, 0, erodeSteps, tenths, 1), steps: [] };
     for (const part of parts) {
       if (part.kind === 'add') tenths += part.tenths;
+      else if (part.kind === 'baseAdd') baseBonus += part.amount;
       else if (part.kind === 'mul') factor *= part.factor;
       else baseFactor *= part.factor;
-      const label = part.kind === 'add' ? `+${part.tenths / 10}` : part.kind === 'mul' ? `×${part.factor}` : `基数 ×${part.factor}`;
+      const label =
+        part.kind === 'add' ? `+${part.tenths / 10}` : part.kind === 'baseAdd' ? `基数 +${part.amount}` : part.kind === 'mul' ? `×${part.factor}` : `基数 ×${part.factor}`;
       tally.steps.push({ key: part.key, label, value: multiplierFor(P, config, 0, erodeSteps, tenths, factor) });
     }
     log.scoringArtifacts.push(...parts.map((p) => p.key));
@@ -368,6 +372,7 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
         bonusTenths: tenths,
         multiplierFactor: factor,
         baseFactor,
+        baseBonus,
         passiveClearCount: P,
         hadActiveColorClear: result.hadActiveColorClear,
         // 冲分模式没有催化剂充能（颜色不再有各自的作用）
@@ -436,7 +441,10 @@ export function useItem(prev: BattleState, use: ItemUse, config: EngineConfig = 
   return { ok: true, state, log: null, events: [{ type: 'shuffle', moves: shuffled.moves }] };
 }
 
-type ScoringPart = { key: ArtifactKey; kind: 'add'; tenths: number } | { key: ArtifactKey; kind: 'mul' | 'base'; factor: number };
+type ScoringPart =
+  | { key: ArtifactKey; kind: 'add'; tenths: number }
+  | { key: ArtifactKey; kind: 'baseAdd'; amount: number }
+  | { key: ArtifactKey; kind: 'mul' | 'base'; factor: number };
 
 /**
  * 计分神器（2026-10-06 第一批）：加成以十分位相加，乘成相乘，因此持有顺序不影响结果。
@@ -446,19 +454,42 @@ function scoringParts(prev: BattleState, state: BattleState, result: ActionResul
   const has = (k: ArtifactKey) => state.artifacts.includes(k);
   const P = ARTIFACT_PARAMS;
   const out: ScoringPart[] = [];
+  const counters = (state.player.counters ??= {});
+  const detonated = result.detonatedByType.line + result.detonatedByType.area + result.detonatedByType.color;
   if (has('redNose')) out.push({ key: 'redNose', kind: 'add', tenths: P.redNoseTenths });
   if (has('smallStep')) {
     const own = activeTileCount(result.events);
     if (own > 0 && own <= P.smallStepMax) out.push({ key: 'smallStep', kind: 'add', tenths: P.smallStepTenths });
   }
   if (has('banana')) out.push({ key: 'banana', kind: 'add', tenths: P.bananaTenths });
-  if (has('loner') && result.detonatedByType.line + result.detonatedByType.area + result.detonatedByType.color === 0) {
-    out.push({ key: 'loner', kind: 'base', factor: P.lonerBaseFactor });
+  if (has('loner') && detonated === 0) out.push({ key: 'loner', kind: 'base', factor: P.lonerBaseFactor });
+  // 囤积者：这一步结算完、棋盘稳定后还留着的炸弹
+  if (has('hoarder')) {
+    const bombs = state.board.flat().filter((t) => t?.kind === 'bomb').length;
+    if (bombs > 0) out.push({ key: 'hoarder', kind: 'add', tenths: P.hoarderTenths * bombs });
+  }
+  // 长跑：没有炸弹爆炸的一步，连续步数 +1 再按连续步数加倍率；有爆炸清零（进度跨关保留）
+  if (has('marathon')) {
+    counters.marathon = detonated === 0 ? (counters.marathon ?? 0) + 1 : 0;
+    if (counters.marathon > 0) out.push({ key: 'marathon', kind: 'add', tenths: P.marathonTenths * counters.marathon });
+  }
+  // 尺规：先计入这一步做出的直线炸弹（含连锁中产生的），再按累计数给基数
+  if (has('ruler')) {
+    counters.ruler = (counters.ruler ?? 0) + lineBombsMade(result.events);
+    const bonus = Math.floor(counters.ruler / P.rulerEvery);
+    if (bonus > 0) out.push({ key: 'ruler', kind: 'baseAdd', amount: bonus });
   }
   if (has('lastCall') && !item && prev.ap === 1) out.push({ key: 'lastCall', kind: 'mul', factor: P.lastCallFactor });
   if (has('loyaltyCard') && !item && (state.stepsTaken ?? 0) % P.loyaltyEvery === 0) out.push({ key: 'loyaltyCard', kind: 'mul', factor: P.loyaltyFactor });
   if (has('glassCannon')) out.push({ key: 'glassCannon', kind: 'mul', factor: P.glassCannonFactor });
   return out;
+}
+
+/** 这一步做出的直线炸弹数（亲手与连锁中） */
+function lineBombsMade(events: ActionResult['events']): number {
+  let n = 0;
+  for (const e of events) if (e.type === 'matches') n += e.created.filter((c) => c.bomb === 'H' || c.bomb === 'V').length;
+  return n;
 }
 
 /** 这一步主动阶段清除的格数（方块与炸弹都算） */
@@ -503,6 +534,18 @@ function applyCounterArtifacts(state: BattleState, result: ActionResult, log: Ac
     }
     counters[key]! -= every;
     if (state.outcome !== 'ongoing') return;
+  }
+  // 裂变：这一步有五连炸弹爆炸，步末随机几个普通方块变成直线炸弹（横竖随机）
+  if (state.artifacts.includes('fission') && result.detonatedByType.color > 0) {
+    const cells: Pos[] = [];
+    for (let i = 0; i < ARTIFACT_PARAMS.fissionBombs; i++) {
+      const rng = createRng(state.rngState);
+      const bomb: BombKind = rng.int(2) === 0 ? 'H' : 'V';
+      state.rngState = rng.state;
+      const at = placeBombOnRandomTile(state, bomb);
+      if (at) cells.push(at);
+    }
+    log.counterTriggers.push({ key: 'fission', cells });
   }
 }
 

@@ -132,3 +132,78 @@ describe('逐件结算明细', () => {
     expect(act(battle([], three), swap3).tally).toBeNull();
   });
 });
+
+describe('第二批：炸弹类', () => {
+  const explosions = (log: ReturnType<typeof act>) => log.result.events.flatMap((e) => (e.type === 'wave' ? e.explosions : []));
+
+  it('十字引线：直线炸弹在垂直方向也向两侧各清除 2 格', () => {
+    const log = act(battle(['crossFuse'], { '4,3': 'H' }), { type: 'ignite', at: { r: 4, c: 3 } });
+    const x = explosions(log)[0]!;
+    expect(x.byArtifact).toBe('crossFuse');
+    expect(x.cells).toHaveLength(8 + 2 * ARTIFACT_PARAMS.crossArm);
+    expect(x.cells).toContainEqual({ r: 2, c: 3 });
+    expect(x.cells).not.toContainEqual({ r: 1, c: 3 });
+  });
+
+  it('大口径：3×3 炸弹扩为 13 格的菱形', () => {
+    const log = act(battle(['bigBore'], { '4,4': 'A' }), { type: 'ignite', at: { r: 4, c: 4 } });
+    const x = explosions(log)[0]!;
+    expect(x.cells).toHaveLength(13);
+    expect(x.cells).toContainEqual({ r: 2, c: 4 });
+    expect(x.cells).toContainEqual({ r: 3, c: 3 });
+    expect(x.cells).not.toContainEqual({ r: 2, c: 3 });
+  });
+
+  it('裂变：五连炸弹爆炸后，步末 2 个普通方块变成直线炸弹', () => {
+    const s = battle(['fission'], { '4,4': 'B' });
+    const out = playerAction(s, { type: 'ignite', at: { r: 4, c: 4 } }, config);
+    if (!out.ok) throw new Error(out.reason);
+    const t = out.log.counterTriggers.find((c) => c.key === 'fission');
+    if (!t || !('cells' in t)) throw new Error('裂变没有触发');
+    expect(t.cells).toHaveLength(ARTIFACT_PARAMS.fissionBombs);
+    for (const p of t.cells) {
+      const tile = out.state.board[p.r]![p.c]!;
+      expect(tile.kind === 'bomb' && (tile.bomb === 'H' || tile.bomb === 'V')).toBe(true);
+    }
+    // 没有五连爆炸时不触发
+    expect(act(battle(['fission'], three), swap3).counterTriggers).toEqual([]);
+  });
+
+  it('囤积者：结算时棋盘上每枚炸弹倍率 +0.2', () => {
+    const board = { ...three, '6,6': 'A', '7,7': 'H' };
+    const plain = battle([], board);
+    const withIt = battle(['hoarder'], board);
+    const a = playerAction(plain, swap3, config);
+    const b = playerAction(withIt, swap3, config);
+    if (!a.ok || !b.ok) throw new Error('行动无效');
+    const bombs = b.state.board.flat().filter((t) => t?.kind === 'bomb').length;
+    expect(bombs).toBeGreaterThanOrEqual(2);
+    expect(b.log.settlement!.multiplier).toBeCloseTo(a.log.settlement!.multiplier + 0.2 * bombs);
+  });
+
+  it('长跑：连续没有炸弹爆炸的步累加 +0.2；有炸弹爆炸清零', () => {
+    const s = battle(['marathon'], { ...three, '4,0': 'H' });
+    s.player.counters = { marathon: 2 };
+    const quiet = playerAction(s, swap3, config);
+    if (!quiet.ok) throw new Error(quiet.reason);
+    expect(quiet.state.player.counters!.marathon).toBe(3);
+    expect(quiet.log.tally!.steps).toEqual([expect.objectContaining({ key: 'marathon', label: `+${(3 * ARTIFACT_PARAMS.marathonTenths) / 10}` })]);
+    const loud = playerAction({ ...s, board: battle([], bomb).board }, ignite, config);
+    if (!loud.ok) throw new Error(loud.reason);
+    expect(loud.state.player.counters!.marathon).toBe(0);
+    expect(loud.log.scoringArtifacts).not.toContain('marathon');
+  });
+
+  it('尺规：每做出若干枚直线炸弹，基数永久 +1', () => {
+    const s = battle(['ruler'], three);
+    s.player.counters = { ruler: ARTIFACT_PARAMS.rulerEvery };
+    const M = act(battle([], three), swap3).settlement!.multiplier;
+    const log = act(s, swap3);
+    expect(log.settlement!.settlementScore).toBe(Math.round((3 + 1) * M));
+    // 亲手做出四连直线炸弹，计数 +1
+    const four = battle(['ruler'], { '0,0': 'a', '0,1': 'a', '0,3': 'a', '1,2': 'a' });
+    const out = playerAction(four, { type: 'swap', from: { r: 1, c: 2 }, to: { r: 0, c: 2 } }, config);
+    if (!out.ok) throw new Error(out.reason);
+    expect(out.state.player.counters!.ruler).toBeGreaterThanOrEqual(1);
+  });
+});

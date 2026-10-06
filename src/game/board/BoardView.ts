@@ -705,11 +705,18 @@ function drawBlast(ctx: CanvasRenderingContext2D, e: Explosion, S: number, W: nu
   const colsOf = () => [...new Set(e.cells.map((c) => c.c))];
   switch (e.shape) {
     case 'H':
-      ctx.fillRect(cx - reach, cy - thick / 2, reach * 2, thick);
+    case 'V': {
+      if (e.shape === 'H') ctx.fillRect(cx - reach, cy - thick / 2, reach * 2, thick);
+      else ctx.fillRect(cx - thick / 2, cy - reach, thick, reach * 2);
+      // 十字引线：垂直方向的短臂，长度按实际波及的格算
+      if (e.byArtifact === 'crossFuse') {
+        const arm = Math.max(...e.cells.map((c) => (e.shape === 'H' ? Math.abs(c.r - e.origin.r) : Math.abs(c.c - e.origin.c))));
+        const len = Math.min((arm + 0.5) * S, reach);
+        if (e.shape === 'H') ctx.fillRect(cx - thick / 2, cy - len, thick, len * 2);
+        else ctx.fillRect(cx - len, cy - thick / 2, len * 2, thick);
+      }
       return;
-    case 'V':
-      ctx.fillRect(cx - thick / 2, cy - reach, thick, reach * 2);
-      return;
+    }
     case 'rows3':
       for (const r of rowsOf()) ctx.fillRect(cx - reach, (r + 0.5) * S - thick / 2, reach * 2, thick);
       return;
@@ -743,7 +750,7 @@ function drawBlast(ctx: CanvasRenderingContext2D, e: Explosion, S: number, W: nu
     }
     default: {
       // 3×3、5×5 等范围：黑色圆环扩散、变细
-      const span = e.shape === 'square5' ? 2.2 : 1.2;
+      const span = e.shape === 'square5' ? 2.2 : e.byArtifact === 'bigBore' ? 1.7 : 1.2;
       ctx.lineWidth = S * 0.18 * (1 - p);
       ctx.beginPath();
       ctx.arc(cx, cy, S * (0.6 + p * span), 0, Math.PI * 2);
