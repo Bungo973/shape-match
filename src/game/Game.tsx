@@ -238,8 +238,7 @@ function Battle({
     runRef.current = next;
     setRun(next);
     if (b.outcome !== 'ongoing') {
-      // 达标的这一步：等出分弹字和分数滚动播完，再弹出结算卡
-      if (s) await wait(700);
+      // 结算卡立刻挂上（让界面停在棋盘上，不先闪出商店），卡片本身延迟淡入，等出分弹字和分数滚动播完
       sfx.win();
       setEnding({ won: true, score: b.totalScore, target: b.goal?.target ?? 0, penalty: 0, income: next.income, lost: next.lostArtifacts });
       return;
