@@ -13,6 +13,8 @@ export interface EngineConfig {
   multiplierSegments: number[];
   /** 取消倍率封顶：各段用完后按最后一段的格数继续加（2026-09-30 定） */
   multiplierUncapped: boolean;
+  /** 原型（2026-10-06）：连锁（被动阶段）清除的普通方块也计入基数，算法与主动清除相同；网址 ?chainbase=1 开启 */
+  chainBase: boolean;
   /** 爆破等级给倍率：本步引爆过的每类炸弹，每高出 1 级倍率 +0.1 × 此值（十分位，2026-09-30 定为 1） */
   bombLevelMultTenths: number;
   /**
@@ -103,6 +105,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   colorWeights: { attack: 30, shield: 25, poison: 25, catalyst: 20 },
   multiplierSegments: [6, 10, 14, 18, 22],
   multiplierUncapped: true,
+  chainBase: false,
   bombLevelMultTenths: 1,
   bombHeatEvery: { line: 12, area: 9, color: 3 },
   catalystPerCharge: 3,
@@ -150,3 +153,14 @@ export const DEFAULT_CONFIG: EngineConfig = {
   rerollPrice: 3,
   rerollPriceStep: 1,
 };
+
+/**
+ * 原型“连锁计基数”（2026-10-06）：连锁清除的方块也按方块基数计入基数。分数约涨到 2–3 倍，
+ * 目标分按模拟重调（熟练自动玩家各关达标率与现行规则相当，300 局）。界面网址带 ?chainbase=1 时使用。
+ */
+export const CHAIN_BASE_CONFIG: EngineConfig = {
+  ...DEFAULT_CONFIG,
+  chainBase: true,
+  scoreTargets: [3600, 5000, 6400, 10100, 12900, 11300, 17800, 19900, 17050],
+};
+

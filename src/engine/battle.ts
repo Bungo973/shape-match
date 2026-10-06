@@ -410,6 +410,7 @@ export function playerAction(prev: BattleState, input: BattleAction, baseConfig:
         baseFactor,
         baseBonus,
         passiveClearCount: P,
+        chainBase: result.chainBase,
         hadActiveColorClear: result.hadActiveColorClear,
         // 冲分模式没有催化剂充能（颜色不再有各自的作用）
         chargesBefore: state.goal ? 0 : state.player.catalystCharges,

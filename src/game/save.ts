@@ -1,7 +1,10 @@
 // 本地自动保存冲分一局；规则版本不符时放弃旧存档，开新局。与旧界面的存档分开存放。
 import { RULES_VERSION, RUN_RULES_VERSION, type RunState } from '../engine';
 
-const KEY = 'score-chase/run';
+/** 原型“连锁计基数”（网址 ?chainbase=1）单独存档，和现行规则互不覆盖 */
+export const CHAIN_BASE = new URLSearchParams(window.location.search).get('chainbase') === '1';
+const MODE = CHAIN_BASE ? '/chainbase' : '';
+const KEY = `score-chase/run${MODE}`;
 
 export function loadRun(): RunState | null {
   try {
@@ -33,7 +36,7 @@ export function clearRun(): void {
 }
 
 // 最好成绩：通关与无尽模式都算，按到达的关卡、再按总分比较
-const BEST_KEY = 'score-chase/best';
+const BEST_KEY = `score-chase/best${MODE}`;
 
 export interface Best {
   level: number;

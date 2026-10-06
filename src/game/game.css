@@ -162,6 +162,10 @@ button {
   color: var(--muted);
 }
 
+.level .tier.proto {
+  background: var(--blue);
+}
+
 .level .tier {
   align-self: center;
   white-space: nowrap;
@@ -1704,4 +1708,11 @@ button {
 
 .side .close {
   margin-left: auto;
+}
+
+/* 原型标签只给电脑上试玩看，手机窄屏顶栏放不下就不显示 */
+@media (max-width: 480px) {
+  .level .tier.proto {
+    display: none;
+  }
 }

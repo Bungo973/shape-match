@@ -26,6 +26,7 @@ import {
   chooseArtifact,
   continueEndless,
   DEFAULT_CONFIG,
+  CHAIN_BASE_CONFIG,
   newRun,
   pickStarter,
   leaveShop,
@@ -60,9 +61,10 @@ import {
 import { getKit, getShepard, KIT_NAMES, setKit, setShepard, sfx, type SoundKit } from './audio';
 import { BoardView } from './board/BoardView';
 import { GearIcon, ItemIcon, UpgradeIcon } from './icons';
-import { clearRun, loadBest, loadRun, recordBest, saveRun } from './save';
+import { CHAIN_BASE, clearRun, loadBest, loadRun, recordBest, saveRun } from './save';
 
-const config = DEFAULT_CONFIG;
+// 网址带 ?chainbase=1 时用原型规则“连锁计基数”（目标分另调），否则用现行规则
+const config = CHAIN_BASE ? CHAIN_BASE_CONFIG : DEFAULT_CONFIG;
 
 const newSeed = () => Math.floor(Math.random() * 1e9);
 /** 网址带 ?seed=123 时从该种子开新局，便于复现 */
@@ -155,6 +157,11 @@ export function Game() {
           <b>{String(shownLevel).padStart(2, '0')}</b>
           <span className="of">{run.endless ? '无尽' : `/${String(run.route.length).padStart(2, '0')}`}</span>
           {boss && <span className="tier">首领</span>}
+          {CHAIN_BASE && (
+            <span className="tier proto" title="原型规则：连锁清除的方块也计入基数（去掉网址里的 ?chainbase=1 回到现行规则）">
+              连锁计基数
+            </span>
+          )}
         </div>
         <div className="vitals">
           <Hp hp={run.player.hp} max={run.player.maxHp} />
@@ -222,6 +229,8 @@ function Battle({
   // 这一步的计算：基数 × 倍率。基数在出手时就定了（主动清除），倍率随连锁和神器逐步上涨
   const [mult, setMult] = useState({ base: 0, value: 1, chain: 0, final: false });
   const multRef = useRef(1);
+  // 这一步的基数构成：主动部分出手即定；原型“连锁计基数”下，连锁部分随连锁进度按比例涨上去，结算时对齐精确值
+  const stepBase = useRef({ active: 0, chain: 0, passive: 0 });
   const battle = run.battle!;
 
   const setBusy = (v: boolean) => {
@@ -250,7 +259,8 @@ function Battle({
     const view = viewRef.current!;
     multRef.current = 1;
     const s = log?.settlement;
-    setMult({ base: s?.rawBase ?? 0, value: 1, chain: 0, final: false });
+    stepBase.current = { active: (s?.rawBase ?? 0) - (s?.chainBase ?? 0), chain: s?.chainBase ?? 0, passive: log?.result.passiveClearCount ?? 0 };
+    setMult({ base: stepBase.current.active, value: 1, chain: 0, final: false });
     const b = next.battle!;
     if (events.length) await view.play(events, b.board);
     else view.sync(b.board);
@@ -413,7 +423,9 @@ function Battle({
         // 倍率跨过整数档时响一声
         if (Math.floor(value) > Math.floor(multRef.current)) sfx.multUp(Math.floor(value) - 1);
         multRef.current = value;
-        setMult((m) => ({ ...m, value, chain, final: false }));
+        const sb = stepBase.current;
+        const base = sb.active + (sb.passive ? Math.round((sb.chain * Math.min(1, passive / sb.passive)) * 10) / 10 : 0);
+        setMult((m) => ({ ...m, base, value, chain, final: false }));
       },
     });
     viewRef.current = view;

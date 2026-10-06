@@ -133,6 +133,8 @@ export interface ActionResult {
   events: ResolutionEvent[];
   activeClearsByType: ClearsByType;
   passiveClearCount: number;
+  /** 原型“连锁计基数”：连锁清除带来的基数；关闭时为 0 */
+  chainBase: number;
   /** 本次行动是否主动清除了至少一枚有色普通方块 */
   hadActiveColorClear: boolean;
   /** 主动消除触发的嵌片基础值 E */
@@ -180,6 +182,8 @@ class Resolver {
   readonly socket: EffectValues = { attack: 0, shield: 0, poison: 0 };
   readonly triggeredIds = new Set<string>();
   passiveCount = 0;
+  /** 原型“连锁计基数”：被动阶段清除的普通方块按主动的算法累计的基数 */
+  passiveBase = 0;
   activeBombsDetonated = 0;
   readonly detonatedByType: Record<BombUpgrade, number> = { line: 0, area: 0, color: 0 };
   /** 本次行动中已引爆或已消耗的炸弹，保证每枚只引爆一次；也用于保留本步亲手做出的炸弹 */
@@ -222,6 +226,8 @@ class Resolver {
   private count(phase: Phase, tile: Tile, pos: Pos, extra = 0): void {
     if (phase === 'passive') {
       this.passiveCount++;
+      if (this.ctx.config.chainBase && tile.kind === 'normal' && tile.color !== this.ctx.mutedColor)
+        this.passiveBase += blockValue(this.ctx.levels, tile.color, this.ctx.sealedColor) + extra;
       return;
     }
     if (tile.kind !== 'normal') return;
@@ -588,6 +594,7 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     events: [],
     activeClearsByType: emptyClears(),
     passiveClearCount: 0,
+    chainBase: 0,
     hadActiveColorClear: false,
     socketBonuses: { attack: 0, shield: 0, poison: 0 },
     triggeredInsertIds: [],
@@ -698,6 +705,7 @@ export function resolveAction(board: Board, action: Action, ctx: ResolveContext)
     events: res.events,
     activeClearsByType: res.activeClears,
     passiveClearCount: res.passiveCount,
+    chainBase: res.passiveBase,
     hadActiveColorClear: colorClears > 0,
     socketBonuses: res.socket,
     triggeredInsertIds: [...res.triggeredIds].sort(),
