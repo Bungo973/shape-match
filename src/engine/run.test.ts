@@ -222,7 +222,9 @@ describe('神器：商店、栏位与出售', () => {
     run = winBattle(ok(startNextBattle(run)));
     expect(run.phase).toBe('artifact');
     expect(run.artifactChoices.every((k) => ARTIFACTS[k].rarity !== 'common')).toBe(true);
-    const full = { ...run, artifacts: ['chainLens', 'redNose', 'banana', 'loner', 'smallStep'] as RunState['artifacts'] };
+    // 用普通神器把栏位填满（首领奖励只出罕见以上，不会撞上）
+    const commons = offeredArtifacts().filter((k) => ARTIFACTS[k].rarity === 'common');
+    const full = { ...run, artifacts: commons.slice(0, DEFAULT_CONFIG.artifactSlots) };
     const pick = full.artifactChoices[0]!;
     expect(chooseArtifact(full, pick).ok).toBe(false);
     const after = ok(chooseArtifact(ok(sellArtifact(full, 'redNose')), pick));

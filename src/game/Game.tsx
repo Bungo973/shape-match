@@ -120,7 +120,12 @@ export function Game() {
   const boss = run.phase !== 'starter' && levelInfo(run, shownLevel, config).boss;
   const showBattle = (run.phase === 'battle' || ending) && run.battle;
 
+  const [drawer, setDrawer] = useState(false);
+  const sellable = run.phase === 'shop' || run.phase === 'artifact';
+  const counters = { ...(run.battle?.player.counters ?? run.player.counters), loyaltyCard: (run.battle?.stepsTaken ?? 0) % ARTIFACT_PARAMS.loyaltyEvery };
+
   return (
+    <div className="shell">
     <div className="game">
       <header className="top">
         <div className="level">
@@ -145,13 +150,7 @@ export function Game() {
       )}
 
       <footer className="bottom">
-        <Artifacts
-          keys={run.artifacts}
-          gold={run.battle?.gold ?? run.gold}
-          counters={{ ...(run.battle?.player.counters ?? run.player.counters), loyaltyCard: (run.battle?.stepsTaken ?? 0) % ARTIFACT_PARAMS.loyaltyEvery }}
-          pings={pings}
-          onSell={run.phase === 'shop' || run.phase === 'artifact' ? (k) => apply(sellArtifact(run, k, config)) : undefined}
-        />
+        <Artifacts keys={run.artifacts} gold={run.battle?.gold ?? run.gold} counters={counters} pings={pings} onOpen={() => setDrawer(true)} />
         <div className="tools">
           <SoundPicker />
           <button className="link" onClick={restart}>
@@ -159,6 +158,17 @@ export function Game() {
           </button>
         </div>
       </footer>
+    </div>
+      <ArtifactPanel
+        keys={run.artifacts}
+        counters={counters}
+        gold={run.battle?.gold ?? run.gold}
+        ap={run.phase === 'battle' ? (run.battle?.ap ?? null) : null}
+        pings={pings}
+        open={drawer}
+        onClose={() => setDrawer(false)}
+        onSell={sellable ? (k) => apply(sellArtifact(run, k, config)) : undefined}
+      />
     </div>
   );
 }
@@ -541,7 +551,7 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
       return (
         <Panel eyebrow="首领奖励" title="选一件神器">
           <ArtifactChoices keys={run.artifactChoices} full={run.artifacts.length >= config.artifactSlots} onPick={(k) => apply(chooseArtifact(run, k, config))} />
-          {run.artifacts.length >= config.artifactSlots && <p className="hint">神器栏满了：点下方神器栏里的一件卖掉，或者跳过。</p>}
+          {run.artifacts.length >= config.artifactSlots && <p className="hint">神器栏满了：在神器栏里卖掉一件，或者跳过。</p>}
           <button className="ghost" onClick={() => apply(skipArtifact(run, config))}>
             跳过
           </button>
@@ -650,7 +660,7 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
       <h2 className="sub">
         神器
         <span>
-          神器栏 {run.artifacts.length}/{config.artifactSlots} · 点下方神器栏可以半价卖出
+          神器栏 {run.artifacts.length}/{config.artifactSlots} · 在神器栏里可以半价卖出
         </span>
       </h2>
       {run.shopArtifacts.length > 0 ? (
@@ -759,60 +769,150 @@ function ArtifactChoices({ keys, onPick, full }: { keys: ArtifactKey[]; onPick: 
   );
 }
 
+/** 底栏的神器条（窄屏用）：只列名字，点一下打开侧边抽屉看详情、卖出 */
 function Artifacts({
   keys,
   counters,
   pings,
-  onSell,
   gold,
+  onOpen,
 }: {
   keys: ArtifactKey[];
-  gold: number;
   counters: Partial<Record<ArtifactKey, number>> | undefined;
   pings: Partial<Record<ArtifactKey, { label: string; n: number }>>;
-  onSell: ((k: ArtifactKey) => void) | undefined;
+  gold: number;
+  onOpen: () => void;
 }) {
-  const [selling, setSelling] = useState<ArtifactKey | null>(null);
-  if (!keys.length) return <span />;
   return (
-    <ul className="artifacts" aria-label={`神器 ${keys.length}/${config.artifactSlots}`}>
+    <button className="artifacts" onClick={onOpen} aria-label={`查看神器（${keys.length}/${config.artifactSlots}）`}>
       {keys.map((k) => {
         const a = ARTIFACTS[k];
         const p = pings[k];
-        const body = (
-          <>
-            <i className={`dot ${a.rarity}`} />
-            {a.name}
-            <Progress artifact={k} n={counters?.[k] ?? 0} gold={gold} count={keys.length} />
-          </>
-        );
         return (
-          <li key={`${k}-${p?.n ?? 0}`} title={`${RARITY_NAME[a.rarity]} · ${a.text}`} className={p ? 'kick' : ''}>
+          <span key={`${k}-${p?.n ?? 0}`} className={`chip${p ? ' kick' : ''}`}>
             {p && (
               <span className="tag" aria-hidden="true">
                 {p.label}
               </span>
             )}
-            {onSell ? (
-              selling === k ? (
-                <button className="sell" onClick={() => (onSell(k), setSelling(null))} onBlur={() => setSelling(null)} autoFocus>
-                  卖出 +{artifactSellPrice(k, config)}
-                </button>
-              ) : (
-                <button className="held" onClick={() => setSelling(k)}>
-                  {body}
-                </button>
-              )
-            ) : (
-              body
-            )}
-          </li>
+            <i className={`dot ${a.rarity}`} />
+            {a.name}
+            <Progress artifact={k} n={counters?.[k] ?? 0} gold={gold} count={keys.length} />
+          </span>
         );
       })}
-      <li className="slots">
-        {keys.length}/{config.artifactSlots}
-      </li>
-    </ul>
+      <span className="slots">
+        神器 {keys.length}/{config.artifactSlots} ▸
+      </span>
+    </button>
+  );
+}
+
+/** 神器在侧边栏里的当前状态：进度、已累计的加成、下一步是否生效 */
+function artifactStatus(k: ArtifactKey, n: number, gold: number, count: number, ap: number | null): string | null {
+  const P = ARTIFACT_PARAMS;
+  switch (k) {
+    case 'fuseBox':
+    case 'aftershockCore':
+      return `进度 ${n}/${ARTIFACTS[k].every}`;
+    case 'loyaltyCard':
+      return ap == null ? null : `本关第 ${n} 步 · 再走 ${P.loyaltyEvery - n} 步触发`;
+    case 'lastCall':
+      return ap == null ? null : ap === 1 ? '下一步生效' : `本回合还剩 ${ap} 步`;
+    case 'ruler':
+      return `进度 ${n % P.rulerEvery}/${P.rulerEvery} · 已加基数 +${Math.floor(n / P.rulerEvery)}`;
+    case 'marathon':
+      return n > 0 ? `已连续 ${n} 步 · 下一步不爆炸则 +${((n + 1) * P.marathonTenths) / 10}` : `下一步不爆炸则 +${P.marathonTenths / 10}`;
+    case 'iceCream':
+      return `当前基数 +${Math.max(0, P.iceCreamBase - n)}，还能撑 ${Math.ceil(Math.max(0, P.iceCreamBase - n) / P.iceCreamMelt)} 关`;
+    case 'medal':
+      return `已得 ${n} 枚 · 倍率 +${(n * P.medalTenths) / 10}`;
+    case 'tycoon':
+      return `当前基数 +${Math.floor(gold / P.tycoonPer)}`;
+    case 'collector':
+      return `当前倍率 +${(count * P.collectorTenths) / 10}`;
+    case 'vacancy':
+      return `当前倍率 +${(Math.max(0, config.artifactSlots - count) * P.vacancyTenths) / 10}`;
+    case 'piggyBank':
+      return `关末利息 +${Math.min(P.piggyMax, Math.floor(gold / P.piggyPer))}`;
+    default:
+      return null;
+  }
+}
+
+/** 神器侧边栏：宽屏常驻在棋盘右侧，窄屏为抽屉。每件写明稀有度、效果、当前状态；商店和领奖时可以卖出 */
+function ArtifactPanel({
+  keys,
+  counters,
+  gold,
+  ap,
+  pings,
+  open,
+  onClose,
+  onSell,
+}: {
+  keys: ArtifactKey[];
+  counters: Partial<Record<ArtifactKey, number>> | undefined;
+  gold: number;
+  ap: number | null;
+  pings: Partial<Record<ArtifactKey, { label: string; n: number }>>;
+  open: boolean;
+  onClose: () => void;
+  onSell: ((k: ArtifactKey) => void) | undefined;
+}) {
+  const [selling, setSelling] = useState<ArtifactKey | null>(null);
+  return (
+    <>
+      {open && <div className="backdrop" onClick={onClose} />}
+      <aside className={`side${open ? ' open' : ''}`} aria-label="神器">
+        <header>
+          <h2>
+            神器 <span>{keys.length}/{config.artifactSlots}</span>
+          </h2>
+          <button className="link close" onClick={onClose}>
+            关闭
+          </button>
+        </header>
+        {onSell && keys.length > 0 && <p className="hint">点“卖出”得半价金币。</p>}
+        <ol>
+          {keys.map((k) => {
+            const a = ARTIFACTS[k];
+            const p = pings[k];
+            const status = artifactStatus(k, counters?.[k] ?? 0, gold, keys.length, ap);
+            return (
+              <li key={`${k}-${p?.n ?? 0}`} className={`card ${a.rarity}${p ? ' kick' : ''}`}>
+                {p && (
+                  <span className="tag" aria-hidden="true">
+                    {p.label}
+                  </span>
+                )}
+                <div className="head">
+                  <b>{a.name}</b>
+                  <Rarity artifact={k} />
+                </div>
+                <p className="text">{a.text}</p>
+                {status && <p className="status">{status}</p>}
+                {onSell &&
+                  (selling === k ? (
+                    <button className="sell" onClick={() => (onSell(k), setSelling(null))} onBlur={() => setSelling(null)} autoFocus>
+                      确认卖出 +{artifactSellPrice(k, config)}
+                    </button>
+                  ) : (
+                    <button className="ghost small" onClick={() => setSelling(k)}>
+                      卖出 +{artifactSellPrice(k, config)}
+                    </button>
+                  ))}
+              </li>
+            );
+          })}
+          {Array.from({ length: Math.max(0, config.artifactSlots - keys.length) }, (_, i) => (
+            <li key={`empty-${i}`} className="card empty">
+              空栏
+            </li>
+          ))}
+        </ol>
+      </aside>
+    </>
   );
 }
 

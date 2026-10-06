@@ -91,5 +91,6 @@
 | [SCORE_MODE](SCORE_MODE.md#神器) · [ARTIFACT_DESIGN](ARTIFACT_DESIGN.md#分级神器池2026-10-06) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 道具定为不耗步；神器仿《小丑牌》分三级，商店上架神器、神器栏 5 格可半价卖出；全池约 31 件分三批，第一批计分类 7 件已做 | 现行（原型数值） |
 | [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [VISUAL_STYLE](VISUAL_STYLE.md) · [BALANCE_LOG](BALANCE_LOG.md) | 神器触发反馈（逐件抖动、弹数值、倍率逐档跳）；第二批炸弹类 6 件，范围类改为稀有 | 现行（原型数值） |
 | [SCORE_MODE](SCORE_MODE.md#神器) · [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [BALANCE_LOG](BALANCE_LOG.md) | 色封下 0 分也弹出说明；第三批节奏、金币与规则类 12 件，神器池 31 件全部到位 | 现行（原型数值） |
+| [DESIGN_JOURNAL](DESIGN_JOURNAL.md) · [VISUAL_STYLE](VISUAL_STYLE.md) · [SCORE_MODE](SCORE_MODE.md) | 修结算卡闪回；神器栏 6 格、升级降为 8 起每级 +4；神器侧边栏（宽屏常驻、窄屏抽屉） | 现行（原型数值） |
 
 **2026-09-30 起停用**：[ART_DIRECTION](ART_DIRECTION.md)、[ASSET_PLAN](ASSET_PLAN.md)、[ASSET_BATCH2](ASSET_BATCH2.md)、[ASSET_BATCH3](ASSET_BATCH3.md)、[BOARD_INSERT_VISUAL](BOARD_INSERT_VISUAL.md)（美术素材不再使用，视觉以 VISUAL_STYLE 为准）；[THEME_STORY](THEME_STORY.md) 中的敌人与故事线随打怪模式搁置。

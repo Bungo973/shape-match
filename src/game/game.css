@@ -746,37 +746,71 @@ button {
   padding-top: 10px;
 }
 
+/* ---------- 神器：底栏的名字条（窄屏）与侧边栏（宽屏常驻、窄屏抽屉） ---------- */
+
 .artifacts {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
+  align-items: center;
+  gap: 6px 12px;
   font-size: 13px;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
 }
 
-.artifacts li {
+.artifacts .chip {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
-  cursor: help;
   padding: 1px 4px;
-  transition: background 0.12s;
 }
 
-/* 神器触发：底色闪黄、回弹抖动，上方弹出数值。li 以触发序号为 key，每次触发重新挂载、动画重播 */
-.artifacts li {
-  position: relative;
+.artifacts .slots {
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--muted);
 }
 
-.artifacts li.kick {
+.artifacts:hover .slots,
+.artifacts:focus-visible .slots {
+  color: var(--ink);
+}
+
+.artifacts .count {
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  display: block;
+  background: var(--ink);
+}
+
+.dot.uncommon,
+.badge.uncommon {
+  background: var(--blue);
+}
+
+.dot.rare,
+.badge.rare {
+  background: var(--red);
+}
+
+/* 神器触发：底色闪黄、回弹抖动，上方弹出数值。以触发序号为 key 重新挂载，动画重播 */
+.kick {
   animation:
     kick 0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
     flash 0.9s steps(1, end);
 }
 
-.artifacts .tag {
+.tag {
   position: absolute;
   left: 50%;
   bottom: 100%;
@@ -790,6 +824,7 @@ button {
   padding: 3px 6px;
   white-space: nowrap;
   pointer-events: none;
+  z-index: 2;
   animation: tag 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
@@ -849,66 +884,205 @@ button {
   }
 }
 
-.artifacts .dot {
-  width: 9px;
-  height: 9px;
-  display: block;
-  background: var(--ink);
+.shell {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 24px;
 }
 
-.artifacts .dot.uncommon,
-.badge.uncommon {
-  background: var(--blue);
+.shell .game {
+  margin: 0;
+  flex: 0 1 calc(var(--board) + 32px);
+  min-width: 0;
 }
 
-.artifacts .dot.rare,
-.badge.rare {
-  background: var(--red);
+.side {
+  width: 280px;
+  flex: none;
+  background: var(--paper);
+  padding: 20px 16px 28px 0;
 }
 
-.artifacts .slots {
+.side header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: var(--frame) solid var(--ink);
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.side h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.side h2 span {
   font-family: var(--font-num);
-  font-size: 11px;
+  font-weight: 400;
+  font-size: 14px;
   color: var(--muted);
-  cursor: default;
 }
 
-.artifacts .held,
-.artifacts .sell {
+.side .hint {
+  margin: 0 0 10px;
+}
+
+.side ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.side .card {
+  position: relative;
+  border: 2px solid var(--ink);
+  border-left-width: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side .card.uncommon {
+  border-left-color: var(--blue);
+}
+
+.side .card.rare {
+  border-left-color: var(--red);
+}
+
+.side .card.empty {
+  border: 2px dashed var(--rule);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 10px;
+}
+
+.side .head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.side .head b {
+  font-size: 15px;
+}
+
+.side .text {
+  margin: 0;
   font-size: 13px;
+  line-height: 1.45;
 }
 
-.artifacts .held:hover,
-.artifacts .held:focus-visible {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  outline: none;
+.side .status {
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: 12px;
+  color: var(--red);
 }
 
-.artifacts .sell {
+.side .ghost.small,
+.side .sell {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.side .sell {
   background: var(--red);
   color: var(--paper);
-  padding: 0 8px;
+  border: 2px solid var(--red);
   font-weight: 700;
+}
+
+.side .tag {
+  left: auto;
+  right: 8px;
+  transform: none;
+  bottom: auto;
+  top: -10px;
+  animation-name: tag-side;
+}
+
+@keyframes tag-side {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  35% {
+    transform: none;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+/* 宽屏：侧边栏常驻、跟着页面停在顶部，底栏不再重复列神器 */
+@media (min-width: 1100px) {
+  .side {
+    position: sticky;
+    top: 0;
+    max-height: 100dvh;
+    overflow-y: auto;
+    padding-top: 26px;
+  }
+
+  .side .close,
+  .backdrop,
+  .bottom .artifacts {
+    display: none;
+  }
+}
+
+/* 窄屏：侧边栏变成从右侧滑出的抽屉，点底栏的神器条打开 */
+@media (max-width: 1099px) {
+  .side {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(320px, 86vw);
+    padding: 20px 16px 28px;
+    border-left: var(--frame) solid var(--ink);
+    overflow-y: auto;
+    transform: translateX(105%);
+    transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
+  }
+
+  .side.open {
+    transform: none;
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgba(22, 22, 22, 0.25);
+    animation: fade 0.2s ease-out;
+  }
 }
 
 .ending .lost {
   margin: 0;
   font-size: 13px;
   color: var(--red);
-}
-
-.artifacts .count {
-  font-family: var(--font-num);
-  font-size: 11px;
-  color: var(--muted);
 }
 
 .link {
@@ -924,6 +1098,7 @@ button {
 }
 
 .tools {
+  margin-left: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
