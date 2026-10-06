@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>界面方向样板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* 界面方向样板（2026-10-06）：同一个关卡画面画成三个方向，静态，不接游戏代码。
+   数据一致：第 3 关首领、分数 4,820 / 6,700、这一步 24 × 2.5、剩 11 步、两件道具、三件神器。 */
+:root {
+  --paper: #f2f1ec;
+  --ink: #161616;
+  --red: #d6362a;
+  --blue: #1d4e9e;
+  --yellow: #efb622;
+  --green: #1f8a5b;
+  --muted: #6d6a62;
+  --rule: rgba(22, 22, 22, 0.14);
+  --num: 'Archivo Black', Impact, sans-serif;
+  --body: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #e4e2db; color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.page { max-width: 1320px; margin: 0 auto; padding: 32px 16px 64px; display: flex; flex-direction: column; gap: 20px; }
+.intro h1 { margin: 0 0 6px; font-size: 28px; }
+.intro p { margin: 0; color: var(--muted); max-width: 70ch; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; position: sticky; top: 0; z-index: 10; background: #e4e2db; padding: 8px 0; }
+.tabs button { font: inherit; font-weight: 700; border: 3px solid var(--ink); background: var(--paper); padding: 6px 16px; cursor: pointer; }
+.tabs button[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
+.note { background: var(--paper); border-left: 8px solid var(--ink); padding: 10px 14px; max-width: 80ch; }
+.note b { margin-right: 6px; }
+.note ul { margin: 4px 0 0; padding-left: 20px; }
+.screen { background: var(--paper); width: 100%; overflow-x: auto; }
+.screen > .inner { min-width: 1180px; padding: 20px 24px 28px; }
+[hidden] { display: none !important; }
+
+/* 棋盘：10×10，图形与游戏一致 */
+.board { display: grid; grid-template-columns: repeat(10, 1fr); aspect-ratio: 1; border: 3px solid var(--ink); background: var(--paper); }
+.board .cell { position: relative; border-right: 1px solid rgba(22,22,22,.1); border-bottom: 1px solid rgba(22,22,22,.1); display: grid; place-items: center; }
+.board .cell:nth-child(10n) { border-right: 0; }
+.board .cell:nth-child(n+91) { border-bottom: 0; }
+.board svg { width: 72%; height: 72%; display: block; }
+.num { font-family: var(--num); font-weight: 400; font-variant-numeric: tabular-nums; }
+.lab { font-size: 12px; letter-spacing: .12em; color: var(--muted); }
+
+/* 三栏骨架（三个方向共用） */
+.cols { display: grid; grid-template-columns: 250px 1fr 270px; gap: 32px; align-items: start; }
+.mid { display: flex; flex-direction: column; gap: 12px; }
+
+/* ===== A 极简 ===== */
+.a .top { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--ink); padding-bottom: 10px; margin-bottom: 18px; }
+.a .lv { display: flex; align-items: baseline; gap: 8px; }
+.a .lv b { font-size: 34px; line-height: 1; }
+.a .lv .of { color: var(--muted); }
+.a .tag { background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 700; padding: 1px 8px; align-self: center; }
+.a .vit { display: flex; align-items: center; gap: 18px; }
+.a .vit span { display: flex; align-items: center; gap: 6px; font-family: var(--num); }
+.a .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.a .ibtn { width: 24px; height: 24px; border: 2px solid var(--muted); border-radius: 50%; display: grid; place-items: center; font-family: var(--num); font-size: 13px; color: var(--muted); }
+.a .left { display: flex; flex-direction: column; gap: 26px; }
+.a .score b { font-size: 60px; line-height: .95; display: block; }
+.a .score .t { font-family: var(--num); color: var(--muted); }
+.a .bar { height: 6px; background: var(--rule); margin-top: 10px; }
+.a .bar i { display: block; height: 100%; width: 72%; background: var(--blue); }
+.a .calc { display: flex; align-items: center; gap: 8px; }
+.a .calc span { flex: 1; text-align: center; color: var(--paper); font-family: var(--num); font-size: 30px; padding: 6px 0; }
+.a .steps { display: flex; align-items: center; justify-content: space-between; }
+.a .steps .sq { display: flex; gap: 6px; }
+.a .steps .g { display: flex; gap: 2px; }
+.a .steps i { width: 8px; height: 8px; background: var(--ink); display: block; }
+.a .steps i.off { background: var(--rule); }
+.a .steps b { font-size: 22px; }
+.a .chip { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.a .chip .k { width: 6px; align-self: stretch; }
+.a .chip .p { margin-left: auto; font-family: var(--num); font-size: 12px; color: var(--muted); }
+.a .ups { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.a .ups div { display: flex; align-items: center; gap: 8px; font-family: var(--num); font-size: 14px; }
+.a .ups .up { color: var(--red); }
+.a .tip { position: relative; border: 2px dashed var(--muted); padding: 6px 10px; font-size: 12px; color: var(--muted); }
+.a .right { display: flex; flex-direction: column; gap: 22px; }
+.a .items { display: flex; gap: 8px; }
+.a .items span { width: 56px; height: 56px; border: 2px solid var(--ink); display: grid; place-items: center; }
+.a .items span.e { border: 2px dashed var(--rule); }
+.a .arts { display: flex; flex-direction: column; gap: 6px; }
+.a .arts div { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; padding: 4px 0; border-bottom: 1px solid var(--rule); }
+.a .arts .open { flex-direction: column; align-items: flex-start; gap: 2px; border: 2px solid var(--ink); padding: 8px 10px; }
+.a .arts .open small { font-weight: 400; color: var(--muted); }
+.a .arts .free { color: var(--muted); font-weight: 400; font-size: 12px; border: 0; }
+
+/* ===== B 海报色块 ===== */
+.b .top { display: flex; justify-content: space-between; align-items: stretch; background: var(--ink); color: var(--paper); margin: -20px -24px 20px; padding: 0 24px 0 0; }
+.b .lvblk { background: var(--yellow); color: var(--ink); padding: 8px 20px; display: flex; align-items: baseline; gap: 8px; }
+.b .lvblk b { font-size: 44px; line-height: 1; }
+.b .lvblk .boss { background: var(--red); color: var(--paper); font-weight: 700; font-size: 13px; padding: 2px 8px; align-self: center; }
+.b .vit { display: flex; align-items: center; gap: 22px; font-family: var(--num); font-size: 18px; }
+.b .hpbar { width: 120px; height: 12px; background: #3a3936; }
+.b .hpbar i { display: block; height: 100%; width: 80%; background: var(--red); }
+.b .vit .g { display: flex; align-items: center; gap: 8px; }
+.b .vit .g i { width: 16px; height: 16px; border-radius: 50%; background: var(--yellow); }
+.b .ib { width: 28px; height: 28px; background: var(--paper); color: var(--ink); display: grid; place-items: center; font-size: 15px; }
+.b .left { display: flex; flex-direction: column; gap: 8px; }
+.b .blk { padding: 12px 14px; }
+.b .scoreblk { position: relative; overflow: hidden; border: 3px solid var(--ink); background: var(--paper); }
+.b .scoreblk::after { content: ''; position: absolute; left: 0; bottom: 0; height: 10px; width: 72%; background: var(--blue); }
+.b .scoreblk::before { content: ''; position: absolute; right: -40px; top: -40px; width: 130px; height: 130px; border-radius: 50%; background: var(--yellow); }
+.b .scoreblk b { position: relative; z-index: 1; display: block; font-size: 58px; line-height: 1; }
+.b .scoreblk .t { position: relative; z-index: 1; font-family: var(--num); }
+.b .calc { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.b .calc div { color: var(--paper); padding: 10px 12px 8px; }
+.b .calc b { font-size: 40px; line-height: 1; display: block; }
+.b .calc small { font-size: 12px; opacity: .8; }
+.b .stepsblk { background: var(--ink); color: var(--paper); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.b .stepsblk .sq { display: flex; gap: 6px; }
+.b .stepsblk .g { display: flex; gap: 3px; }
+.b .stepsblk i { width: 9px; height: 9px; background: var(--paper); display: block; }
+.b .stepsblk i.off { background: #4a4945; }
+.b .stepsblk b { font-size: 26px; }
+.b .rule { background: var(--red); color: var(--paper); font-size: 13px; }
+.b .rule b, .b .task b { display: block; font-size: 15px; }
+.b .task { background: var(--yellow); font-size: 13px; display: flex; justify-content: space-between; align-items: end; }
+.b .ups { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.b .ups div { border: 3px solid var(--ink); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.b .ups b { font-size: 20px; }
+.b .ups b.up { color: var(--red); }
+.b .ups small { font-size: 11px; color: var(--muted); }
+.b .right { display: flex; flex-direction: column; gap: 8px; }
+.b .hd { background: var(--ink); color: var(--paper); font-weight: 700; padding: 4px 12px; display: flex; justify-content: space-between; }
+.b .item { border: 3px solid var(--ink); border-top: 0; padding: 10px 12px; display: flex; gap: 10px; }
+.b .item small { display: block; color: var(--muted); font-size: 12px; }
+.b .art { border: 3px solid var(--ink); }
+.b .art .band { height: 10px; }
+.b .art div:last-child { padding: 8px 12px; }
+.b .art small { display: block; color: var(--muted); font-size: 12px; }
+.b .free { border: 3px dashed var(--rule); padding: 8px 12px; font-size: 12px; color: var(--muted); }
+
+/* ===== C 方块语言 ===== */
+.c .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+.c .route { display: flex; align-items: center; gap: 6px; }
+.c .route b { font-size: 30px; margin-right: 10px; }
+.c .route svg { width: 22px; height: 22px; }
+.c .vit { display: flex; align-items: center; gap: 22px; }
+.c .hearts { display: flex; gap: 4px; align-items: center; }
+.c .hearts svg { width: 16px; height: 16px; }
+.c .gold { display: flex; align-items: center; gap: 6px; font-family: var(--num); font-size: 18px; }
+.c .ib { width: 26px; height: 26px; border: 2px solid var(--ink); display: grid; place-items: center; font-family: var(--num); font-size: 13px; }
+.c .left { display: flex; flex-direction: column; gap: 28px; }
+.c .score b { font-size: 60px; line-height: .95; display: block; }
+.c .score .t { font-family: var(--num); color: var(--muted); }
+.c .prog { display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; margin-top: 10px; }
+.c .prog i { aspect-ratio: 1; background: var(--rule); display: block; }
+.c .prog i.on { background: var(--blue); }
+.c .calc { display: flex; align-items: center; justify-content: space-between; }
+.c .calc .sh { position: relative; width: 100px; height: 100px; display: grid; place-items: center; color: var(--paper); }
+.c .calc .sh svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.c .calc .sh b { position: relative; font-size: 34px; }
+.c .calc .x { font-family: var(--num); font-size: 22px; }
+.c .calc + small { display: block; text-align: center; color: var(--muted); font-size: 12px; margin-top: -18px; }
+.c .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.c .steps .g { display: flex; gap: 3px; padding: 3px; }
+.c .steps .g.now { outline: 2px solid var(--ink); }
+.c .steps svg { width: 100%; height: auto; }
+.c .stepline { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.c .stepline b { font-size: 22px; }
+.c .marks { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.c .marks div { display: flex; align-items: center; gap: 10px; }
+.c .marks svg { width: 18px; height: 18px; flex: none; }
+.c .marks .p { margin-left: auto; font-family: var(--num); font-size: 12px; color: var(--muted); }
+.c .ups { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.c .ups div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.c .ups .tile { width: 52px; height: 52px; background: var(--ink); display: grid; place-items: center; }
+.c .ups .tile.block { background: transparent; border: 2px solid var(--ink); }
+.c .ups b { font-size: 14px; }
+.c .ups b.up { color: var(--red); }
+.c .right { display: flex; flex-direction: column; gap: 26px; }
+.c .items { display: flex; gap: 10px; }
+.c .items .it { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; }
+.c .items .bk { width: 60px; height: 60px; background: var(--ink); border-radius: 8px; display: grid; place-items: center; }
+.c .items .bk.e { background: transparent; border: 2px dashed var(--rule); }
+.c .arts { display: flex; flex-direction: column; gap: 10px; }
+.c .arts .art { display: grid; grid-template-columns: 22px 1fr; gap: 2px 10px; align-items: start; }
+.c .arts svg { width: 22px; height: 22px; grid-row: span 2; }
+.c .arts b { font-size: 14px; }
+.c .arts small { color: var(--muted); font-size: 12px; }
+.c .free { display: flex; gap: 6px; }
+.c .free i { width: 22px; height: 22px; border: 2px dashed var(--rule); display: block; }
+.c h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: .1em; color: var(--muted); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="intro">
+    <h1>界面方向样板</h1>
+    <p>同一个关卡画面（第 3 关首领、分数 4,820 / 6,700、这一步 24 × 2.5、剩 11 步）画成三个方向。只是静态样板，数字是示意；选定后再改真实界面。点上方按钮切换。</p>
+  </header>
+
+  <nav class="tabs" aria-label="方向">
+    <button data-v="a" aria-pressed="true">A 极简</button>
+    <button data-v="b" aria-pressed="false">B 海报色块</button>
+    <button data-v="c" aria-pressed="false">C 方块语言</button>
+  </nav>
+
+  <!-- ================= A ================= -->
+  <section data-view="a">
+    <div class="note"><b>A 极简</b>结构不变，常驻的小字基本拿掉，只留数字和图标；说明在悬停或点按时才出现（左栏底部的虚线框、右栏展开的“冰淇淋”是悬停时的样子）。
+      <ul><li>好处：最干净，棋盘最突出；改动最小。</li><li>代价：第一次玩的人要靠悬停和“?”才看得懂各项含义。</li></ul></div>
+    <div class="screen a"><div class="inner">
+      <div class="top">
+        <div class="lv"><b class="num">03</b><span class="of num">/09</span><span class="tag">首领</span></div>
+        <div class="vit">
+          <span><i class="dot" style="background:var(--red)"></i>32</span>
+          <span><i class="dot" style="background:var(--yellow)"></i>45</span>
+          <span class="ibtn">?</span><span class="ibtn">⚙</span>
+        </div>
+      </div>
+      <div class="cols">
+        <div class="left">
+          <div class="score"><b class="num">4,820</b><span class="t">/ 6,700</span><div class="bar"><i></i></div></div>
+          <div class="calc"><span style="background:var(--blue)">24</span><b class="num">×</b><span style="background:var(--red)">2.5</span></div>
+          <div class="steps"><div class="sq" id="a-steps"></div><b class="num">11</b></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="chip"><i class="k" style="background:var(--red)"></i>低压 · 倍率封顶 ×3</div>
+            <div class="chip"><i class="k" style="background:var(--ink)"></i>一步连锁 6 层<span class="p">4 / 6</span></div>
+          </div>
+          <div class="ups" id="a-ups"></div>
+          <div class="tip">悬停“直线 Lv2”：每块 +1 基数 · 引爆时倍率 +0.1；本关再引爆 7 枚升一级</div>
+        </div>
+        <div class="mid"><div class="board" id="board-a"></div></div>
+        <div class="right">
+          <div class="items" id="a-items"></div>
+          <div class="arts">
+            <div><i class="dot" style="background:var(--ink)"></i>红鼻子</div>
+            <div class="open"><span>冰淇淋 <i class="dot" style="background:var(--ink);width:8px;height:8px"></i></span><small>基数 +20，每过一关少 4 · 当前 +16</small></div>
+            <div><i class="dot" style="background:var(--blue)"></i>末班车</div>
+            <div class="free">还能装 3 件</div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ================= B ================= -->
+  <section data-view="b" hidden>
+    <div class="note"><b>B 海报色块</b>用整块平涂色块分区，几乎不用细线：黑色顶栏、黄色关卡号、红色首领规则、黄色任务、黑色步数块；计分是两大块蓝红色块。分数块右上一枚黄色半圆做构成主义的装饰。
+      <ul><li>好处：最像构成主义海报，和棋盘的平涂图形最统一，作品集截图辨识度高。</li><li>代价：色块多，抢棋盘的注意力；红黄两色在界面和方块里都出现，要靠形状区分。</li></ul></div>
+    <div class="screen b"><div class="inner">
+      <div class="top">
+        <div class="lvblk"><b class="num">03</b><span class="num">/09</span><span class="boss">首领</span></div>
+        <div class="vit">
+          <span class="hpbar"><i></i></span><span>32</span>
+          <span class="g"><i></i>45</span>
+          <span class="ib num">?</span><span class="ib">⚙</span>
+        </div>
+      </div>
+      <div class="cols">
+        <div class="left">
+          <div class="blk scoreblk"><b class="num">4,820</b><span class="t">/ 6,700</span></div>
+          <div class="calc">
+            <div style="background:var(--blue)"><b class="num">24</b><small>基数</small></div>
+            <div style="background:var(--red)"><b class="num">2.5</b><small>倍率 · 连锁 3</small></div>
+          </div>
+          <div class="blk stepsblk"><div class="sq" id="b-steps"></div><b class="num">11</b></div>
+          <div class="blk rule"><b>首领 · 低压</b>倍率封顶 ×3</div>
+          <div class="blk task"><div><b>一步连锁 6 层</b>任务</div><span class="num">4 / 6</span></div>
+          <div class="ups" id="b-ups"></div>
+        </div>
+        <div class="mid"><div class="board" id="board-b"></div></div>
+        <div class="right">
+          <div class="hd"><span>道具</span><span class="num">2/3</span></div>
+          <div id="b-items"></div>
+          <div class="hd" style="margin-top:12px"><span>神器</span><span class="num">3/6</span></div>
+          <div class="art"><div class="band" style="background:var(--ink)"></div><div><b>红鼻子</b><small>倍率 +0.5</small></div></div>
+          <div class="art"><div class="band" style="background:var(--ink)"></div><div><b>冰淇淋</b><small>基数 +20，每过一关少 4 · 当前 +16</small></div></div>
+          <div class="art"><div class="band" style="background:var(--blue)"></div><div><b>末班车</b><small>每回合最后一步，倍率 ×1.5</small></div></div>
+          <div class="free">还能装 3 件</div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ================= C ================= -->
+  <section data-view="c" hidden>
+    <div class="note"><b>C 方块语言</b>界面上的数量都用四种方块来表示：生命是一排红圆，金币是黄三角，步数是蓝方块，路线是九个图形；基数写在蓝方块里、倍率写在红圆里；道具是和炸弹一样的黑色圆角块。没有边框和分隔线，靠留白分区。
+      <ul><li>好处：最“契合方块”，访客一眼看出界面和棋盘是一套东西；文字最少。</li><li>代价：图形要讲清规则（比如一个红圆代表几点生命），需要说明页兜底；改动最大。</li></ul></div>
+    <div class="screen c"><div class="inner">
+      <div class="top">
+        <div class="route" id="c-route"><b class="num">03</b></div>
+        <div class="vit">
+          <span class="hearts" id="c-hearts"></span>
+          <span class="gold" id="c-gold">45</span>
+          <span class="ib">?</span><span class="ib">⚙</span>
+        </div>
+      </div>
+      <div class="cols">
+        <div class="left">
+          <div class="score"><b class="num">4,820</b><span class="t">/ 6,700</span><div class="prog" id="c-prog"></div></div>
+          <div>
+            <div class="calc">
+              <div class="sh" id="c-base"><b class="num">24</b></div>
+              <span class="x">×</span>
+              <div class="sh" id="c-mult"><b class="num">2.5</b></div>
+            </div>
+          </div>
+          <div><div class="stepline"><span class="lab">步数</span><b class="num">11</b></div><div class="steps" id="c-steps"></div></div>
+          <div class="marks" id="c-marks"></div>
+          <div><h4>升级</h4><div class="ups" id="c-ups"></div></div>
+        </div>
+        <div class="mid"><div class="board" id="board-c"></div></div>
+        <div class="right">
+          <div><h4>道具</h4><div class="items" id="c-items"></div></div>
+          <div><h4>神器</h4><div class="arts" id="c-arts"></div><div class="free" style="margin-top:12px"><i></i><i></i><i></i></div></div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+</div>
+
+<script>
+// 图形：与棋盘一致的红圆、蓝方、黄三角、绿菱形，以及黑块白标炸弹
+const C = { r: '#d6362a', b: '#1d4e9e', y: '#efb622', g: '#1f8a5b', k: '#161616', p: '#f2f1ec' };
+const shape = (t, fill = C[t]) => {
+  switch (t) {
+    case 'r': return `<svg viewBox="-1 -1 2 2"><circle r=".72" fill="${fill}"/></svg>`;
+    case 'b': return `<svg viewBox="-1 -1 2 2"><rect x="-.66" y="-.66" width="1.32" height="1.32" rx=".14" fill="${fill}"/></svg>`;
+    case 'y': return `<svg viewBox="-1 -1 2 2"><polygon points="0,-.78 .78,.62 -.78,.62" fill="${fill}"/></svg>`;
+    case 'g': return `<svg viewBox="-1 -1 2 2"><polygon points="0,-.86 .62,0 0,.86 -.62,0" fill="${fill}"/></svg>`;
+  }
+};
+const bomb = (kind) => {
+  const mark = kind === 'H' ? '<path d="M-.42 0H.42M.27-.15L.42 0L.27.15M-.27-.15L-.42 0L-.27.15" stroke="#f2f1ec" stroke-width=".12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+    : kind === 'A' ? '<rect x="-.36" y="-.36" width=".72" height=".72" stroke="#f2f1ec" stroke-width=".12" fill="none"/><rect x="-.07" y="-.07" width=".14" height=".14" fill="#f2f1ec"/>'
+    : ['r', 'b', 'y', 'g'].map((c, i) => `<circle cx="${Math.cos(i * Math.PI / 2) * .28}" cy="${Math.sin(i * Math.PI / 2) * .28}" r=".15" fill="${C[c]}"/>`).join('');
+  return `<svg viewBox="-1 -1 2 2"><rect x="-.8" y="-.8" width="1.6" height="1.6" rx=".16" fill="#161616"/>${mark}</svg>`;
+};
+const icon = (k) => ({
+  glove: '<svg viewBox="-1 -1 2 2" width="26" height="26"><path d="M-.6-.2h1.2M.35-.45L.6-.2L.35.05M.6.25h-1.2M-.35 0L-.6.25L-.35.5" stroke="#f2f1ec" stroke-width=".14" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  magnifier: '<svg viewBox="-1 -1 2 2" width="26" height="26"><circle cx="-.15" cy="-.15" r=".42" stroke="#efb622" stroke-width=".16" fill="none"/><path d="M.15.15L.6.6" stroke="#efb622" stroke-width=".2" stroke-linecap="round"/></svg>',
+}[k]);
+const iconInk = (k) => icon(k).replaceAll('#f2f1ec', '#161616');
+
+// 固定的一盘：伪随机，带两枚炸弹
+function board(el) {
+  let s = 7;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const colors = ['r', 'r', 'r', 'b', 'b', 'y', 'y', 'g', 'g'];
+  let html = '';
+  for (let i = 0; i < 100; i++) {
+    const t = i === 34 ? bomb('H') : i === 77 ? bomb('A') : shape(colors[Math.floor(rnd() * colors.length)]);
+    html += `<div class="cell">${t}</div>`;
+  }
+  document.getElementById(el).innerHTML = html;
+}
+['board-a', 'board-b', 'board-c'].forEach(board);
+
+// 步数：5 回合 × 3 步；第 1 回合用完，第 2 回合剩 2
+const stepState = [0, 2, 3, 3, 3];
+const stepsHtml = (on, off) => stepState.map((n) => `<span class="g">${[0, 1, 2].map((j) => `<i class="${j < n ? '' : 'off'}"></i>`).join('')}</span>`).join('');
+document.getElementById('a-steps').innerHTML = stepsHtml();
+document.getElementById('b-steps').innerHTML = stepsHtml();
+
+// 升级
+const ups = [
+  { k: 'block', name: '方块', lv: 2, txt: '每块 2 基数' },
+  { k: 'H', name: '直线', lv: 2, up: true, txt: '每块 +1 · 倍率 +0.1' },
+  { k: 'A', name: '3×3', lv: 1, txt: '每块 +0 · 倍率 +0' },
+  { k: 'CB', name: '五连', lv: 1, txt: '每块 +0 · 倍率 +0' },
+];
+const blockIcon = '<svg viewBox="-1 -1 2 2" width="20" height="20"><circle cx="-.46" cy="-.46" r=".34" fill="#d6362a"/><rect x=".12" y="-.8" width=".66" height=".66" rx=".08" fill="#1d4e9e"/><polygon points="-.46,.1 -.1,.8 -.82,.8" fill="#efb622"/><polygon points=".46,.08 .8,.46 .46,.84 .12,.46" fill="#1f8a5b"/></svg>';
+const upIcon = (u, size = 20) => (u.k === 'block' ? blockIcon.replaceAll('20', String(size)) : bomb(u.k).replace('<svg', `<svg width="${size}" height="${size}"`));
+document.getElementById('a-ups').innerHTML = ups.map((u) => `<div>${upIcon(u)}<span class="${u.up ? 'up' : ''}">Lv${u.lv}${u.up ? '↑' : ''}</span></div>`).join('');
+document.getElementById('b-ups').innerHTML = ups.map((u) => `<div><span style="display:flex;gap:6px;align-items:center">${upIcon(u, 18)}<b class="num ${u.up ? 'up' : ''}">Lv${u.lv}</b></span><small>${u.txt}</small></div>`).join('');
+document.getElementById('c-ups').innerHTML = ups.map((u) => `<div><span class="tile ${u.k === 'block' ? 'block' : ''}">${u.k === 'block' ? upIcon(u, 34) : upIcon(u, 52)}</span><b class="num ${u.up ? 'up' : ''}">Lv${u.lv}${u.up ? '↑' : ''}</b></div>`).join('');
+
+// 道具
+const items = [{ k: 'glove', name: '手套', txt: '任意两格互换，炸弹也能换' }, { k: 'magnifier', name: '放大镜', txt: '下一次结算倍率 ×2' }];
+document.getElementById('a-items').innerHTML = items.map((i) => `<span title="${i.name}">${iconInk(i.k)}</span>`).join('') + '<span class="e"></span>';
+document.getElementById('b-items').innerHTML = items.map((i) => `<div class="item">${iconInk(i.k)}<div><b>${i.name}</b><small>${i.txt}</small></div></div>`).join('');
+document.getElementById('c-items').innerHTML = items.map((i) => `<div class="it"><span class="bk">${icon(i.k)}</span>${i.name}</div>`).join('') + '<div class="it"><span class="bk e"></span>&nbsp;</div>';
+
+// C：路线、生命、金币、进度、计分图形、规则与任务、神器
+document.getElementById('c-route').innerHTML += [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
+  const boss = n % 3 === 0;
+  if (n < 3) return shape('g');
+  if (n === 3) return '<svg viewBox="-1 -1 2 2"><rect x="-.7" y="-.7" width="1.4" height="1.4" fill="#161616"/><rect x="-.3" y="-.3" width=".6" height=".6" fill="#efb622"/></svg>';
+  return boss ? '<svg viewBox="-1 -1 2 2"><rect x="-.62" y="-.62" width="1.24" height="1.24" fill="none" stroke="#161616" stroke-width=".22"/></svg>' : '<svg viewBox="-1 -1 2 2"><circle r=".3" fill="rgba(22,22,22,.25)"/></svg>';
+}).join('');
+document.getElementById('c-hearts').innerHTML = Array.from({ length: 8 }, (_, i) => shape('r', i < 6 ? C.r : 'rgba(214,54,42,.2)')).join('') + '<span class="num" style="margin-left:6px">32</span>';
+document.getElementById('c-gold').innerHTML = `<span style="width:18px;height:18px;display:inline-block">${shape('y')}</span>45`;
+document.getElementById('c-prog').innerHTML = Array.from({ length: 20 }, (_, i) => `<i class="${i < 14 ? 'on' : ''}"></i>`).join('');
+document.getElementById('c-base').innerHTML = shape('b') + document.getElementById('c-base').innerHTML;
+document.getElementById('c-mult').innerHTML = shape('r') + document.getElementById('c-mult').innerHTML;
+document.getElementById('c-steps').innerHTML = stepState.map((n, t) => `<span class="g ${t === 1 ? 'now' : ''}">${[0, 1, 2].map((j) => shape('b', j < n ? C.b : 'rgba(29,78,158,.18)')).join('')}</span>`).join('');
+document.getElementById('c-marks').innerHTML =
+  `<div><svg viewBox="-1 -1 2 2"><rect x="-.7" y="-.7" width="1.4" height="1.4" fill="#d6362a"/></svg>低压 · 倍率封顶 ×3</div>` +
+  `<div><svg viewBox="-1 -1 2 2"><polygon points="0,-.86 .62,0 0,.86 -.62,0" fill="none" stroke="#161616" stroke-width=".18"/></svg>一步连锁 6 层<span class="p">4 / 6</span></div>`;
+const arts = [{ n: '红鼻子', t: '倍率 +0.5', c: 'k' }, { n: '冰淇淋', t: '基数 +20，每关少 4 · 当前 +16', c: 'k' }, { n: '末班车', t: '每回合最后一步，倍率 ×1.5', c: 'b' }];
+document.getElementById('c-arts').innerHTML = arts.map((a) => `<div class="art">${a.c === 'k' ? '<svg viewBox="-1 -1 2 2"><circle r=".7" fill="#161616"/></svg>' : '<svg viewBox="-1 -1 2 2"><circle r=".7" fill="#1d4e9e"/></svg>'}<b>${a.n}</b><small>${a.t}</small></div>`).join('');
+
+// 切换
+const btns = document.querySelectorAll('.tabs button');
+btns.forEach((b) => b.addEventListener('click', () => {
+  btns.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  document.querySelectorAll('[data-view]').forEach((v) => (v.hidden = v.dataset.view !== b.dataset.v));
+}));
+</script>
+</body>
+</html>
