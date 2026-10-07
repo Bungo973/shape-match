@@ -10,6 +10,9 @@
   --green: #29846a;
   --muted: #75766b;
   --line: #d8d5c9;
+  /* 无边框设计（2026-10-07）：方框一律改成比纸色深一点的色块；横向的结构线保留 */
+  --plate: #e9e4d6;
+  --plate-hover: #e0d9c7;
   --rule: rgba(32, 35, 30, 0.14);
   --frame: 3px;
   --heavy: 4px;
@@ -97,11 +100,11 @@ button {
 .runpanel .route li {
   width: 20px;
   height: 20px;
-  border: 2px solid var(--ink);
+  background: var(--plate);
 }
 
 .runpanel .route li.boss {
-  border-color: var(--red);
+  background: #f1d4cc;
 }
 
 .runpanel .route li.done {
@@ -169,7 +172,6 @@ button {
 .stage {
   position: relative;
   aspect-ratio: 1 / 1;
-  border: var(--frame) solid var(--ink);
 }
 
 .stage canvas {
@@ -199,7 +201,7 @@ button {
 
 .ending .card {
   background: var(--paper);
-  border: var(--frame) solid var(--ink);
+  border-top: var(--heavy) solid var(--ink);
   padding: 20px 28px 22px;
   display: flex;
   flex-direction: column;
@@ -275,11 +277,10 @@ button {
 }
 
 .eyebrow {
+  font-family: var(--font-mono);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  background: var(--yellow);
-  padding: 2px 8px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
 }
 
 .panel h1 {
@@ -313,9 +314,9 @@ button {
   align-items: flex-start;
   gap: 6px;
   text-align: left;
-  background: var(--paper);
-  border: var(--frame) solid var(--ink);
-  padding: 14px;
+  background: var(--plate);
+  border: none;
+  padding: 16px;
   cursor: pointer;
   transition:
     transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -330,7 +331,7 @@ button {
 .choice:hover:not(:disabled),
 .choice:focus-visible {
   transform: translateY(-4px);
-  border-color: var(--blue);
+  background: var(--plate-hover);
   outline: none;
 }
 
@@ -450,11 +451,9 @@ button {
 }
 
 .badge {
-  font-family: var(--font-num);
+  font-family: var(--font-mono);
   font-size: 11px;
-  background: var(--ink);
-  color: var(--paper);
-  padding: 1px 6px;
+  color: var(--muted);
 }
 
 .rest {
@@ -504,10 +503,16 @@ button {
 }
 
 .ghost {
-  background: none;
-  border: 2px solid var(--ink);
-  padding: 6px 14px;
+  background: var(--plate);
+  border: none;
+  padding: 7px 14px;
+  font-weight: 700;
   cursor: pointer;
+  transition: background 0.12s;
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--plate-hover);
 }
 
 .ghost:disabled {
@@ -578,12 +583,12 @@ button {
 
 .dot.uncommon,
 .badge.uncommon {
-  background: var(--blue);
+  color: var(--blue);
 }
 
 .dot.rare,
 .badge.rare {
-  background: var(--red);
+  color: var(--red);
 }
 
 /* 神器触发：底色闪黄、回弹抖动，上方弹出数值。以触发序号为 key 重新挂载，动画重播 */
@@ -677,8 +682,6 @@ button {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  border-bottom: var(--frame) solid var(--ink);
-  padding-bottom: 10px;
   margin-bottom: 12px;
 }
 
@@ -698,7 +701,7 @@ button {
 .side .sell {
   background: var(--red);
   color: var(--paper);
-  border: 2px solid var(--red);
+  border: none;
   font-weight: 700;
 }
 
@@ -863,8 +866,7 @@ button {
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  background: var(--paper);
-  border: var(--frame) solid var(--ink);
+  background: var(--plate);
   font-size: 13px;
   transform-origin: top right;
   animation: pop-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -944,17 +946,11 @@ button {
 /* ---------- 可选任务 ---------- */
 
 .tasks .task[aria-checked='true'] {
-  border-color: var(--blue);
-  background: #e2e7f0;
+  background: #dde3ef;
 }
 
 .tasks .task.hard[aria-checked='true'] {
-  border-color: var(--red);
   background: #f5e2dc;
-}
-
-.tasks .task .badge:not(.rare) {
-  background: var(--ink);
 }
 
 .ending .taskres {
@@ -1016,7 +1012,7 @@ button {
   margin-top: 4px;
   padding: 12px 0 16px;
   background: var(--paper);
-  border-top: var(--frame) solid var(--ink);
+  border-top: var(--heavy) solid var(--ink);
 }
 
 .gold.big {
@@ -1122,21 +1118,21 @@ button {
   display: grid;
   place-items: center;
   padding: 0;
-  border: 2px solid var(--muted);
+  border: none;
   border-radius: 50%;
-  background: none;
+  background: var(--plate);
   color: var(--muted);
   font-family: var(--font-num);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 
 .help-btn:hover,
 .help-btn:focus-visible {
   color: var(--ink);
-  border-color: var(--ink);
+  background: var(--plate-hover);
   outline: none;
 }
 
@@ -1158,7 +1154,7 @@ button {
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
   background: var(--paper);
-  border: var(--frame) solid var(--ink);
+  border-top: var(--heavy) solid var(--ink);
   padding: 18px 22px 22px;
   animation: pop-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -1167,7 +1163,7 @@ button {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  border-bottom: var(--frame) solid var(--ink);
+  border-bottom: 1px solid var(--line);
   padding-bottom: 10px;
 }
 
@@ -1519,11 +1515,6 @@ button {
   color: var(--ink);
 }
 
-/* 结算完成：两块描黑边定格，直到下一步 */
-.mult.final .cell {
-  outline: 3px solid var(--ink);
-  outline-offset: -3px;
-}
 
 /* 步数：大数字 /15，每回合一组方格，下面写第几回合 */
 .steps {
@@ -1562,11 +1553,10 @@ button {
   display: flex;
   gap: 3px;
   padding: 3px;
-  outline: 1px solid transparent;
 }
 
 .steps .group.now {
-  outline-color: var(--ink);
+  background: var(--plate);
 }
 
 .steps .group i {
@@ -1753,8 +1743,7 @@ button {
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  background: var(--paper);
-  border: 1px solid var(--ink);
+  background: var(--plate);
   border-left: 4px solid var(--ink);
 }
 
@@ -1767,7 +1756,8 @@ button {
 }
 
 .side .card.empty {
-  border: 1px dashed var(--line);
+  border: none;
+  background: transparent;
   padding: 8px;
   color: var(--muted);
   font-size: 11px;
@@ -1827,6 +1817,11 @@ button {
   margin-left: 24px;
 }
 
+/* 卡片本身是色块，卡上的次要按钮改用纸色，才分得出来 */
+.side .card .ghost {
+  background: var(--paper);
+}
+
 /* 道具：两列卡片（图标、名字、一句话），空位虚线框 */
 .bag ul {
   list-style: none;
@@ -1845,8 +1840,8 @@ button {
   align-items: center;
   gap: 4px;
   padding: 12px 6px 9px;
-  background: var(--paper);
-  border: 1px solid var(--ink);
+  background: var(--plate);
+  border: none;
   text-align: center;
   cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -1880,7 +1875,7 @@ button {
 
 .bag .empty {
   min-height: 84px;
-  border: 1px dashed var(--line);
+  background: rgba(233, 228, 214, 0.5);
 }
 
 .bag > .hint {
@@ -1996,7 +1991,6 @@ button {
     z-index: 30;
     width: min(320px, 86vw);
     padding: 20px 16px 28px;
-    border-left: var(--frame) solid var(--ink);
     overflow-x: hidden;
     overflow-y: auto;
     transform: translateX(105%);

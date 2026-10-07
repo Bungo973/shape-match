@@ -3,7 +3,7 @@
 import gsap from 'gsap';
 import { posKey, samePos, type Board, type Explosion, type Pos, type ResolutionEvent, type Tile } from '../../engine';
 import { sfx } from '../audio';
-import { COLOR_HEX, drawBomb, drawNormal, drawStone, drawTri, GRID_LINE, INK, PAPER } from './paint';
+import { COLOR_HEX, drawBomb, drawNormal, drawStone, drawTri, GRID_LINE, INK, PAPER, BOARD_BG } from './paint';
 
 /** 拖过这么多格就算交换（拖动跟手在此之前） */
 const DRAG_SWAP = 0.35;
@@ -661,7 +661,7 @@ export class BoardView {
     const S = this.S;
     if (!W || !S) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = PAPER;
+    ctx.fillStyle = BOARD_BG;
     ctx.fillRect(0, 0, W, W);
     ctx.strokeStyle = GRID_LINE;
     ctx.lineWidth = 1;

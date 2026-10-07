@@ -4,7 +4,9 @@ import type { BombKind, Color } from '../../engine';
 // 2026-10-07 换成瑞士海报配色（略暖、略亮），见 docs/prototypes/ui-style-lab.html?style=poster
 export const INK = '#20231E';
 export const PAPER = '#F3EFE4';
-export const GRID_LINE = 'rgba(32,35,30,0.09)';
+/** 棋盘底：比页面纸色深一点的色块，无边框设计里靠它和页面区分（2026-10-07） */
+export const BOARD_BG = '#E9E4D6';
+export const GRID_LINE = 'rgba(32,35,30,0.08)';
 
 export const COLOR_HEX: Record<Color, string> = {
   attack: '#DF4935',
