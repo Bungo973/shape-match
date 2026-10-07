@@ -13,6 +13,8 @@ npm run sim        # 数值模拟，见 docs/BALANCE_LOG.md
 npm run build      # 打包到 dist/
 ```
 
+运行开发服务器后，打开 `/docs/prototypes/ui-style-lab.html` 查看五种可试玩 UI 样本：瑞士海报、终端实验室、软糖玩具、纸本档案、午夜剧院。它们保留同一局面切换风格，支持提示、演示一步、道具与重置，使用现有规则引擎；不写入正式存档。该页面也随生产构建输出。
+
 ## 目录
 
 | 位置 | 内容 |
