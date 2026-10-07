@@ -1322,10 +1322,9 @@ button {
   row-gap: 4px;
 }
 
-/* 金币只有圆点和数字；底部垫出生命细条那一行的高度（4 + 4），数字和生命数字对齐 */
+/* 金币只有圆点和数字，在顶栏里上下居中 */
 .purse {
   grid-template-columns: auto;
-  padding-bottom: 8px;
 }
 
 /* 金币：和商店底栏一样，数字前一枚黄色圆点 */
