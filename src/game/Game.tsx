@@ -1,6 +1,6 @@
 // 冲分模式的整局界面：开局神器 → 关卡（棋盘）→ 结算金币 →（首领后）神器 → 商店 → 下一关。
 // 规则全部由引擎给出；这里只负责展示、发出动作和安排动画的先后。
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ARTIFACTS,
@@ -59,6 +59,7 @@ import {
 } from '../engine';
 import { getKit, getShepard, KIT_NAMES, setKit, setShepard, sfx, type SoundKit } from './audio';
 import { BoardView } from './board/BoardView';
+import { useFitMode } from './fit';
 import { markTip, nextTip, resetGuide, seenTips, skipGuide, tipSeen, TIPS, type TipKey } from './guide';
 import { BombIcon, GearIcon, ItemIcon, UpgradeIcon } from './icons';
 import { clearRun, loadBest, loadRun, recordBest, saveRun } from './save';
@@ -184,8 +185,6 @@ export function Game() {
         )}
         <ArtifactPanel
           keys={run.artifacts}
-          levels={run.levels}
-          heat={run.phase === 'battle' ? run.battle?.bombHeat : undefined}
           counters={counters}
           gold={run.battle?.gold ?? run.gold}
           ap={run.phase === 'battle' ? (run.battle?.ap ?? null) : null}
@@ -495,7 +494,7 @@ function Battle({
 
   const target = battle.goal?.target ?? 0;
   const score = useRolling(battle.totalScore);
-  const wide = useWide();
+  const wide = useFitMode() === 'wide';
   const bag = <ItemBag items={run.items} picking={picking} onPick={pickItem} hint={hint} />;
   const progress = target ? Math.min(1, score / target) : 0;
 
@@ -561,7 +560,7 @@ function Coach({ tip, onClose, onSkip, onBoard }: { tip: TipKey; onClose: () => 
   );
 }
 
-/** 常驻说明：顶栏“?”打开，分几小节讲清一局怎么玩；底部可以重新看引导 */
+/** 常驻说明：顶栏“?”打开，六个分页签（目标、消除、计分、炸弹、关卡之间、道具）讲清一局怎么玩；底部可以重新看引导 */
 function Help({ onClose, onReplay }: { onClose: () => void; onReplay: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -571,6 +570,68 @@ function Help({ onClose, onReplay }: { onClose: () => void; onReplay: () => void
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
   const steps = config.scoreTurns * config.apPerTurn;
+  const sections: [string, ReactNode][] = [
+    [
+      '目标',
+      <>
+        <p>
+          一共 {config.scoreTargets.length} 关，打完还可以挑战无尽模式。每关有 {steps} 步（{config.scoreTurns} 回合 × {config.apPerTurn} 步），分数凑够目标就立即过关，剩下的每一步换 {config.goldPerStep} 金币。步数用完还没凑够，按差距扣生命；生命（{config.playerMaxHp}）扣完，这一局结束。
+        </p>
+      </>,
+    ],
+    [
+      '消除',
+      <>
+        <p>拖动或先后点选，交换相邻两块；同色连成 3 个就消除，只有能消除的交换才算数。消除后上面的方块落下来，又连上就继续消除，这叫连锁。</p>
+      </>,
+    ],
+    [
+      '计分',
+      <>
+        <p className="help-calc">
+          <span className="cell base">基数</span>×<span className="cell rate">倍率</span>
+        </p>
+        <p>每一步得分 = 基数 × 倍率。清掉的每一块都计基数（方块基数几级就算几）；消除后掉下来又连上的越多，倍率越高。印记会再加基数或倍率。</p>
+      </>,
+    ],
+    [
+      '炸弹',
+      <>
+        <ul className="help-bombs">
+          <li>
+            <BombIcon bomb="H" size={22} />
+            <span>连成 4 个：清一整行或一整列</span>
+          </li>
+          <li>
+            <BombIcon bomb="A" size={22} />
+            <span>T 形或 L 形：清周围 3×3</span>
+          </li>
+          <li>
+            <BombIcon bomb="CB" size={22} />
+            <span>连成 5 个：清掉棋盘上某一种颜色</span>
+          </li>
+        </ul>
+        <p>点两下炸弹原地引爆，或和旁边一块交换引爆；两枚炸弹交换会合体，范围更大。</p>
+      </>,
+    ],
+    [
+      '关卡之间',
+      <>
+        <p>
+          过关得金币，在商店买升级（方块基数、三类炸弹的等级）和印记；印记最多带 {config.artifactSlots} 枚，可以半价卖出。第 3、6、9 关是首领关，各有一条特殊规则，开打前会写明。每关开打前可以选一个任务，完成有奖励。
+        </p>
+      </>,
+    ],
+    [
+      '道具',
+      <>
+        <p>
+          关内做出五连炸弹或一步连锁 {ITEM_PARAMS.dropChain} 层以上时掉落，最多带 {config.itemSlots} 件，跨关保留，用了不扣步。点道具再按提示点棋盘。
+        </p>
+      </>,
+    ],
+  ];
+  const [tab, setTab] = useState(0);
   return (
     <>
       <div className="help-backdrop" onClick={onClose} />
@@ -581,52 +642,18 @@ function Help({ onClose, onReplay }: { onClose: () => void; onReplay: () => void
             关闭
           </button>
         </header>
-        <section>
-          <h3>目标</h3>
-          <p>
-            一共 {config.scoreTargets.length} 关，打完还可以挑战无尽模式。每关有 {steps} 步（{config.scoreTurns} 回合 × {config.apPerTurn} 步），分数凑够目标就立即过关，剩下的每一步换 {config.goldPerStep} 金币。步数用完还没凑够，按差距扣生命；生命（{config.playerMaxHp}）扣完，这一局结束。
-          </p>
-        </section>
-        <section>
-          <h3>消除</h3>
-          <p>拖动或先后点选，交换相邻两块；同色连成 3 个就消除，只有能消除的交换才算数。消除后上面的方块落下来，又连上就继续消除，这叫连锁。</p>
-        </section>
-        <section>
-          <h3>计分</h3>
-          <p className="help-calc">
-            <span className="cell base">基数</span>×<span className="cell rate">倍率</span>
-          </p>
-          <p>每一步得分 = 基数 × 倍率。清掉的每一块都计基数（方块基数几级就算几）；消除后掉下来又连上的越多，倍率越高。印记会再加基数或倍率。</p>
-        </section>
-        <section>
-          <h3>炸弹</h3>
-          <ul className="help-bombs">
-            <li>
-              <BombIcon bomb="H" size={22} />
-              <span>连成 4 个：清一整行或一整列</span>
-            </li>
-            <li>
-              <BombIcon bomb="A" size={22} />
-              <span>T 形或 L 形：清周围 3×3</span>
-            </li>
-            <li>
-              <BombIcon bomb="CB" size={22} />
-              <span>连成 5 个：清掉棋盘上某一种颜色</span>
-            </li>
-          </ul>
-          <p>点两下炸弹原地引爆，或和旁边一块交换引爆；两枚炸弹交换会合体，范围更大。</p>
-        </section>
-        <section>
-          <h3>关卡之间</h3>
-          <p>
-            过关得金币，在商店买升级（方块基数、三类炸弹的等级）和印记；印记最多带 {config.artifactSlots} 枚，可以半价卖出。第 3、6、9 关是首领关，各有一条特殊规则，开打前会写明。每关开打前可以选一个任务，完成有奖励。
-          </p>
-        </section>
-        <section>
-          <h3>道具</h3>
-          <p>
-            关内做出五连炸弹或一步连锁 {ITEM_PARAMS.dropChain} 层以上时掉落，最多带 {config.itemSlots} 件，跨关保留，用了不扣步。点道具再按提示点棋盘。
-          </p>
+        {/* 分页签：一次只看一节，内容永远放得下，不用滚动 */}
+        <nav className="help-tabs" role="tablist">
+          {sections.map(([title], i) => (
+            <button key={title} role="tab" aria-selected={tab === i} onClick={() => setTab(i)}>
+              <span>{String(i + 1).padStart(2, '0')}</span>
+              {title}
+            </button>
+          ))}
+        </nav>
+        <section role="tabpanel">
+          <h3>{sections[tab]![0]}</h3>
+          {sections[tab]![1]}
         </section>
         <footer>
           <button className="ghost small" onClick={onReplay}>
@@ -638,18 +665,6 @@ function Help({ onClose, onReplay }: { onClose: () => void; onReplay: () => void
   );
 }
 
-const WIDE_QUERY = '(min-width: 1100px)';
-/** 是否为宽屏三栏（与 game.css 的断点一致） */
-function useWide(): boolean {
-  return useSyncExternalStore(
-    (cb) => {
-      const m = window.matchMedia(WIDE_QUERY);
-      m.addEventListener('change', cb);
-      return () => m.removeEventListener('change', cb);
-    },
-    () => window.matchMedia(WIDE_QUERY).matches,
-  );
-}
 
 /** 道具的一句话简介（卡片上用；完整说明在悬停提示和说明页） */
 const ITEM_SHORT: Record<ItemKey, string> = {
@@ -1223,7 +1238,7 @@ function Artifacts({
               </span>
             )}
             <i className={`dot ${a.rarity}`} />
-            {a.name}
+            <span className="nm">{a.name}</span>
             <Progress artifact={k} n={counters?.[k] ?? 0} gold={gold} count={keys.length} />
           </span>
         );
@@ -1276,8 +1291,6 @@ function artifactStatus(k: ArtifactKey, n: number, gold: number, count: number, 
 /** 右栏：宽屏常驻在棋盘右侧，窄屏为抽屉。上面是道具（带说明），下面是神器（每件写明稀有度、效果、当前状态，商店和领奖时可以卖出）；窄屏抽屉里另列升级等级 */
 function ArtifactPanel({
   keys,
-  levels,
-  heat,
   counters,
   gold,
   ap,
@@ -1290,9 +1303,6 @@ function ArtifactPanel({
   /** 道具区：关内是道具栏的挂载点（宽屏时关卡把可点的道具栏放进来），关卡之间是只读的道具列表 */
   itemDock: ReactNode;
   keys: ArtifactKey[];
-  levels: Record<UpgradeKey, number>;
-  /** 关内的炸弹等级（引爆够数会临时升级）；关卡之间没有 */
-  heat: BattleState['bombHeat'] | undefined;
   counters: Partial<Record<ArtifactKey, number>> | undefined;
   gold: number;
   ap: number | null;
@@ -1312,9 +1322,6 @@ function ArtifactPanel({
           </button>
         </header>
         {itemDock}
-        <div className="narrow-only">
-          <Upgrades levels={levels} heat={heat} />
-        </div>
         <div className="phead arts-head">
           <h3>印记 / MARKS</h3>
           <span>
@@ -1334,23 +1341,28 @@ function ArtifactPanel({
                     {p.label}
                   </span>
                 )}
+                {/* 标题行：编号、名字、右边稀有度；商店和领奖时换成“卖出”按钮（省一行高度，右栏不用滚动） */}
                 <div className="head">
                   <span className="idx">{String(i + 1).padStart(2, '0')}</span>
                   <b>{a.name}</b>
-                  <small className={`rar ${a.rarity}`}>{RARITY_NAME[a.rarity]}</small>
-                </div>
-                <p className="text">{a.text}</p>
-                {status && <p className="status">{status}</p>}
-                {onSell &&
-                  (selling === k ? (
-                    <button className="sell" onClick={() => (onSell(k), setSelling(null))} onBlur={() => setSelling(null)} autoFocus>
-                      确认卖出 +{artifactSellPrice(k, config)}
-                    </button>
+                  {onSell ? (
+                    selling === k ? (
+                      <button className="sell" onClick={() => (onSell(k), setSelling(null))} onBlur={() => setSelling(null)} autoFocus>
+                        确认 +{artifactSellPrice(k, config)}
+                      </button>
+                    ) : (
+                      <button className="ghost small" onClick={() => setSelling(k)}>
+                        卖出 +{artifactSellPrice(k, config)}
+                      </button>
+                    )
                   ) : (
-                    <button className="ghost small" onClick={() => setSelling(k)}>
-                      卖出 +{artifactSellPrice(k, config)}
-                    </button>
-                  ))}
+                    <small className={`rar ${a.rarity}`}>{RARITY_NAME[a.rarity]}</small>
+                  )}
+                </div>
+                <p className="text" title={a.text}>
+                  {a.text}
+                </p>
+                {status && <p className="status">{status}</p>}
               </li>
             );
           })}

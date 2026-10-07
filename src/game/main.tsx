@@ -3,11 +3,13 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DEFAULT_CONFIG } from '../engine';
 import { installAudioUnlock } from './audio';
+import { installFit } from './fit';
 import { Game } from './Game';
 import './game.css';
 
 DEFAULT_CONFIG.scoreMode = true;
 installAudioUnlock();
+installFit();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

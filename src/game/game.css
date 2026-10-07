@@ -17,8 +17,8 @@
   --frame: 3px;
   --heavy: 4px;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
-  /* 棋盘边长：窄屏尽量占满宽度（上下扣掉本关信息约 300px），最宽 760px，最窄 300px；宽屏三栏时另算，见文末 */
-  --board: clamp(300px, min(100vw - 32px, 100dvh - 300px), 760px);
+  /* 棋盘边长：画板是固定尺寸（见 src/game/fit.ts），棋盘也是定值；竖屏画板 400 宽减去两边 16 */
+  --board: 368px;
   --hud: 250px;
   --side: 280px;
   --gap: 32px;
@@ -33,6 +33,8 @@
 
 html,
 body {
+  height: 100%;
+  overflow: hidden;
   margin: 0;
   background: var(--paper);
   color: var(--ink);
@@ -47,12 +49,23 @@ button {
   color: inherit;
 }
 
-/* 页面骨架：顶栏 → 主体（关卡的本关面板 + 棋盘，或关卡之间的页面；宽屏右侧是构筑栏）→ 窄屏底栏 */
+/* 画板式自适应：#root 铺满窗口、不滚动；.shell 是固定尺寸的画板（--fw × --fh），等比缩放 --s 后居中。
+   画板上的 transform 也让里面 position: fixed 的弹窗、遮罩、抽屉都以画板为准。 */
+#root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
 .shell {
-  max-width: calc(var(--board) + 32px);
-  margin: 0 auto;
-  padding: 20px 16px 28px;
-  min-height: 100dvh;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--fw, 1440px);
+  height: var(--fh, 960px);
+  transform: translate(-50%, -50%) scale(var(--s, 1));
+  overflow: hidden;
+  padding: 20px 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -285,7 +298,7 @@ button {
 
 .panel h1 {
   margin: 0;
-  font-size: clamp(26px, 7vw, 36px);
+  font-size: 34px;
   line-height: 1.2;
   font-weight: 700;
   text-wrap: balance;
@@ -581,14 +594,20 @@ button {
   background: var(--ink);
 }
 
-.dot.uncommon,
 .badge.uncommon {
   color: var(--blue);
 }
 
-.dot.rare,
 .badge.rare {
   color: var(--red);
+}
+
+.dot.uncommon {
+  background: var(--blue);
+}
+
+.dot.rare {
+  background: var(--red);
 }
 
 /* 神器触发：底色闪黄、回弹抖动，上方弹出数值。以触发序号为 key 重新挂载，动画重播 */
@@ -758,50 +777,42 @@ button {
 }
 
 /* 宽屏三栏：左本关面板、中棋盘、右构筑栏常驻；棋盘按窗口高度放大（扣掉顶栏和道具栏约 180px），底栏不再重复列神器 */
-@media (min-width: 1100px) {
-  :root {
-    --board: clamp(360px, min(100vw - 48px - var(--hud) - var(--side) - 2 * var(--gap), 100dvh - 210px), 760px);
-  }
+.wide {
+  /* 宽屏画板 1440×960：宽度扣两边 24、左栏、右栏、两道间隔后约 798；高度扣顶栏和棋盘上方说明后约 820，取 790 */
+  --board: 790px;
+}
 
-  .shell {
-    max-width: calc(var(--hud) + var(--board) + var(--side) + 2 * var(--gap) + 48px);
-    padding: 20px 24px 24px;
-  }
+.wide .shell {
+  padding: 20px 24px 24px;
+}
 
-  .battle,
-  .between {
-    display: grid;
-    grid-template-columns: var(--hud) var(--board);
-    gap: var(--gap);
-  }
+.wide .battle,
+.wide .between {
+  display: grid;
+  grid-template-columns: var(--hud) var(--board);
+  gap: var(--gap);
+}
 
-  .runpanel {
-    display: flex;
-  }
+.wide .runpanel {
+  display: flex;
+}
 
-  .panel {
-    max-width: none;
-    padding-top: 4px;
-  }
+.wide .panel {
+  max-width: none;
+  padding-top: 4px;
+}
 
-  .side {
-    position: sticky;
-    top: 0;
-    max-height: 100dvh;
-    overflow-x: hidden;
-    overflow-y: auto;
-    /* 留出边距，卡片抖动和弹字不贴边 */
-    padding: 10px 6px 16px;
-    margin: -10px -6px 0;
-    scrollbar-gutter: stable;
-  }
+.wide .side {
+  overflow: hidden;
+  /* 留出边距，卡片抖动和弹字不贴边 */
+  padding: 10px 6px 16px;
+  margin: -10px -6px 0;
+}
 
-  .side header,
-  .narrow-only,
-  .backdrop,
-  .bottom {
-    display: none;
-  }
+.wide .side header,
+.wide .backdrop,
+.wide .bottom {
+  display: none;
 }
 
 /* 窄屏：侧边栏变成从右侧滑出的抽屉，点底栏的神器条打开 */
@@ -861,7 +872,7 @@ button {
   top: calc(100% + 14px);
   right: 0;
   z-index: 40;
-  width: min(300px, calc(100vw - 32px));
+  width: 300px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1150,9 +1161,8 @@ button {
   top: 50%;
   left: 50%;
   translate: -50% -50%;
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100dvh - 48px);
-  overflow-y: auto;
+  width: min(600px, calc(var(--fw, 1440px) - 32px));
+  overflow: hidden;
   background: var(--paper);
   border-top: var(--heavy) solid var(--ink);
   padding: 18px 22px 22px;
@@ -1300,7 +1310,7 @@ button {
 .vitals {
   display: flex;
   align-items: center;
-  gap: clamp(12px, 3vw, 22px);
+  gap: 22px;
 }
 
 .hp,
@@ -1342,7 +1352,7 @@ button {
 .hp .meter {
   grid-column: 1 / -1;
   display: block;
-  width: clamp(56px, 18vw, 92px);
+  width: 92px;
   height: 4px;
   background: var(--line);
 }
@@ -1412,7 +1422,7 @@ button {
   margin: 4px 0 6px;
   font-family: var(--font-num);
   font-weight: 400;
-  font-size: clamp(40px, 12vw, 62px);
+  font-size: 62px;
   line-height: 1;
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
@@ -1736,8 +1746,8 @@ button {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
+  gap: 3px;
+  padding: 8px 10px;
   background: var(--plate);
   border-left: 4px solid var(--ink);
 }
@@ -1796,8 +1806,14 @@ button {
   line-height: 1.6;
 }
 
+/* 说明最多两行（完整内容悬停可见），右栏六枚印记也放得下 */
 .side .text {
   color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 .side .status {
@@ -1806,9 +1822,14 @@ button {
   color: var(--red);
 }
 
-.side .card .ghost.small,
-.side .card .sell {
-  margin-left: 24px;
+/* 标题行右端的“卖出”按钮 */
+.side .head .ghost.small,
+.side .head .sell {
+  margin-left: auto;
+  margin-top: 0;
+  padding: 1px 8px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 /* 卡片本身是色块，卡上的次要按钮改用纸色，才分得出来 */
@@ -1829,24 +1850,31 @@ button {
 .item {
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 28px 1fr;
   align-items: center;
-  gap: 4px;
-  padding: 12px 6px 9px;
+  column-gap: 8px;
+  row-gap: 1px;
+  padding: 8px 10px;
   background: var(--plate);
   border: none;
-  text-align: center;
+  text-align: left;
   cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.item svg {
+  grid-row: span 2;
+}
+
 .item b {
   font-size: 13px;
+  line-height: 1.2;
 }
 
 .item small {
   font-size: 11px;
+  line-height: 1.3;
   color: var(--muted);
 }
 
@@ -1868,7 +1896,7 @@ button {
 }
 
 .bag .empty {
-  min-height: 84px;
+  min-height: 52px;
   background: rgba(233, 228, 214, 0.5);
 }
 
@@ -1891,7 +1919,7 @@ button {
 
 .play .bag .item {
   width: auto;
-  flex-direction: row;
+  grid-template-columns: auto auto;
   padding: 4px 10px 4px 6px;
 }
 
@@ -1911,132 +1939,243 @@ button {
 
 /* ---------- 窄屏：左栏压成棋盘上方几行；右栏是从右侧滑出的抽屉 ---------- */
 
-@media (max-width: 1099px) {
-  .score .cap,
-  .steps .cap,
-  .upgrades .cap,
-  .bar-cap,
-  .mult .note {
-    display: none;
-  }
+.narrow .score .cap,
+.narrow .steps .cap,
+.narrow .upgrades .cap,
+.narrow .bar-cap,
+.narrow .mult .note {
+  display: none;
+}
 
-  .score > b {
-    font-size: 44px;
-  }
+.narrow .score > b {
+  font-size: 44px;
+}
 
-  .bar {
-    margin-top: 8px;
-  }
+.narrow .bar {
+  margin-top: 8px;
+}
 
-  .calc .cell {
-    padding: 4px 10px;
-  }
+.narrow .calc .cell {
+  padding: 4px 10px;
+}
 
-  .calc .cell small {
-    display: none;
-  }
+.narrow .calc .cell small {
+  display: none;
+}
 
-  .calc b {
-    font-size: 22px;
-  }
+.narrow .calc b {
+  font-size: 22px;
+}
 
-  .steps {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-top: 0;
-    padding-top: 0;
-  }
+.narrow .steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 0;
+  padding-top: 0;
+}
 
-  .steps-head {
-    order: 2;
-  }
+.narrow .steps-head {
+  order: 2;
+}
 
-  .steps .groups {
-    margin: 0;
-  }
+.narrow .steps .groups {
+  margin: 0;
+}
 
-  .hud .upgrades .what {
-    display: none;
-  }
+.narrow .hud .upgrades .what {
+  display: none;
+}
 
-  .hud .levels {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 6px 16px;
-  }
+.narrow .hud .levels {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
 
-  .hud .levels li {
-    flex-wrap: nowrap;
-    gap: 4px;
-  }
+.narrow .hud .levels li {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
 
-  .hud .levels .meter {
-    flex: 0 0 22px;
-    margin-left: 2px;
-  }
+.narrow .hud .levels .meter {
+  flex: 0 0 22px;
+  margin-left: 2px;
+}
 
-  .side {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 30;
-    width: min(320px, 86vw);
-    padding: 20px 16px 28px;
-    overflow-x: hidden;
-    overflow-y: auto;
-    transform: translateX(105%);
-    transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
-  }
+.narrow .side {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: 320px;
+  padding: 20px 16px 28px;
+  overflow: hidden;
+  transform: translateX(105%);
+  transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
 
-  .side.open {
-    transform: none;
-  }
+.narrow .side.open {
+  transform: none;
+}
 
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 29;
-    background: rgba(32, 35, 30, 0.25);
-    animation: fade 0.2s ease-out;
-  }
+.narrow .backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: rgba(32, 35, 30, 0.25);
+  animation: fade 0.2s ease-out;
 }
 
 /* 宽屏三栏：左栏纵向堆叠，分数下面一条 4px 粗线（放在文件末尾，盖过上面的窄屏默认） */
-@media (min-width: 1100px) {
-  .hud {
-    grid-template-columns: 1fr;
-    grid-template-areas: 'score' 'mult' 'steps' 'notes' 'upgrades';
-    align-items: start;
-    align-content: start;
-    gap: 22px;
-  }
+.wide .hud {
+  grid-template-columns: 1fr;
+  grid-template-areas: 'score' 'mult' 'steps' 'notes' 'upgrades';
+  align-items: start;
+  align-content: start;
+  gap: 22px;
+}
 
-  .hud.with-coach {
-    grid-template-areas: 'score' 'mult' 'coach' 'steps' 'notes' 'upgrades';
-  }
+.wide .hud.with-coach {
+  grid-template-areas: 'score' 'mult' 'coach' 'steps' 'notes' 'upgrades';
+}
 
-  .hud .score {
-    border-bottom: var(--heavy) solid var(--ink);
-    padding-bottom: 16px;
-  }
+.wide .hud .score {
+  border-bottom: var(--heavy) solid var(--ink);
+  padding-bottom: 16px;
 }
 
 /* 很窄的手机：生命、金币去掉文字标签，关卡块去掉“STAGE”，给按钮留位置 */
-@media (max-width: 420px) {
-  .hp small,
-  .purse small,
-  .stage-tag > span:first-child {
-    display: none;
-  }
-
-  .stage-tag {
-    padding: 5px 8px;
-  }
-
-  .stage-tag b {
-    font-size: 22px;
-  }
+.narrow .hp small,
+.narrow .purse small,
+.narrow .stage-tag > span:first-child {
+  display: none;
 }
 
+.narrow .stage-tag {
+  padding: 5px 8px;
+}
+
+.narrow .stage-tag b {
+  font-size: 22px;
+}
+
+/* ---------- 竖屏画板（400 宽）的几处尺寸 ---------- */
+
+.narrow .vitals {
+  gap: 12px;
+}
+
+.narrow .hp .meter {
+  width: 56px;
+}
+
+.narrow .panel h1 {
+  font-size: 28px;
+}
+
+.narrow .board-cap {
+  display: none;
+}
+
+/* 竖屏商店：升级卡不写说明，印记卡两列、说明最多三行，补给说明收起，整页放得下 */
+.narrow .shop-group .choice .desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.narrow .shop-group .choice .lv + .desc,
+.narrow .supply .hint {
+  display: none;
+}
+
+.narrow .choice {
+  padding: 12px;
+}
+
+/* ---------- 说明页分页签 ---------- */
+
+.help-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.help-tabs button {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  border: none;
+  background: var(--plate);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.help-tabs button span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.help-tabs button[aria-selected='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.help-tabs button[aria-selected='true'] span {
+  color: rgba(243, 239, 228, 0.7);
+}
+
+.help section[role='tabpanel'] {
+  min-height: 170px;
+}
+
+/* 竖屏底栏：每枚印记一个色点，名字和进度收起，只占一行 */
+.narrow .artifacts {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.narrow .artifacts .nm,
+.narrow .artifacts .count {
+  display: none;
+}
+
+.narrow .artifacts .chip {
+  padding: 2px;
+}
+
+/* 竖屏商店：升级卡去掉图标，整页放得下 */
+.narrow .shop-group .choice > svg {
+  display: none;
+}
+
+
+/* 竖屏商店的升级：四张小卡排一行（名字、等级、价格） */
+.narrow .shop-group:first-of-type .choices.grid {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.narrow .shop-group:first-of-type .choice {
+  padding: 8px 6px;
+  gap: 3px;
+}
+
+.narrow .shop-group:first-of-type .choice b {
+  font-size: 13px;
+}
+
+.narrow .shop-group:first-of-type .choice .lv {
+  font-size: 10px;
+}
+
+.narrow .shop-group:first-of-type .choice .price {
+  font-size: 14px;
+}

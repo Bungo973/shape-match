@@ -3,6 +3,7 @@
 import gsap from 'gsap';
 import { posKey, samePos, type Board, type Explosion, type Pos, type ResolutionEvent, type Tile } from '../../engine';
 import { sfx } from '../audio';
+import { fitScale } from '../fit';
 import { COLOR_HEX, drawBomb, drawNormal, drawStone, drawTri, GRID_LINE, INK, PAPER, BOARD_BG } from './paint';
 
 /** 拖过这么多格就算交换（拖动跟手在此之前） */
@@ -155,6 +156,8 @@ export class BoardView {
     this.ctx = canvas.getContext('2d')!;
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(canvas.parentElement!);
+    // 窗口缩放变了，画布在屏幕上的大小跟着变，但布局尺寸不变（ResizeObserver 不会触发），单独重算
+    window.addEventListener('fitchange', () => this.resize(), { signal: this.listeners.signal });
     this.resize();
     this.bind();
     this.last = performance.now();
@@ -177,7 +180,8 @@ export class BoardView {
 
   private resize(): void {
     const w = this.canvas.parentElement!.clientWidth;
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    // 画板整体被缩放（见 fit.ts）：绘制分辨率按屏幕上的实际大小算，放大时不发虚
+    this.dpr = Math.min(4, (window.devicePixelRatio || 1) * fitScale());
     this.W = w;
     this.canvas.width = Math.round(w * this.dpr);
     this.canvas.height = Math.round(w * this.dpr);
