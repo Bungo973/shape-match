@@ -1,4 +1,4 @@
-// 神器池，规则见 docs/ARTIFACT_DESIGN.md 与 docs/BLOCK_BUILD.md「神器」；效果在 resolve.ts／battle.ts 按时机生效。
+// 神器池，规则见 docs/ARTIFACT_DESIGN.md 与 docs/archive/BLOCK_BUILD.md「神器」；效果在 resolve.ts／battle.ts 按时机生效。
 import type { EngineConfig } from './config';
 import type { ActionResult } from './resolve';
 import { COLORS, type ClearsByType } from './types';

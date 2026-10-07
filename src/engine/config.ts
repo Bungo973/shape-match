@@ -19,7 +19,7 @@ export interface EngineConfig {
   bombLevelMultTenths: number;
   /**
    * 爆破等级（2026-09-30）：本场每引爆这么多枚该类炸弹（含接力），该类升一级；每场重置。
-   * n 级时，该类炸弹炸掉的每块方块多计 n − 1 基数。见 docs/BLOCK_BUILD.md。
+   * n 级时，该类炸弹炸掉的每块方块多计 n − 1 基数。见 docs/archive/BLOCK_BUILD.md。
    */
   bombHeatEvery: { line: number; area: number; color: number };
   /** 每满多少个主动催化剂获得 1 层充能 */

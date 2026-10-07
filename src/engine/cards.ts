@@ -1,4 +1,4 @@
-// 嵌片卡（原型）：数据定义与牌堆操作。设计见 docs/CARD_DESIGN.md（讨论稿）。
+// 嵌片卡（原型）：数据定义与牌堆操作。设计见 docs/archive/CARD_DESIGN.md（讨论稿）。
 // 原型只包含消除卡：基础卡与四种属性卡；费用与数值为临时值。
 import { normalize, SHAPES, type ShapeName } from './inserts';
 import type { Rng } from './rng';

@@ -1,6 +1,6 @@
 // 升级表：方块基数一项，加 3 类炸弹。
 // 方块等级 = 主动清除时每块计的基数（四色共用，2026-09-30 起颜色不再有各自的等级）；
-// 炸弹等级 = 每场的起始爆破等级（场内越炸越高）。设计见 docs/BLOCK_BUILD.md。
+// 炸弹等级 = 每场的起始爆破等级（场内越炸越高）。设计见 docs/archive/BLOCK_BUILD.md。
 import type { EngineConfig } from './config';
 import type { BombKind, Color } from './types';
 

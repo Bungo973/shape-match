@@ -23,7 +23,8 @@
   --side: 280px;
   --gap: 32px;
   --font-num: 'Archivo Black', Impact, sans-serif;
-  --font-body: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  /* 中文用系统字体：苹果苹方、Windows 微软雅黑，装了思源黑体的系统用思源 */
+  --font-body: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC', sans-serif;
   color-scheme: light;
 }
 

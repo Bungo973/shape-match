@@ -129,7 +129,7 @@
 
 ## 方块构筑神器（2026-09-29 实现）
 
-随“方块构筑”加入的 5 件（见 [BLOCK_BUILD](BLOCK_BUILD.md)「神器」），实现于 `src/engine/artifacts.ts`（`artifactBaseBonus`）与 `src/engine/resolve.ts`（`lightningCells`）。前四件只看本步主动阶段清到了什么、往基数里加值，不产生新触发；雷鸣引线属于“修改范围”，被闪电击中的炸弹在下一波引爆。名称为暂定，数值为原型值。依赖嵌片的 A09 共振底座、A10 锁位共鸣器已下架（`retired`），不进入任何候选。
+随“方块构筑”加入的 5 件（见 [BLOCK_BUILD](archive/BLOCK_BUILD.md)「神器」），实现于 `src/engine/artifacts.ts`（`artifactBaseBonus`）与 `src/engine/resolve.ts`（`lightningCells`）。前四件只看本步主动阶段清到了什么、往基数里加值，不产生新触发；雷鸣引线属于“修改范围”，被闪电击中的炸弹在下一波引爆。名称为暂定，数值为原型值。依赖嵌片的 A09 共振底座、A10 锁位共鸣器已下架（`retired`），不进入任何候选。
 
 | ID | 神器 | 开局池 | 规则 | 五问要点 |
 | --- | --- | --- | --- | --- |

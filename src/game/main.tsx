@@ -5,6 +5,8 @@ import { DEFAULT_CONFIG } from '../engine';
 import { installAudioUnlock } from './audio';
 import { installFit } from './fit';
 import { Game } from './Game';
+// 数字字体随包发布（2026-10-07），不依赖 Google Fonts，国内也能加载
+import '@fontsource/archivo-black/latin-400.css';
 import './game.css';
 
 DEFAULT_CONFIG.scoreMode = true;

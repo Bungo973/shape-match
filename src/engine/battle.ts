@@ -1,4 +1,4 @@
-// 一场战斗的状态与回合流程，规则见 docs/GAME_RULES.md §1、§3、§4 与 docs/ENEMY_DESIGN.md。
+// 一场战斗的状态与回合流程，规则见 docs/GAME_RULES.md §1、§3、§4 与 docs/archive/ENEMY_DESIGN.md。
 // 所有函数都是纯函数：输入旧状态，返回新状态与日志；状态可直接序列化存档。
 import { ARTIFACT_PARAMS, ARTIFACTS, type ArtifactKey } from './artifacts';
 import { addDetonations, BOMB_UPGRADES, defaultLevels, initialBombHeat, type BombHeat, type BombUpgrade, type UpgradeLevels } from './upgrades';

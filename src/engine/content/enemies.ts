@@ -1,4 +1,4 @@
-// 九战敌人的内容数据。行为设计见 docs/ENEMY_DESIGN.md；生命与伤害为占位值，待模拟器与试玩校准。
+// 九战敌人的内容数据。行为设计见 docs/archive/ENEMY_DESIGN.md；生命与伤害为占位值，待模拟器与试玩校准。
 // 出招循环的兜底模板是“三拍”：预备（挂 debuff／buff + 小攻击）→ 重拍（大攻击）→ 喘息（防御或强化）。
 import type { EnemyDef, Intent, IntentPart } from '../battle';
 
@@ -126,7 +126,7 @@ export const RELIC_COLOSSUS: EnemyDef = {
 
 export type EnemyTier = 'minion' | 'elite' | 'boss';
 
-/** 一局分三层，每层三战；背景与敌人家族随层变化，见 docs/ASSET_BATCH3.md */
+/** 一局分三层，每层三战；背景与敌人家族随层变化，见 docs/archive/ASSET_BATCH3.md */
 export type Layer = 1 | 2 | 3;
 
 export const LAYER_NAMES: Record<Layer, string> = { 1: '晶洞', 2: '封印遗迹', 3: '悬浮遗物殿' };
