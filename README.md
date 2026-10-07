@@ -17,6 +17,8 @@ npm run build      # 打包到 dist/
 
 `npm run build` 会先跑类型检查，再把游戏打包到 `dist/`。打包用相对路径，把 `dist/` 里的全部文件原样放到网站根目录或任意子目录（例如 `/games/shape-match/`）都能直接打开；本地可用 `npm run preview` 预览打包结果。存档存在玩家浏览器的本地存储里，不需要服务器。
 
+现在发布在 GitHub Pages：<https://bungo973.github.io/shape-match/>。推送到 `main` 后，`.github/workflows/pages.yml` 会自动测试、打包并发布。
+
 ## 目录
 
 | 位置 | 内容 |
