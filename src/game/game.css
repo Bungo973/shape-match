@@ -1326,6 +1326,20 @@ button {
   grid-template-columns: auto;
 }
 
+/* 金币：和商店底栏一样，数字前一枚黄色圆点 */
+.purse b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.purse b i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
 .hp small,
 .purse small {
   font-size: 11px;

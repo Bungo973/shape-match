@@ -165,7 +165,10 @@ export function Game() {
           <Hp hp={run.player.hp} max={run.player.maxHp} />
           <span className="purse">
             <small>金币</small>
-            <b>{run.gold}</b>
+            <b>
+              <i aria-hidden="true" />
+              {run.gold}
+            </b>
           </span>
           <button className="help-btn" aria-label="玩法说明" title="玩法说明" onClick={() => setHelp(true)}>
             ?
