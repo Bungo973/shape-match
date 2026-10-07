@@ -163,8 +163,7 @@ export function Game() {
         </div>
         <div className="vitals">
           <Hp hp={run.player.hp} max={run.player.maxHp} />
-          <span className="purse">
-            <small>金币</small>
+          <span className="purse" title="金币" aria-label={`金币 ${run.gold}`}>
             <b>
               <i aria-hidden="true" />
               {run.gold}
