@@ -164,7 +164,7 @@ export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, rout
 }
 
 export function pickStarter(prev: RunState, key: ArtifactKey): RunResult {
-  if (prev.phase !== 'starter' || !prev.starterChoices.includes(key)) return fail(prev, '不在开局神器选择中');
+  if (prev.phase !== 'starter' || !prev.starterChoices.includes(key)) return fail(prev, '不在开局印记选择中');
   const run = clone(prev);
   run.artifacts.push(key);
   run.starterChoices = [];
@@ -397,8 +397,8 @@ export function rerollShop(prev: RunState, config: EngineConfig = DEFAULT_CONFIG
 }
 
 export function chooseArtifact(prev: RunState, key: ArtifactKey, config: EngineConfig = DEFAULT_CONFIG): RunResult {
-  if (prev.phase !== 'artifact' || !prev.artifactChoices.includes(key)) return fail(prev, '无效的神器候选');
-  if (prev.artifacts.length >= config.artifactSlots) return fail(prev, '神器栏已满');
+  if (prev.phase !== 'artifact' || !prev.artifactChoices.includes(key)) return fail(prev, '无效的印记候选');
+  if (prev.artifacts.length >= config.artifactSlots) return fail(prev, '印记栏已满');
   const run = clone(prev);
   run.artifacts.push(key);
   run.artifactChoices = [];
@@ -408,7 +408,7 @@ export function chooseArtifact(prev: RunState, key: ArtifactKey, config: EngineC
 
 /** 首领奖励一件都不要（神器栏满了又不想卖时） */
 export function skipArtifact(prev: RunState, config: EngineConfig = DEFAULT_CONFIG): RunResult {
-  if (prev.phase !== 'artifact') return fail(prev, '不在神器选择中');
+  if (prev.phase !== 'artifact') return fail(prev, '不在印记选择中');
   const run = clone(prev);
   run.artifactChoices = [];
   enterShop(run, config);
@@ -419,8 +419,8 @@ export function skipArtifact(prev: RunState, config: EngineConfig = DEFAULT_CONF
 export function buyArtifact(prev: RunState, index: number, config: EngineConfig = DEFAULT_CONFIG): RunResult {
   if (prev.phase !== 'shop') return fail(prev, '不在商店');
   const key = prev.shopArtifacts[index];
-  if (!key) return fail(prev, '没有这件神器');
-  if (prev.artifacts.length >= config.artifactSlots) return fail(prev, '神器栏已满');
+  if (!key) return fail(prev, '没有这枚印记');
+  if (prev.artifacts.length >= config.artifactSlots) return fail(prev, '印记栏已满');
   const price = artifactPrice(key, config);
   if (prev.gold < price) return fail(prev, '金币不足');
   const run = clone(prev);
@@ -432,8 +432,8 @@ export function buyArtifact(prev: RunState, index: number, config: EngineConfig 
 
 /** 卖掉持有的一件神器，得半价；在商店和首领奖励时都可以卖 */
 export function sellArtifact(prev: RunState, key: ArtifactKey, config: EngineConfig = DEFAULT_CONFIG): RunResult {
-  if (prev.phase !== 'shop' && prev.phase !== 'artifact') return fail(prev, '只能在商店或领奖时卖神器');
-  if (!prev.artifacts.includes(key)) return fail(prev, '没有这件神器');
+  if (prev.phase !== 'shop' && prev.phase !== 'artifact') return fail(prev, '只能在商店或领奖时卖印记');
+  if (!prev.artifacts.includes(key)) return fail(prev, '没有这枚印记');
   const run = clone(prev);
   run.artifacts = run.artifacts.filter((k) => k !== key);
   run.gold += artifactSellPrice(key, config);

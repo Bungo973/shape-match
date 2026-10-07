@@ -596,7 +596,7 @@ function Help({ onClose, onReplay }: { onClose: () => void; onReplay: () => void
           <p className="help-calc">
             <span className="cell base">基数</span>×<span className="cell rate">倍率</span>
           </p>
-          <p>每一步得分 = 基数 × 倍率。清掉的每一块都计基数（方块基数几级就算几）；消除后掉下来又连上的越多，倍率越高。神器会再加基数或倍率。</p>
+          <p>每一步得分 = 基数 × 倍率。清掉的每一块都计基数（方块基数几级就算几）；消除后掉下来又连上的越多，倍率越高。印记会再加基数或倍率。</p>
         </section>
         <section>
           <h3>炸弹</h3>
@@ -619,7 +619,7 @@ function Help({ onClose, onReplay }: { onClose: () => void; onReplay: () => void
         <section>
           <h3>关卡之间</h3>
           <p>
-            过关得金币，在商店买升级（方块基数、三类炸弹的等级）和神器；神器最多带 {config.artifactSlots} 件，可以半价卖出。第 3、6、9 关是首领关，各有一条特殊规则，开打前会写明。每关开打前可以选一个任务，完成有奖励。
+            过关得金币，在商店买升级（方块基数、三类炸弹的等级）和印记；印记最多带 {config.artifactSlots} 枚，可以半价卖出。第 3、6、9 关是首领关，各有一条特殊规则，开打前会写明。每关开打前可以选一个任务，完成有奖励。
           </p>
         </section>
         <section>
@@ -882,7 +882,7 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
   switch (run.phase) {
     case 'starter':
       return (
-        <Panel eyebrow="开局" title="选一件神器">
+        <Panel eyebrow="开局" title="选一枚印记">
           <ArtifactChoices keys={run.starterChoices} onPick={(k) => apply(pickStarter(run, k))} />
         </Panel>
       );
@@ -890,9 +890,9 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
       return <MapPanel run={run} apply={apply} />;
     case 'artifact':
       return (
-        <Panel eyebrow="首领奖励" title="选一件神器">
+        <Panel eyebrow="首领奖励" title="选一枚印记">
           <ArtifactChoices keys={run.artifactChoices} full={run.artifacts.length >= config.artifactSlots} onPick={(k) => apply(chooseArtifact(run, k, config))} />
-          {run.artifacts.length >= config.artifactSlots && <p className="hint">神器栏满了：在神器栏里卖掉一件，或者跳过。</p>}
+          {run.artifacts.length >= config.artifactSlots && <p className="hint">印记栏满了：在印记栏里卖掉一枚，或者跳过。</p>}
           <button className="ghost" onClick={() => apply(skipArtifact(run, config))}>
             跳过
           </button>
@@ -990,7 +990,7 @@ function taskText(t: TaskDef): string {
 }
 
 function taskRewardText(t: TaskDef, boss: boolean): string {
-  return t.tier === 'easy' ? `奖励 ${boss ? config.taskGoldBoss : config.taskGold} 金币` : `奖励一件随机神器（栏满改给 ${config.taskFullGold} 金币）`;
+  return t.tier === 'easy' ? `奖励 ${boss ? config.taskGoldBoss : config.taskGold} 金币` : `奖励一枚随机印记（栏满改给 ${config.taskFullGold} 金币）`;
 }
 
 /** 关内的任务进度：左边一条蓝线，标题写奖励；单步类显示最好的一步，累计类显示总数；速通、轻装到达标时才判定 */
@@ -1011,7 +1011,7 @@ function TaskLine({ task, boss }: { task: TaskState; boss: boolean }) {
 }
 
 function taskRewardShort(t: TaskDef, boss: boolean): string {
-  return t.tier === 'easy' ? `奖励 ${boss ? config.taskGoldBoss : config.taskGold} 金币` : '奖励一件神器';
+  return t.tier === 'easy' ? `奖励 ${boss ? config.taskGoldBoss : config.taskGold} 金币` : '奖励一枚印记';
 }
 
 /** 首领规则：左边一条红线，标题“首领规则 / 名字”，下面一句说明；路线页用大号 */
@@ -1089,7 +1089,7 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
       </section>
       <section className="shop-group">
         <h2 className="sub">
-          神器
+          印记
           <span>
             {run.artifacts.length}/{config.artifactSlots}
             {full ? ' · 栏满了，先在构筑栏卖掉一件' : ' · 在构筑栏里可以半价卖出'}
@@ -1116,7 +1116,7 @@ function Shop({ run, apply }: { run: RunState; apply: (r: RunResult) => void }) 
             })}
           </div>
         ) : (
-          <p className="hint">神器已经买空了。</p>
+          <p className="hint">印记已经买空了。</p>
         )}
       </section>
       <section className="shop-group">
@@ -1211,7 +1211,7 @@ function Artifacts({
   onOpen: () => void;
 }) {
   return (
-    <button className="artifacts" onClick={onOpen} aria-label={`查看道具、神器与升级（神器 ${keys.length}/${config.artifactSlots}）`}>
+    <button className="artifacts" onClick={onOpen} aria-label={`查看道具、印记与升级（印记 ${keys.length}/${config.artifactSlots}）`}>
       {keys.map((k) => {
         const a = ARTIFACTS[k];
         const p = pings[k];
@@ -1229,7 +1229,7 @@ function Artifacts({
         );
       })}
       <span className="slots">
-        神器 {keys.length}/{config.artifactSlots} ▸
+        印记 {keys.length}/{config.artifactSlots} ▸
       </span>
     </button>
   );
@@ -1305,7 +1305,7 @@ function ArtifactPanel({
   return (
     <>
       {open && <div className="backdrop" onClick={onClose} />}
-      <aside className={`side${open ? ' open' : ''}`} aria-label="道具与神器">
+      <aside className={`side${open ? ' open' : ''}`} aria-label="道具与印记">
         <header>
           <button className="link close" onClick={onClose}>
             关闭
@@ -1316,7 +1316,7 @@ function ArtifactPanel({
           <Upgrades levels={levels} heat={heat} />
         </div>
         <div className="phead arts-head">
-          <h3>神器构筑 / ARTIFACTS</h3>
+          <h3>印记 / MARKS</h3>
           <span>
             {keys.length} / {config.artifactSlots}
           </span>
