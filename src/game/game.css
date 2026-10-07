@@ -1571,11 +1571,6 @@ button {
   background: var(--ink);
 }
 
-.steps-cap {
-  font-size: 11px;
-  color: var(--muted);
-}
-
 /* 首领规则：左边红线；支线任务：左边蓝线 */
 .rule,
 .taskline {
@@ -1755,13 +1750,12 @@ button {
   border-left-color: var(--red);
 }
 
+/* 空的神器栏位：和道具空位一样，一块浅色占位 */
 .side .card.empty {
+  min-height: 40px;
+  padding: 0;
   border: none;
-  background: transparent;
-  padding: 8px;
-  color: var(--muted);
-  font-size: 11px;
-  text-align: center;
+  background: rgba(233, 228, 214, 0.5);
 }
 
 .side .head {
@@ -1922,7 +1916,6 @@ button {
   .steps .cap,
   .upgrades .cap,
   .bar-cap,
-  .steps-cap,
   .mult .note {
     display: none;
   }

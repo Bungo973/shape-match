@@ -496,7 +496,7 @@ function Battle({
   const target = battle.goal?.target ?? 0;
   const score = useRolling(battle.totalScore);
   const wide = useWide();
-  const bag = <ItemBag items={run.items} picking={picking} onPick={pickItem} hint={hint || (picking == null && run.items.length ? '点道具使用' : '')} />;
+  const bag = <ItemBag items={run.items} picking={picking} onPick={pickItem} hint={hint} />;
   const progress = target ? Math.min(1, score / target) : 0;
 
   return (
@@ -531,9 +531,6 @@ function Battle({
       <div className="play">
         <div className="board-cap">
           <span>连成三个，让连锁发生。</span>
-          <span>
-            {config.rows} × {config.cols}
-          </span>
         </div>
         <div className="stage">
           <canvas ref={canvasRef} tabIndex={0} aria-label="棋盘：拖动或点选相邻方块交换，点两下炸弹引爆" />
@@ -689,7 +686,7 @@ function ItemBag({ items, picking, onPick, hint }: { items: ItemKey[]; picking?:
           );
         })}
       </ul>
-      <p className="hint">{hint || (items.length ? '不消耗步数' : `做出五连炸弹或一步连锁 ${ITEM_PARAMS.dropChain} 层会掉落`)}</p>
+      {(hint || !items.length) && <p className="hint">{hint || `五连炸弹或 ${ITEM_PARAMS.dropChain} 层连锁会掉落道具`}</p>}
     </section>
   );
 }
@@ -709,7 +706,7 @@ function Upgrades({ levels, heat }: { levels: Record<UpgradeKey, number>; heat?:
               <UpgradeIcon upgrade={k} size={20} />
               <span className="what">
                 {upgradeName(k)}
-                <small>{levelEffect(k, lv)}</small>
+                {lv > 1 && <small>{levelEffect(k, lv)}</small>}
               </span>
               <b className={up ? 'up' : ''}>
                 Lv.{lv}
@@ -804,9 +801,6 @@ function Steps({ battle }: { battle: BattleState }) {
           );
         })}
       </div>
-      <span className="steps-cap">
-        第 {battle.turn} 回合 / 共 {turns} 回合
-      </span>
     </div>
   );
 }
@@ -1244,7 +1238,7 @@ function Artifacts({
 /** 升级等级换算成的实际数值：方块基数是每块的基数；炸弹 n 级时炸掉的每块多计 n−1 基数，这一步引爆过该类炸弹时倍率再加 0.1×(n−1) */
 function levelEffect(k: UpgradeKey, lv: number): string {
   if (k === 'block') return `每块 ${lv} 基数`;
-  return `每块 +${bombBlockBonus(lv)} 基数 · 引爆时倍率 +${(((lv - 1) * config.bombLevelMultTenths) / 10).toFixed(1)}`;
+  return `+${bombBlockBonus(lv)} 基数 · 倍率 +${(((lv - 1) * config.bombLevelMultTenths) / 10).toFixed(1)}`;
 }
 
 /** 神器在侧边栏里的当前状态：进度、已累计的加成、下一步是否生效 */
@@ -1259,21 +1253,21 @@ function artifactStatus(k: ArtifactKey, n: number, gold: number, count: number, 
     case 'lastCall':
       return ap == null ? null : ap === 1 ? '下一步生效' : `本回合还剩 ${ap} 步`;
     case 'ruler':
-      return `进度 ${n % P.rulerEvery}/${P.rulerEvery} · 已加基数 +${Math.floor(n / P.rulerEvery) * P.rulerBase}`;
+      return `进度 ${n % P.rulerEvery}/${P.rulerEvery}${n >= P.rulerEvery ? ` · 已加基数 +${Math.floor(n / P.rulerEvery) * P.rulerBase}` : ''}`;
     case 'marathon':
       return n > 0 ? `已连续 ${n} 步 · 下一步不爆炸则 +${((n + 1) * P.marathonTenths) / 10}` : `下一步不爆炸则 +${P.marathonTenths / 10}`;
     case 'iceCream':
       return `当前基数 +${Math.max(0, P.iceCreamBase - n)}，还能撑 ${Math.ceil(Math.max(0, P.iceCreamBase - n) / P.iceCreamMelt)} 关`;
     case 'medal':
-      return `已得 ${n} 枚 · 倍率 +${(n * P.medalTenths) / 10}`;
+      return n > 0 ? `已得 ${n} 枚 · 倍率 +${(n * P.medalTenths) / 10}` : null;
     case 'tycoon':
-      return `当前基数 +${Math.floor(gold / P.tycoonPer) * P.tycoonBase}`;
+      return gold >= P.tycoonPer ? `当前基数 +${Math.floor(gold / P.tycoonPer) * P.tycoonBase}` : null;
     case 'collector':
       return `当前倍率 +${(count * P.collectorTenths) / 10}`;
     case 'vacancy':
-      return `当前倍率 +${(Math.max(0, config.artifactSlots - count) * P.vacancyTenths) / 10}`;
+      return count < config.artifactSlots ? `当前倍率 +${((config.artifactSlots - count) * P.vacancyTenths) / 10}` : null;
     case 'piggyBank':
-      return `关末利息 +${Math.min(P.piggyMax, Math.floor(gold / P.piggyPer))}`;
+      return gold >= P.piggyPer ? `关末利息 +${Math.min(P.piggyMax, Math.floor(gold / P.piggyPer))}` : null;
     default:
       return null;
   }
@@ -1360,9 +1354,9 @@ function ArtifactPanel({
               </li>
             );
           })}
-          {keys.length < config.artifactSlots && (
-            <li className="card empty">{keys.length ? `还有 ${config.artifactSlots - keys.length} 个空位` : '还没有神器：商店、首领奖励和困难任务都能拿到'}</li>
-          )}
+          {Array.from({ length: Math.max(0, config.artifactSlots - keys.length) }, (_, i) => (
+            <li key={`empty-${i}`} className="card empty" aria-hidden="true" />
+          ))}
         </ol>
 
       </aside>
@@ -1377,9 +1371,9 @@ function Progress({ artifact, n, gold, count }: { artifact: ArtifactKey; n: numb
   const extra: Partial<Record<ArtifactKey, string>> = {
     iceCream: `基数 +${Math.max(0, P.iceCreamBase - n)}`,
     medal: n > 0 ? `+${(n * P.medalTenths) / 10}` : '',
-    tycoon: `基数 +${Math.floor(gold / P.tycoonPer) * P.tycoonBase}`,
+    tycoon: gold >= P.tycoonPer ? `基数 +${Math.floor(gold / P.tycoonPer) * P.tycoonBase}` : '',
     collector: `+${(count * P.collectorTenths) / 10}`,
-    vacancy: `+${(Math.max(0, config.artifactSlots - count) * P.vacancyTenths) / 10}`,
+    vacancy: count < config.artifactSlots ? `+${((config.artifactSlots - count) * P.vacancyTenths) / 10}` : '',
   };
   if (artifact in extra) return extra[artifact] ? <span className="count">{extra[artifact]}</span> : null;
   if (artifact === 'ruler') {
