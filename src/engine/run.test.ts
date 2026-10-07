@@ -327,3 +327,20 @@ describe('商店刷新', () => {
     expect(rerollPrice(next)).toBe(DEFAULT_CONFIG.rerollPrice);
   });
 });
+
+describe('整局高光数据（终局成绩卡）', () => {
+  it('每走一步记下最高一步、最长连锁和引爆的炸弹', async () => {
+    const { findHint } = await import('./shuffle');
+    const config = { ...DEFAULT_CONFIG, scoreMode: true };
+    let run = ok(pickStarter(newRun(3, config), newRun(3, config).starterChoices[0]!));
+    run = ok(startNextBattle(run, config));
+    expect(run.stats).toEqual({ bestStep: null, maxChain: 0, bombs: 0 });
+    const h = findHint(run.battle!.board)!;
+    const out = runAction(run, { type: 'swap', from: h.from, to: h.to }, config);
+    if (!out.ok || !out.log) throw new Error('行动无效');
+    const s = out.log.settlement!;
+    expect(out.run.stats!.bestStep).toEqual({ score: s.settlementScore, base: s.base, multiplier: s.multiplier, level: 1 });
+    const chain = out.log.result.events.filter((e) => e.type === 'matches' && e.phase === 'passive').length;
+    expect(out.run.stats!.maxChain).toBe(chain);
+  });
+});

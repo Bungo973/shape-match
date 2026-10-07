@@ -867,10 +867,13 @@ function RunPanel({ run }: { run: RunState }) {
   const showNext = run.phase === 'shop' || run.phase === 'artifact';
   return (
     <aside className="runpanel" aria-label="本局">
-      <div className="score">
-        <span className="lab">本局总分 / TOTAL</span>
-        <b>{fmt(run.totalScore)}</b>
-      </div>
+      {/* 终局时总分已经写在成绩卡上，左栏不重复 */}
+      {run.phase !== 'over' && (
+        <div className="score">
+          <span className="lab">本局总分 / TOTAL</span>
+          <b>{fmt(run.totalScore)}</b>
+        </div>
+      )}
       <div className="route">
         <span className="lab">{run.endless ? `无尽 / ENDLESS · 已过 ${done} 关` : `路线 / ROUTE · 已过 ${done}/${run.route.length}`}</span>
         {!run.endless && (
@@ -917,40 +920,112 @@ function Between({ run, apply, restart }: { run: RunState; apply: (r: RunResult)
       );
     case 'shop':
       return <Shop run={run} apply={apply} />;
-    case 'over': {
-      const best = loadBest();
-      const won = run.outcome === 'won';
-      const eyebrow = won ? '通关' : run.endless ? `无尽 · 到达第 ${run.battleIndex} 关` : '生命耗尽';
-      return (
-        <Panel eyebrow={eyebrow} title={`总分 ${fmt(run.totalScore)}`}>
-          <p className="hint">
-            {won
-              ? `九关全部打完，剩余生命 ${run.player.hp}。可以继续挑战无尽模式：目标每关上涨，直到生命耗尽。`
-              : run.endless
-                ? `通关后又多打了 ${run.battleIndex - 1 - run.route.length} 关。`
-                : `停在第 ${run.battleIndex} 关。`}
-          </p>
-          {best && (
-            <p className="best">
-              最好成绩：通过 {best.level} 关 · {fmt(best.score)} 分
-            </p>
-          )}
-          <div className="row">
-            {won && (
-              <button className="primary big" onClick={() => apply(continueEndless(run))} autoFocus>
-                继续挑战无尽
-              </button>
-            )}
-            <button className={won ? 'ghost' : 'primary big'} onClick={restart} autoFocus={!won}>
-              再来一局
-            </button>
-          </div>
-        </Panel>
-      );
-    }
+    case 'over':
+      return <RunSummary run={run} apply={apply} restart={restart} />;
     default:
       return null;
   }
+}
+
+/**
+ * 终局成绩卡（2026-10-07）：海报式的一张卡，适合截图。巨型总分；四格数据（通过关卡、最高一步、最长连锁、引爆炸弹）；
+ * 最高一步用蓝红两块写出“基数 × 倍率”；这局带的印记；最好成绩（刷新时标“新纪录”）；底部是种子号，方便复现。
+ */
+function RunSummary({ run, apply, restart }: { run: RunState; apply: (r: RunResult) => void; restart: () => void }) {
+  const won = run.outcome === 'won';
+  const cleared = won ? run.battleIndex : run.battleIndex - 1;
+  const best = loadBest();
+  const isNew = !!best && best.level === cleared && best.score === run.totalScore;
+  const st = run.stats;
+  const step = st?.bestStep;
+  const kicker = won ? (run.endless ? 'ENDLESS / 无尽' : 'CLEAR / 通关') : run.endless ? 'ENDLESS / 无尽' : 'GAME OVER / 生命耗尽';
+  const line = won
+    ? `九关全部打完，剩余生命 ${run.player.hp}。`
+    : run.endless
+      ? `通关后又多打了 ${Math.max(0, cleared - run.route.length)} 关。`
+      : `停在第 ${run.battleIndex} 关。`;
+  return (
+    <main className="panel summary">
+      <span className="eyebrow">{kicker}</span>
+      <div className="sum-score">
+        <span className="cap">本局总分 / TOTAL</span>
+        <b>{fmt(run.totalScore)}</b>
+        <p>
+          {line}
+          {isNew ? <i className="new">新纪录</i> : best && <span className="best">最好成绩：通过 {best.level} 关 · {fmt(best.score)} 分</span>}
+        </p>
+      </div>
+      <dl className="sum-stats">
+        <div>
+          <dt>通过关卡 / STAGES</dt>
+          <dd>
+            {cleared}
+            {!run.endless && <small>/{run.route.length}</small>}
+          </dd>
+        </div>
+        <div>
+          <dt>最高一步 / BEST</dt>
+          <dd>{step ? fmt(step.score) : '—'}</dd>
+        </div>
+        <div>
+          <dt>最长连锁 / CHAIN</dt>
+          <dd>
+            {st?.maxChain ?? 0}
+            <small>层</small>
+          </dd>
+        </div>
+        <div>
+          <dt>引爆炸弹 / BOMBS</dt>
+          <dd>{st?.bombs ?? 0}</dd>
+        </div>
+      </dl>
+      {step && (
+        <div className="sum-best">
+          <span className="cap">最高一步 · 第 {step.level} 关</span>
+          <div className="calc">
+            <span className="cell base">
+              <small>基数</small>
+              <b>{fmt(Math.round(step.base * 10) / 10)}</b>
+            </span>
+            <span className="times">×</span>
+            <span className="cell rate">
+              <small>倍率</small>
+              <b>{step.multiplier.toFixed(1)}</b>
+            </span>
+            <span className="times">=</span>
+            <b className="eq">{fmt(step.score)}</b>
+          </div>
+        </div>
+      )}
+      <div className="sum-marks">
+        <span className="cap">
+          印记 / MARKS · {run.artifacts.length}
+        </span>
+        <ul>
+          {run.artifacts.length ? (
+            run.artifacts.map((k) => (
+              <li key={k} className={ARTIFACTS[k].rarity}>
+                {ARTIFACTS[k].name}
+              </li>
+            ))
+          ) : (
+            <li className="none">这局没有带印记</li>
+          )}
+        </ul>
+      </div>
+      <div className="row sum-actions">
+        {won && !run.endless && (
+          <button className="primary big" onClick={() => apply(continueEndless(run))} autoFocus>
+            继续挑战无尽
+          </button>
+        )}
+        <button className={won && !run.endless ? 'ghost' : 'primary big'} onClick={restart} autoFocus={!won || run.endless}>
+          再来一局
+        </button>
+        <span className="seed">SEED {run.seed}</span>
+      </div>
+    </main>
+  );
 }
 
 /** 路线页：本关目标、首领规则，以及一易一难两条任务二选一 */

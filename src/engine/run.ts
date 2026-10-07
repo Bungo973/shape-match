@@ -48,6 +48,31 @@ export interface RunState {
   lostArtifacts: ArtifactKey[];
   /** 上一关任务的结果，供结算展示 */
   taskResult?: TaskResult | null;
+  /** 整局的高光数据，供终局成绩卡（2026-10-07 起记录；更早的存档没有） */
+  stats?: RunStats;
+}
+
+export interface RunStats {
+  /** 得分最高的一步：分数、基数、倍率、第几关 */
+  bestStep: { score: number; base: number; multiplier: number; level: number } | null;
+  /** 一步里最长的连锁层数 */
+  maxChain: number;
+  /** 一共引爆的炸弹（含连锁中被波及的） */
+  bombs: number;
+}
+
+const emptyStats = (): RunStats => ({ bestStep: null, maxChain: 0, bombs: 0 });
+
+/** 每走一步（交换、点燃、手套、吸管）记下整局的高光 */
+function recordStats(run: RunState, log: ActionLog): void {
+  const st = (run.stats ??= emptyStats());
+  const ev = log.result.events;
+  st.maxChain = Math.max(st.maxChain, ev.filter((e) => e.type === 'matches' && e.phase === 'passive').length);
+  st.bombs += Object.values(log.result.detonatedByType).reduce((a, b) => a + b, 0);
+  const s = log.settlement;
+  if (s && s.settlementScore > (st.bestStep?.score ?? 0)) {
+    st.bestStep = { score: s.settlementScore, base: s.base, multiplier: s.multiplier, level: run.battleIndex };
+  }
 }
 
 export interface TaskResult {
@@ -155,6 +180,7 @@ export function newRun(seed: number, config: EngineConfig = DEFAULT_CONFIG, rout
     artifactChoices: [],
     outcome: 'ongoing',
     totalScore: 0,
+    stats: emptyStats(),
     endless: false,
     items: [],
     shopItems: [],
@@ -212,6 +238,7 @@ export function runAction(prev: RunState, action: Action, config: EngineConfig =
   if (!out.ok) return fail(prev, out.reason);
   const run = clone(prev);
   run.battle = out.state;
+  recordStats(run, out.log);
   const drop = dropItem(run, out.log, config);
   settleBattle(run, config);
   return { ok: true, run, log: out.log, ...(drop ? { drop } : {}) };
@@ -492,6 +519,7 @@ export function runUseItem(
   const run = clone(prev);
   run.items.splice(slot, 1);
   run.battle = out.state;
+  if (out.log) recordStats(run, out.log);
   const drop = out.log ? dropItem(run, out.log, config) : null;
   settleBattle(run, config);
   return { ok: true, run, log: out.log, events: out.events, ...(out.gained ? { gained: out.gained } : {}), ...(drop ? { drop } : {}) };
