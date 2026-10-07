@@ -1,4 +1,4 @@
-/* 瑞士海报风格（2026-10-07，样本见 docs/prototypes/ui-style-lab.html?style=poster）：暖纸色底、粗细两级黑线、
+/* 瑞士海报风格（2026-10-07）：暖纸色底、粗细两级黑线、
    原色色块只用在关卡号和计分上；巨型数字、等宽小号双语标签、正文三级字号。没有阴影和渐变。规格见 docs/VISUAL_STYLE.md */
 :root {
   --paper: #f3efe4;

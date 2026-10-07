@@ -1,7 +1,7 @@
 // 构成风格的调色与图形，规格见 docs/VISUAL_STYLE.md。所有图形以格心为原点、以格宽 S 为尺度绘制。
 import type { BombKind, Color } from '../../engine';
 
-// 2026-10-07 换成瑞士海报配色（略暖、略亮），见 docs/prototypes/ui-style-lab.html?style=poster
+// 2026-10-07 换成瑞士海报配色（略暖、略亮），规格见 docs/VISUAL_STYLE.md
 export const INK = '#20231E';
 export const PAPER = '#F3EFE4';
 /** 棋盘底：比页面纸色深一点的色块，无边框设计里靠它和页面区分（2026-10-07） */
